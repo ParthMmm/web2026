@@ -1,0 +1,70 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import SubTitle from "../../components/SubTitle.astro";
+import Project from "../../components/Project.astro";
+
+const title = "work";
+const work = [
+  {
+    url: "/work/carbon-law-group",
+    title: "Carbon Law Group",
+    description: "created a saas to manage LLC compliance. launched chrome extension"
+  },
+  {
+    url: "/work/embic",
+    title: "Embic",
+    description: "created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. "  // Add description if needed
+  },
+  {
+    url: "/work/penovar",
+    title: "Penovar",
+    description: "created landing page for clinical research facility"  // Add description if needed
+  },
+
+  {
+    url: "/work/rhythm-events",
+    title: "Rhythm Events",
+    description: "crafted animated landing page for events business"  // Add description if needed
+  },
+  {
+    url: "/work/vitality-clinical-research",
+    title: "Vitality Clinical Research",
+    description: "created landing page for clinical research facility"  // Add description if needed
+  },
+];
+
+---
+
+<Layout {title} description="Personal website of Parth Mangrola" image="">
+<div class="container p-4 mx-auto">
+<section class="w-full ">
+<div
+  class="grid grid-cols-1  gap-8"
+>
+
+  <div class="">
+    <SubTitle title="work" />
+    <div class="grid grid-cols-1 gap-4">
+      {
+        work.map((x) => (
+
+        <div class='mb-3'>
+        <div class="flex items-baseline">
+              <a
+                href={x.url}
+                class='underline-none    mr-1
+              whitespace-nowrap shrink-0'
+              >
+                {x.title}
+              </a>
+              <div class="mx-2 w-full border-b border-dotted border-gray-300" />
+                             <span class="shrink-0 truncate w-96">{x.description}</span>
+          </div>
+        </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+</div>
+</Layout>

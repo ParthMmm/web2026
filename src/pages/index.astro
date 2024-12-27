@@ -1,11 +1,111 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import Project from "../components/Project.astro";
+import SubTitle from "../components/SubTitle.astro";
+import ThemeIcon from "../components/ThemeIcon.astro";
+import Work from "../components/Work.astro";
+import Layout from "../layouts/Layout.astro";
+
+import "../styles/global.css";
+
+
+const title = "Parth Mangrola";
+
+const projects = [
+  {
+    title: "tracklister",
+    description: "turn a tracklist into a playlist.",
+    url: "/projects/tracklister",
+    blog: "a"
+  },
+  {
+    title: "auriom",
+    description: "the social platform for music lovers.",
+    url: "/projects/auriom",
+  },
+
+];
+
+const work = [
+  {
+    url: "/work/carbon-law-group",
+    title: "Carbon Law Group",
+    description: "created a saas to manage LLC compliance. launched chrome extension"
+  },
+  {
+    url: "/work/embic",
+    title: "Embic",
+    description: "created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. "  // Add description if needed
+  },
+  {
+    url: "/work/penovar",
+    title: "Penovar",
+    description: "created landing page for clinical research facility"  // Add description if needed
+  },
+
+  {
+    url: "/work/rhythm-events",
+    title: "Rhythm Events",
+    description: "crafted animated landing page for events business"  // Add description if needed
+  },
+  {
+    url: "/work/vitality-clinical-research",
+    title: "Vitality Clinical Research",
+    description: "created landing page for clinical research facility"  // Add description if needed
+  },
+];
+
 ---
 
-<Layout>
-	<Welcome />
+<Layout {title} description="Personal website of Parth Mangrola" image="">
+
+    <div class="container p-4 mx-auto">
+
+
+      <section class="w-full ">
+        <div class="mb-5">
+          <h1 class="text-green-400 font-bold text-2xl">Parth Mangrola</h1>
+        </div>
+        <p class="mb-5">
+
+
+          software engineer. currently running solo @
+         <a
+            href="https://pallas.so"
+            class="text-purple  hover:text-purple/75">pallas</a
+          >
+
+          <div class="mb-7 mt-16">
+          <div
+            class="grid grid-cols-1 lg:grid-cols-2 gap-8"
+          >
+            <div class="flex flex-col gap-2">
+              <SubTitle title="work" />
+              {work.map((item) => (
+                <Work
+                  url={item.url}
+                  title={item.title}
+                  description={item.description}
+                />
+              ))}
+            </div>
+            <div class="">
+              <SubTitle title="projects" />
+              <div class="grid grid-cols-1 gap-4">
+                {
+                  projects.map((project) => (
+                    <Project
+                      title={project.title}
+                      url={project.url}
+                      description={project.description}
+                    />
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+<!-- <Footer/> -->
+    </div>
+
 </Layout>

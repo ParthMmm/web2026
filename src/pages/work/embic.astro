@@ -1,0 +1,18 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { getEntry, render } from 'astro:content';
+
+import ContentWrapper from "../../components/ContentWrapper.astro"
+
+const title = "embic";
+const entry = await getEntry('work', 'embic');
+const { Content } = await render(entry!);
+---
+
+<Layout {title} description="Personal website of Parth Mangrola" image="">
+  <div class="container p-4 mx-auto">
+<ContentWrapper>
+      <Content/>
+</ContentWrapper>
+  </div>
+</Layout>
