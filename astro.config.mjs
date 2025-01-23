@@ -5,6 +5,7 @@ import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
+import vercel from "@astrojs/vercel";
 
 import expressiveCode from "astro-expressive-code";
 
@@ -15,4 +16,10 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
   integrations: [expressiveCode(), react(), mdx(), sitemap()],
+  output: "static",
+  adapter: vercel({
+    webAnalytics: {
+      enabled: true,
+    },
+  }),
 });
