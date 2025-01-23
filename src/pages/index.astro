@@ -8,7 +8,7 @@ import Layout from "../layouts/Layout.astro";
 
 import "../styles/global.css";
 
-const title = "Parth Mangrola - Software Engineer";
+const title = "Parth Mangrola";
 const description =
 	"Software engineer specializing in React and TypeScript. Currently doing software development consulting at Pallas, helping companies build innovative products.";
 
@@ -86,9 +86,9 @@ const jsonLd = {
 };
 ---
 
-<Layout 
+<Layout
   title={title}
-  description={description} 
+  description={description}
   image="/web-app-manifest-512x512.png"
 >
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
@@ -98,7 +98,7 @@ const jsonLd = {
       <header class="mb-5">
         <h1 class="text-green-400 tracking-tighter font-bold text-2xl">parth mangrola</h1>
       </header>
-      
+
       <div class="mb-5">
         <p class="text-lg leading-relaxed">
           hey! I'm a software engineer who loves building things with React and TypeScript. Right now I do software development consulting at
@@ -108,7 +108,7 @@ const jsonLd = {
             rel="noopener"
           >
             Pallas
-          </a> 
+          </a>
           where I help companies build products. Looking for my next full-time role as a frontend or fullstack engineer.
         </p>
       </div>
