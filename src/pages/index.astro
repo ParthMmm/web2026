@@ -8,104 +8,140 @@ import Layout from "../layouts/Layout.astro";
 
 import "../styles/global.css";
 
-
-const title = "Parth Mangrola";
+const title = "Parth Mangrola - Software Engineer";
+const description =
+	"Software engineer specializing in React and TypeScript. Currently doing software development consulting at Pallas, helping companies build innovative products.";
 
 const projects = [
-  {
-    title: "tracklister",
-    description: "turn a tracklist into a playlist.",
-    url: "/projects/tracklister",
-    blog: "a"
-  },
-  {
-    title: "auriom",
-    description: "the social platform for music lovers.",
-    url: "/projects/auriom",
-  },
-
+	{
+		title: "tracklister",
+		description: "turn a tracklist into a playlist.",
+		url: "/projects/tracklister",
+	},
+	{
+		title: "auriom",
+		description:
+			"the social platform for music lovers. built as part of buildspace's nights and weekends s2",
+	},
 ];
 
 const work = [
-  {
-    url: "/work/carbon-law-group",
-    title: "Carbon Law Group",
-    description: "created a saas to manage LLC compliance. launched chrome extension"
-  },
-  {
-    url: "/work/embic",
-    title: "Embic",
-    description: "created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. "  // Add description if needed
-  },
-  {
-    url: "/work/penovar",
-    title: "Penovar",
-    description: "created landing page for clinical research facility"  // Add description if needed
-  },
+	{
+		title: "Carbon Law Group",
+		description:
+			"created a saas for a law firm to manage LLC compliance. launched chrome extension",
+	},
+	{
+		title: "Embic",
+		description:
+			"created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. ", // Add description if needed
+	},
+	{
+		url: "https://www.penovar.com/",
+		title: "Penovar",
+		description: "created landing page for clinical research facility", // Add description if needed
+	},
 
-  {
-    url: "/work/rhythm-events",
-    title: "Rhythm Events",
-    description: "crafted animated landing page for events business"  // Add description if needed
-  },
-  {
-    url: "/work/vitality-clinical-research",
-    title: "Vitality Clinical Research",
-    description: "created landing page for clinical research facility"  // Add description if needed
-  },
+	{
+		url: "https://www.rythm.events/",
+		title: "Rhythm Events",
+		description: "crafted animated landing page for events business", // Add description if needed
+	},
+	{
+		url: "https:vitalityclinical.com/",
+		title: "Vitality Clinical Research",
+		description: "created landing page for clinical research facility",
+	},
 ];
 
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "Person",
+	name: "Parth Mangrola",
+	jobTitle: "Software Engineer",
+	url: "https://www.parthm.dev",
+	sameAs: [
+		"https://github.com/parthmangrola",
+		"https://www.linkedin.com/in/parthmangrola",
+		"https://twitter.com/parthmangrola",
+	],
+	worksFor: {
+		"@type": "Organization",
+		name: "Pallas",
+		url: "https://pallas.so",
+	},
+	knowsAbout: [
+		"React",
+		"TypeScript",
+		"Frontend Development",
+		"Full Stack Development",
+		"Software Engineering",
+	],
+	workExample: work.map((item) => ({
+		"@type": "CreativeWork",
+		name: item.title,
+		description: item.description,
+		url: item.url,
+	})),
+};
 ---
 
-<Layout {title} description="Personal website of Parth Mangrola" image="">
+<Layout 
+  title={title}
+  description={description} 
+  image="/web-app-manifest-512x512.png"
+>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
-    <div class="container p-4 mx-auto">
-
-
-      <section class="w-full ">
-        <div class="mb-5">
-          <h1 class="text-green-400 font-bold text-2xl">Parth Mangrola</h1>
-        </div>
-        <p class="mb-5">
-
-
-          software engineer. currently running solo @
-         <a
+  <div class="container p-4 mx-auto">
+    <section class="w-full">
+      <header class="mb-5">
+        <h1 class="text-green-400 tracking-tighter font-bold text-2xl">parth mangrola</h1>
+      </header>
+      
+      <div class="mb-5">
+        <p class="text-lg leading-relaxed">
+          hey! I'm a software engineer who loves building things with React and TypeScript. Right now I do software development consulting at
+          <a
             href="https://pallas.so"
-            class="text-purple  hover:text-purple/75">pallas</a
+            class="text-purple-600 font-semibold hover:text-purple-400"
+            rel="noopener"
           >
+            Pallas
+          </a> 
+          where I help companies build products. Looking for my next full-time role as a frontend or fullstack engineer.
+        </p>
+      </div>
 
-          <div class="mb-7 mt-16">
-          <div
-            class="grid grid-cols-1 lg:grid-cols-2 gap-8"
-          >
-            <div class="flex flex-col gap-2">
-              <SubTitle title="work" />
-              {work.map((item) => (
-                <Work
-                  url={item.url}
-                  title={item.title}
-                  description={item.description}
+      <div class="mb-7 mt-16">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <section>
+            <h2 class="sr-only">Work Experience</h2>
+            <SubTitle title="work" />
+            {work.map((item) => (
+              <Work
+                url={item.url}
+                title={item.title}
+                description={item.description}
+              />
+            ))}
+          </section>
+
+          <section>
+            <h2 class="sr-only">Projects</h2>
+            <SubTitle title="projects" />
+            <div class="grid grid-cols-1 gap-4">
+              {projects.map((project) => (
+                <Project
+                  title={project.title}
+                  url={project.url}
+                  description={project.description}
                 />
               ))}
             </div>
-            <div class="">
-              <SubTitle title="projects" />
-              <div class="grid grid-cols-1 gap-4">
-                {
-                  projects.map((project) => (
-                    <Project
-                      title={project.title}
-                      url={project.url}
-                      description={project.description}
-                    />
-                  ))
-                }
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
-<!-- <Footer/> -->
-    </div>
-
+      </div>
+    </section>
+  </div>
 </Layout>

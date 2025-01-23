@@ -1,11 +1,11 @@
 ---
+import { getEntry, render } from "astro:content";
 import Layout from "../../layouts/Layout.astro";
-import { getEntry, render } from 'astro:content';
 
-import ContentWrapper from "../../components/ContentWrapper.astro"
+import ContentWrapper from "../../components/ContentWrapper.astro";
 
 const title = "embic";
-const entry = await getEntry('work', 'embic');
+const entry = await getEntry("work", "embic");
 const { Content } = await render(entry!);
 ---
 

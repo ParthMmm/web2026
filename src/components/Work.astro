@@ -1,22 +1,27 @@
 ---
-  type Props = {
-    url: string;
-    title: string;
-    description:string;
-  };
+type Props = {
+	url?: string;
+	title: string;
+	description: string;
+};
 
-const { url, title,description } = Astro.props;
+const { url, title, description } = Astro.props;
 ---
 
   <div class='mb-3'>
     <div class='flex flex-col items-start gap-1'>
-        <a
-          href={url}
-          class='underline decoration-blue-400 decoration-[1px] underline-offset-4   mr-1
-        whitespace-nowrap'
-        >
-          {title}
-        </a>
-        <span>{description}</span>
+      {
+        url ? (
+          <a
+            href={url}
+            class='underline decoration-blue-400 decoration-[1px] underline-offset-4 mr-1 whitespace-nowrap'
+          >
+            {title}
+          </a>
+        ) : (
+          <div class='whitespace-nowrap'>{title}</div>
+        )
+      }
+      <span>{description}</span>
     </div>
   </div>

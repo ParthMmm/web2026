@@ -2,49 +2,76 @@
 // import Footer from "../components/Footer.astro";
 import "@fontsource/geist-mono";
 type Props = {
-  title: string;
-  description: string;
-  image?: string;
+	title: string;
+	description: string;
+	image?: string;
 };
 import "../styles/global.css";
-import Footer from "../components/Footer.astro"
+import { SEO } from "astro-seo";
+import Footer from "../components/Footer.astro";
 
 const { title, description, image } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const ogImage = image || "/og.svg";
 ---
 
 <html lang="en">
   <head>
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonicalURL.toString()}
+      openGraph={{
+        basic: {
+          title,
+          type: "website",
+          image: ogImage,
+          url: canonicalURL.toString(),
+        },
+        image: {
+          alt: "Parth Mangrola Website Screenshot",
+          width: 1200,
+          height: 630,
+          type: "image/svg+xml",
+        },
+        optional: {
+          siteName: "Parth Mangrola",
+          description,
+        },
+      }}
+      twitter={{
+        card: "summary_large_image",
+        site: "@parthmangrola",
+        title,
+        description,
+        image: ogImage,
+        imageAlt: "Parth Mangrola Website Screenshot"
+      }}
+      extend={{
+        meta: [
+          { name: "viewport", content: "width=device-width,initial-scale=1" },
+          { name: "generator", content: Astro.generator },
+          { name: "theme-color", content: "#879A39" },
+          { name: "apple-mobile-web-app-capable", content: "yes" },
+          { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+        ],
+        link: [
+          { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+          { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+          { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+          { rel: "manifest", href: "/manifest.json" },
+        ],
+      }}
+    />
+    
     <!-- global metadata -->
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <link rel="icon" href="/favicon.ico" />
-    <meta name="generator" content={Astro.generator} />
 
-    <!-- primary meta tags -->
     <title>{title}</title>
-    <meta name="title" content={title} />
-    <meta name="description" content={description} />
-
-    <!-- open graph -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Parth Mangrola" />
-    <meta property="og:url" content={Astro.url} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:image" content={image} />
-
-    <!-- twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content={Astro.url} />
-    <meta property="twitter:title" content={title} />
-    <meta property="twitter:description" content={description} />
-    <meta property="twitter:image" content={image} />
-    <title>{title}</title>
-    <!-- <ViewTransitions transition:animate={fade({ duration: '0.2s' })} /> -->
   </head>
   <body class="bg-paper antialiased  dark:bg-black  dark:text-paper text-900 font-mono ">
     <main
-      class="flex-auto flex flex-col  md:mx-auto min-w-0 px-4 md:px-0 mt-8   md:max-w-3xl"
+    class="flex flex-col items-center justify-center w-full px-4 md:px-0 mt-8 md:max-w-3xl mx-auto"
     >
       <slot />
 

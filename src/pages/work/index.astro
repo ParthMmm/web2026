@@ -1,38 +1,39 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import SubTitle from "../../components/SubTitle.astro";
 import Project from "../../components/Project.astro";
+import SubTitle from "../../components/SubTitle.astro";
+import Layout from "../../layouts/Layout.astro";
 
 const title = "work";
 const work = [
-  {
-    url: "/work/carbon-law-group",
-    title: "Carbon Law Group",
-    description: "created a saas to manage LLC compliance. launched chrome extension"
-  },
-  {
-    url: "/work/embic",
-    title: "Embic",
-    description: "created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. "  // Add description if needed
-  },
-  {
-    url: "/work/penovar",
-    title: "Penovar",
-    description: "created landing page for clinical research facility"  // Add description if needed
-  },
+	{
+		url: "/work/carbon-law-group",
+		title: "Carbon Law Group",
+		description:
+			"created a saas for a law firm to manage LLC compliance. launched chrome extension",
+	},
+	{
+		url: "/work/embic",
+		title: "Embic",
+		description:
+			"created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. ", // Add description if needed
+	},
+	{
+		url: "/work/penovar",
+		title: "Penovar",
+		description: "created landing page for clinical research facility", // Add description if needed
+	},
 
-  {
-    url: "/work/rhythm-events",
-    title: "Rhythm Events",
-    description: "crafted animated landing page for events business"  // Add description if needed
-  },
-  {
-    url: "/work/vitality-clinical-research",
-    title: "Vitality Clinical Research",
-    description: "created landing page for clinical research facility"  // Add description if needed
-  },
+	{
+		url: "/work/rhythm-events",
+		title: "Rhythm Events",
+		description: "crafted animated landing page for events business", // Add description if needed
+	},
+	{
+		url: "/work/vitality-clinical-research",
+		title: "Vitality Clinical Research",
+		description: "created landing page for clinical research facility", // Add description if needed
+	},
 ];
-
 ---
 
 <Layout {title} description="Personal website of Parth Mangrola" image="">
