@@ -124,6 +124,8 @@ const jsonLd = {
           <section>
             <h2 class="sr-only">Work Experience</h2>
             <SubTitle title="work" />
+			            <div class="grid grid-cols-1 gap-4">
+
             {work.map((item) => (
               <Work
                 url={item.url}
@@ -131,6 +133,7 @@ const jsonLd = {
                 description={item.description}
               />
             ))}
+					</div>
           </section>
 
           <section>
