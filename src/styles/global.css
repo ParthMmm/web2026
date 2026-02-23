@@ -5,35 +5,65 @@
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
-	--font-display: "Geist Mono";
-	--color-black: oklch(16.96% 0.0017 17.32);
-	--color-paper: oklch(99.01% 0.0161 95.22);
-	--color-950: oklch(22.28% 0.0025 67.7);
-	--color-900: oklch(27.34% 0.0023 0);
-	--color-850: oklch(32.14% 0.0038 84.58);
-	--color-800: oklch(36.51% 0.0044 67.69);
-	--color-700: oklch(45.31% 0.005 91.5);
-	--color-600: oklch(53.75% 0.0078 97.45);
-	--color-500: oklch(61.69% 0.0078 88.67);
-	--color-300: oklch(77.21% 0.0128 96.47);
-	--color-200: oklch(84.63% 0.0137 102.05);
-	--color-150: oklch(88.1% 0.0137 97.46);
-	--color-100: oklch(91.74% 0.0149 98.3);
-	--color-50: oklch(95.37% 0.0147 98.29);
-	--color-red-600: oklch(50.42% 0.1648 27.84);
-	--color-red-400: oklch(59.7% 0.1692 28.38);
-	--color-orange-600: oklch(56.65% 0.1523 45.02);
-	--color-orange-400: oklch(65.76% 0.1539 49.3);
-	--color-yellow-600: oklch(63.33% 0.1295 85.81);
-	--color-yellow-400: oklch(73.46% 0.1462 87.46);
-	--color-green-600: oklch(55.93% 0.1335 122.92);
-	--color-green-400: oklch(65.13% 0.1242 119.38);
-	--color-cyan-600: oklch(55.44% 0.0863 186.74);
-	--color-cyan-400: oklch(67.01% 0.0999 186.58);
-	--color-blue-600: oklch(48.18% 0.1315 254.79);
-	--color-blue-400: oklch(59.88% 0.1104 247);
-	--color-purple-600: oklch(45.4% 0.1451 294.83);
-	--color-purple-400: oklch(63.48% 0.1098 291);
-	--color-magenta-600: oklch(49.54% 0.1614 349.76);
-	--color-magenta-400: oklch(63.48% 0.1565 350.47);
+	--font-sans: "Switzer", system-ui, sans-serif;
+	--font-mono: "Geist Mono", monospace;
+	--color-black: oklch(12% 0 0);
+	--color-paper: oklch(97% 0.005 90);
+	--color-950: oklch(15% 0 0);
+	--color-900: oklch(20% 0 0);
+	--color-850: oklch(25% 0 0);
+	--color-800: oklch(30% 0 0);
+	--color-700: oklch(40% 0 0);
+	--color-600: oklch(50% 0 0);
+	--color-500: oklch(60% 0 0);
+	--color-400: oklch(70% 0 0);
+	--color-300: oklch(77.5% 0 0);
+	--color-200: oklch(85% 0 0);
+	--color-150: oklch(88% 0 0);
+	--color-100: oklch(92% 0 0);
+	--color-50: oklch(97.5% 0 0);
+	--color-accent: oklch(55% 0.18 250);
+	--color-accent-light: oklch(65% 0.15 250);
+	--color-accent-muted: oklch(45% 0.12 250);
+}
+
+/* --- Base polish --- */
+
+h1, h2, h3, h4 {
+	text-wrap: balance;
+}
+
+/* Hairline borders on retina */
+:root {
+	--border-hairline: 1px;
+}
+@media only screen and (min-device-pixel-ratio: 2),
+	only screen and (min-resolution: 192dpi) {
+	:root {
+		--border-hairline: 0.5px;
+	}
+}
+
+/* Hover effects only on hover-capable devices */
+@media (hover: hover) and (pointer: fine) {
+	a[href] {
+		transition: color 150ms ease;
+	}
+	a[href]:active {
+		transform: scale(0.97);
+	}
+}
+
+/* Reduced motion: kill all transitions */
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Disable transitions during theme swap to prevent flash */
+html.theme-transitioning * {
+	transition: none !important;
 }

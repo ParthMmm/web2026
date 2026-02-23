@@ -10,23 +10,23 @@ import "../styles/global.css";
 
 const title = "Parth Mangrola";
 const description =
-	"Software engineer specializing in React and TypeScript. Currently doing software development consulting at Pallas, helping companies build innovative products.";
+	"Fullstack engineer building products from frontend to infrastructure. Currently consulting at Pallas.";
 
 const projects = [
 	{
 		title: "tracklister",
-		description: "turn a tracklist into a playlist.",
+		description: "AI-powered app that converts tracklists to Spotify playlists using vector embeddings and Cloudflare edge functions.",
 		url: "/projects/tracklister",
 	},
 	{
 		title: "auriom",
 		description:
-			"the social platform for music lovers. built as part of buildspace's nights and weekends s2",
+			"The social platform for music lovers. Built as part of Buildspace's Nights and Weekends S2.",
 		url: "https://github.com/ParthMmm/auriom",
 	},
 	{
 		title: "labs",
-		description: "a collection of components and experiments",
+		description: "A collection of components and experiments.",
 		url: "https://labs.p11a.xyz/",
 	},
 ];
@@ -35,28 +35,25 @@ const work = [
 	{
 		title: "Carbon Law Group",
 		description:
-			"created a saas for a law firm to manage LLC compliance. launched chrome extension",
+			"Sole engineer on full-stack SaaS for state filing compliance. Built Chrome extension that automates 30+ form fields.",
 	},
 	{
 		title: "Embic",
 		description:
-			"created prototype for healthcare platform. assisted in transitioning from matlab to python. modernized web presence. ", // Add description if needed
+			"Built healthcare platform with admin dashboard for managing medical orgs and patient records. Fixed production bugs affecting 125+ users.",
 	},
 	{
-		url: "https://www.penovar.com/",
 		title: "Penovar",
-		description: "created landing page for clinical research facility", // Add description if needed
+		description: "Created landing page for clinical research facility.",
 	},
 
 	{
-		url: "https://www.rythm.events/",
 		title: "Rhythm Events",
-		description: "crafted animated landing page for events business", // Add description if needed
+		description: "Crafted animated landing page for events business.",
 	},
 	{
-		url: "https:vitalityclinical.com/",
 		title: "Vitality Clinical Research",
-		description: "created landing page for clinical research facility",
+		description: "Created landing page for clinical research facility.",
 	},
 ];
 
@@ -64,7 +61,7 @@ const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "Person",
 	name: "Parth Mangrola",
-	jobTitle: "Software Engineer",
+	jobTitle: "Fullstack Engineer",
 	url: "https://www.parthm.dev",
 	sameAs: [
 		"https://github.com/parthmangrola",
@@ -79,7 +76,10 @@ const jsonLd = {
 	knowsAbout: [
 		"React",
 		"TypeScript",
-		"Frontend Development",
+		"Node.js",
+		"PostgreSQL",
+		"AWS",
+		"Cloudflare",
 		"Full Stack Development",
 		"Software Engineering",
 	],
@@ -101,21 +101,20 @@ const jsonLd = {
 
   <div class="container p-4 mx-auto">
     <section class="w-full">
-      <header class="mb-5">
-        <h1 class="text-green-400 tracking-tighter font-bold text-2xl">parth mangrola</h1>
+      <header class="mt-20 mb-10">
+        <h1 class="font-black text-4xl md:text-5xl tracking-tighter text-900 dark:text-paper">Parth Mangrola</h1>
       </header>
 
-      <div class="mb-5">
-        <p class="text-lg leading-relaxed">
-          hey! I'm a software engineer who loves building things with React and TypeScript. Right now I do software development consulting at
+      <div class="mb-10">
+        <p class="font-normal text-base leading-relaxed text-600 dark:text-400">
+          Hey! I'm a fullstack engineer who builds products end to end, from React frontends to APIs, databases, and cloud infrastructure. I love making things that feel good to use. Right now I run
           <a
             href="https://pallas.so"
-            class="text-purple-600 dark:text-purple-400 font-semibold hover:text-purple-600 dark:hover:text-purple-400"
+            class="text-accent dark:text-accent-light font-medium hover:underline underline-offset-2"
             rel="noopener"
           >
             Pallas
-          </a>
-          where I help companies build products. Looking for my next full-time role as a frontend or fullstack engineer.
+          </a>, where I've built healthcare platforms, SaaS products, and developer tools for clients. Looking for a frontend or design engineering role where I can obsess over the details.
         </p>
       </div>
 

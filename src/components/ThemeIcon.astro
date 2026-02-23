@@ -2,7 +2,7 @@
 
 ---
 
-<button 
+<button
   id="themeToggle"
   type="button"
   aria-label="Toggle theme"
@@ -33,12 +33,26 @@
     cursor: pointer;
     padding: 0.5rem;
     border-radius: 0.375rem;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  
-  .sun { fill: black; }
+
+  @media (hover: hover) and (pointer: fine) {
+    #themeToggle:hover {
+      background: oklch(50% 0 0 / 0.08);
+    }
+    #themeToggle:active {
+      transform: scale(0.92);
+    }
+  }
+
+  .sun { fill: oklch(20% 0 0); }
   .moon { fill: transparent; }
   :global(.dark) .sun { fill: transparent; }
-  :global(.dark) .moon { fill: white; }
+  :global(.dark) .moon { fill: oklch(88% 0 0); }
 </style>
 
 <script is:inline>
@@ -62,10 +76,17 @@
 
   const handleToggleClick = () => {
     const element = document.documentElement;
+    // Disable transitions during theme swap
+    element.classList.add('theme-transitioning');
     element.classList.toggle("dark");
-
     const isDark = element.classList.contains("dark");
     localStorage.setItem("theme", isDark ? "dark" : "light");
+    // Re-enable after paint
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        element.classList.remove('theme-transitioning');
+      });
+    });
   }
 
   document.getElementById("themeToggle")?.addEventListener("click", handleToggleClick);
