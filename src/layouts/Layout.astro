@@ -16,6 +16,7 @@ type Props = {
 	image?: string;
 };
 import "../styles/global.css";
+import Analytics from "@vercel/analytics/astro";
 import { SEO } from "astro-seo";
 import Footer from "../components/Footer.astro";
 import ThemeIcon from "../components/ThemeIcon.astro";
@@ -94,6 +95,7 @@ const ogImage = image || "/og.svg";
       <Footer  />
       </div>
     </main>
+    <Analytics />
   </body>
 </html>
 
