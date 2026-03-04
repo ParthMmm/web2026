@@ -6,6 +6,7 @@ type Props = {
 };
 
 const { url, title, description } = Astro.props;
+const isExternal = url?.startsWith("http");
 ---
 
   <div class='mb-5'>
@@ -15,6 +16,7 @@ const { url, title, description } = Astro.props;
           <a
             href={url}
             class='card-title font-medium tracking-tight text-950'
+            {...isExternal && { target: "_blank", rel: "noopener noreferrer" }}
           >
             {title}
           </a>
