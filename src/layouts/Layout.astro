@@ -1,4 +1,14 @@
 ---
+import "@fontsource/inter/300.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/inter/900.css";
+import "@fontsource/commit-mono/300.css";
+import "@fontsource/commit-mono/400.css";
+import "@fontsource/commit-mono/500.css";
+import "@fontsource/commit-mono/700.css";
 import "@fontsource/geist-mono";
 type Props = {
 	title: string;
@@ -8,6 +18,7 @@ type Props = {
 import "../styles/global.css";
 import { SEO } from "astro-seo";
 import Footer from "../components/Footer.astro";
+import ThemeIcon from "../components/ThemeIcon.astro";
 
 const { title, description, image } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -50,7 +61,7 @@ const ogImage = image || "/og.svg";
         meta: [
           { name: "viewport", content: "width=device-width,initial-scale=1" },
           { name: "generator", content: Astro.generator },
-          { name: "theme-color", content: "#1a1a1a" },
+          { name: "theme-color", content: "#FFFCF0" },
           { name: "apple-mobile-web-app-capable", content: "yes" },
           { name: "apple-mobile-web-app-status-bar-style", content: "default" },
         ],
@@ -63,15 +74,18 @@ const ogImage = image || "/og.svg";
       }}
     />
 
-    <link href="https://api.fontshare.com/v2/css?f[]=switzer@1&display=swap" rel="stylesheet">
 
     <!-- global metadata -->
     <meta charset="utf-8" />
 
-    <title>{title}</title>
   </head>
-  <body class="bg-paper antialiased dark:bg-black text-900 dark:text-200 font-sans">
+  <body class="bg-paper antialiased text-900 font-sans">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-paper focus:text-950 focus:rounded focus:ring-2 focus:ring-accent">Skip to content</a>
+    <div class="fixed top-4 right-4 z-50">
+      <ThemeIcon />
+    </div>
     <main
+    id="main"
     class="flex flex-col items-center justify-center w-full px-4 md:px-0 mt-8 md:max-w-3xl mx-auto"
     >
       <slot />
@@ -85,6 +99,9 @@ const ogImage = image || "/og.svg";
 
 <style is:global>
   html {
-    font-family: "Switzer", system-ui, sans-serif;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  html.dark {
+    font-family: "Commit Mono", monospace;
   }
 </style>

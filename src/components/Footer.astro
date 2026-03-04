@@ -1,28 +1,26 @@
 ---
-import ThemeIcon from "../components/ThemeIcon.astro";
 ---
 <footer class='py-6'>
   <div class="container mx-auto p-4">
-    <div class="flex flex-wrap md:flex-row md:justify-between flex-col justify-start items-center gap-4">
-      <ThemeIcon />
+    <div class="flex flex-wrap justify-center items-center gap-4">
       <ul class="flex flex-row gap-6">
         <li>
           <a href="https://github.com/ParthMmm"
-            rel='noopener'
+            rel='noopener noreferrer'
             target="_blank"
             class="text-sm font-normal uppercase tracking-wide text-500"
           >github</a>
         </li>
         <li>
           <a href="https://www.linkedin.com/in/parthmangrola/"
-            rel='noopener'
+            rel='noopener noreferrer'
             target="_blank"
             class="text-sm font-normal uppercase tracking-wide text-500"
           >linkedin</a>
         </li>
         <li>
           <a href="https://drive.google.com/file/d/170kgQ0N4xIQd-kuW4DpQa2enXMxeLrfq/view?usp=sharing"
-            rel='noopener'
+            rel='noopener noreferrer'
             target="_blank"
             class="text-sm font-normal uppercase tracking-wide text-500"
           >resume</a>
@@ -34,17 +32,11 @@ import ThemeIcon from "../components/ThemeIcon.astro";
 
 <style>
   footer {
-    border-top: var(--border-hairline) solid oklch(85% 0 0);
-  }
-  :global(.dark) footer {
-    border-top-color: oklch(30% 0 0);
+    border-top: var(--border-hairline) solid var(--color-200);
   }
   @media (hover: hover) and (pointer: fine) {
     footer a:hover {
-      color: oklch(55% 0.18 250);
-    }
-    :global(.dark) footer a:hover {
-      color: oklch(65% 0.15 250);
+      color: var(--color-accent);
     }
   }
 </style>

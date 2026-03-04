@@ -23,12 +23,18 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.4
         version: 2.4.4
+      '@fontsource/commit-mono':
+        specifier: ^5.2.5
+        version: 5.2.5
       '@fontsource/geist-mono':
         specifier: ^5.2.7
         version: 5.2.7
       '@fontsource/geist-sans':
         specifier: ^5.2.5
         version: 5.2.5
+      '@fontsource/inter':
+        specifier: ^5.2.8
+        version: 5.2.8
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -666,11 +672,17 @@ packages:
   '@expressive-code/plugin-text-markers@0.41.6':
     resolution: {integrity: sha512-PBFa1wGyYzRExMDzBmAWC6/kdfG1oLn4pLpBeTfIRrALPjcGA/59HP3e7q9J0Smk4pC7U+lWkA2LHR8FYV8U7Q==}
 
+  '@fontsource/commit-mono@5.2.5':
+    resolution: {integrity: sha512-htX8yQWtiPt5L1Hzh4sirvfUJT2+KYiquDB/Q2sY2tWQYplpBUOD5zHnIM3k36Hnm4V+JIIqA/wmwupSQ68WjA==}
+
   '@fontsource/geist-mono@5.2.7':
     resolution: {integrity: sha512-xVPVFISJg/K0VVd+aQN0Y7X/sw9hUcJPyDWFJ5GpyU3bHELhoRsJkPSRSHXW32mOi0xZCUQDOaPj1sqIFJ1FGg==}
 
   '@fontsource/geist-sans@5.2.5':
     resolution: {integrity: sha512-anllOHyJbElRs9fV15TeDRqAeb1IKm4bSknPl6ZMoyPTx1BBy7logudcUwpNjmQLkzn4Q0JGQLRCUKJYoyST6A==}
+
+  '@fontsource/inter@5.2.8':
+    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
 
   '@fortawesome/fontawesome-free@6.7.2':
     resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
@@ -4016,9 +4028,13 @@ snapshots:
     dependencies:
       '@expressive-code/core': 0.41.6
 
+  '@fontsource/commit-mono@5.2.5': {}
+
   '@fontsource/geist-mono@5.2.7': {}
 
   '@fontsource/geist-sans@5.2.5': {}
+
+  '@fontsource/inter@5.2.8': {}
 
   '@fortawesome/fontawesome-free@6.7.2': {}
 

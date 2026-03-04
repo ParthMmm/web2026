@@ -14,25 +14,22 @@ const { url, title, description } = Astro.props;
         url ? (
           <a
             href={url}
-            class='card-title font-medium tracking-tight text-900 dark:text-100'
+            class='card-title font-medium tracking-tight text-950'
           >
             {title}
           </a>
         ) : (
-          <div class='font-medium tracking-tight text-900 dark:text-100'>{title}</div>
+          <div class='font-medium tracking-tight text-950'>{title}</div>
         )
       }
-      <span class='text-sm font-light text-600 dark:text-400'>{description}</span>
+      <span class='text-sm font-light text-600'>{description}</span>
     </div>
   </div>
 
 <style>
   @media (hover: hover) and (pointer: fine) {
     .card-title:hover {
-      color: oklch(55% 0.18 250);
-    }
-    :global(.dark) .card-title:hover {
-      color: oklch(65% 0.15 250);
+      color: var(--color-accent);
     }
     .card-title {
       transition: color 150ms ease;
