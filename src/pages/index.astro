@@ -1,5 +1,4 @@
 ---
-
 import Project from "../components/Project.astro";
 import SubTitle from "../components/SubTitle.astro";
 import ThemeIcon from "../components/ThemeIcon.astro";
@@ -10,146 +9,150 @@ import "../styles/global.css";
 
 const title = "Parth Mangrola";
 const description =
-	"Fullstack engineer building products from frontend to infrastructure. Currently consulting at Pallas.";
+    "Fullstack engineer building products from frontend to infrastructure. Currently consulting at Pallas.";
 
 const projects = [
-	{
-		title: "tracklister",
-		description: "AI-powered app that converts tracklists to Spotify playlists using vector embeddings and Cloudflare edge functions.",
-		url: "/projects/tracklister",
-	},
-	{
-		title: "auriom",
-		description:
-			"The social platform for music lovers. Built as part of Buildspace's Nights and Weekends S2.",
-		url: "https://github.com/ParthMmm/auriom",
-	},
-	{
-		title: "labs",
-		description: "A collection of components and experiments.",
-		url: "https://labs.p11a.xyz/",
-	},
+    {
+        title: "tracklister",
+        description:
+            "AI-powered app that converts tracklists to Spotify playlists using vector embeddings and Cloudflare edge functions.",
+        url: "/projects/tracklister",
+    },
+    {
+        title: "auriom",
+        description:
+            "The social platform for music lovers. Built as part of Buildspace's Nights and Weekends S2.",
+        url: "https://github.com/ParthMmm/auriom",
+    },
+    {
+        title: "labs",
+        description: "A collection of components and experiments.",
+        url: "https://labs.p11a.xyz/",
+    },
 ];
 
 const work = [
-	{
-		title: "Carbon Law Group",
-		description:
-			"Sole engineer on full-stack SaaS for state filing compliance. Built Chrome extension that automates 30+ form fields.",
-	},
-	{
-		title: "Embic",
-		description:
-			"Built healthcare platform with admin dashboard for managing medical orgs and patient records. Fixed production bugs affecting 125+ users.",
-	},
-	{
-		title: "Penovar",
-		description: "Created landing page for clinical research facility.",
-	},
+    {
+        title: "Carbon Law Group",
+        description:
+            "Sole engineer on full-stack SaaS for state filing compliance. Built Chrome extension that automates 30+ form fields.",
+    },
+    {
+        title: "Embic",
+        description:
+            "Built healthcare platform with admin dashboard for managing medical orgs and patient records. Fixed production bugs affecting 125+ users.",
+    },
+    {
+        title: "Penovar",
+        description: "Created landing page for clinical research facility.",
+    },
 
-	{
-		title: "Rhythm Events",
-		description: "Crafted animated landing page for events business.",
-	},
-	{
-		title: "Vitality Clinical Research",
-		description: "Created landing page for clinical research facility.",
-	},
+    {
+        title: "Rhythm Events",
+        description: "Crafted animated landing page for events business.",
+    },
+    {
+        title: "Vitality Clinical Research",
+        description: "Created landing page for clinical research facility.",
+    },
 ];
 
 const jsonLd = {
-	"@context": "https://schema.org",
-	"@type": "Person",
-	name: "Parth Mangrola",
-	jobTitle: "Fullstack Engineer",
-	url: "https://www.parthm.dev",
-	sameAs: [
-		"https://github.com/parthmangrola",
-		"https://www.linkedin.com/in/parthmangrola",
-		"https://twitter.com/parthmangrola",
-	],
-	worksFor: {
-		"@type": "Organization",
-		name: "Pallas",
-		url: "https://pallas.so",
-	},
-	knowsAbout: [
-		"React",
-		"TypeScript",
-		"Node.js",
-		"PostgreSQL",
-		"AWS",
-		"Cloudflare",
-		"Full Stack Development",
-		"Software Engineering",
-	],
-	workExample: work.map((item) => ({
-		"@type": "CreativeWork",
-		name: item.title,
-		description: item.description,
-		url: item.url,
-	})),
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: "Parth Mangrola",
+    jobTitle: "Fullstack Engineer",
+    url: "https://www.parthm.dev",
+    sameAs: [
+        "https://github.com/parthmangrola",
+        "https://www.linkedin.com/in/parthmangrola",
+        "https://twitter.com/parthmangrola",
+    ],
+    worksFor: {
+        "@type": "Organization",
+        name: "Pallas",
+        url: "https://pallas.so",
+    },
+    knowsAbout: [
+        "React",
+        "TypeScript",
+        "Node.js",
+        "PostgreSQL",
+        "AWS",
+        "Cloudflare",
+        "Full Stack Development",
+        "Software Engineering",
+    ],
+    workExample: work.map((item) => ({
+        "@type": "CreativeWork",
+        name: item.title,
+        description: item.description,
+        url: item.url,
+    })),
 };
 ---
 
-<Layout
-  title={title}
-  description={description}
-  image="/web-app-manifest-512x512.png"
->
-  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+<Layout title={title} description={description} image="/web-app-manifest-512x512.png">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
-  <div class="container p-4 mx-auto">
-    <section class="w-full">
-      <header class="mt-20 mb-10">
-        <h1 class="font-black text-4xl md:text-5xl tracking-tighter text-950">Parth Mangrola</h1>
-      </header>
+    <div class="container p-4 mx-auto">
+        <section class="w-full">
+            <header class="mt-20 mb-10">
+                <h1 class="font-black text-4xl md:text-5xl tracking-tighter text-950">
+                    Parth Mangrola
+                </h1>
+            </header>
 
-      <div class="mb-10">
-        <p class="font-normal text-base leading-relaxed text-600">
-          Hey! I'm a fullstack engineer who builds products end to end, from React frontends to APIs, databases, and cloud infrastructure. I love making things that feel good to use. Right now I run
-          <a
-            href="https://pallas.so"
-            class="text-accent dark:text-accent-light font-medium hover:underline underline-offset-2"
-            rel="noopener noreferrer"
-          >
-            Pallas
-          </a>, where I've built healthcare platforms, SaaS products, and developer tools for clients. Looking for a fullstack or design engineering role where I can obsess over the details.
-        </p>
-      </div>
-
-      <div class="mb-7 mt-16">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <section>
-            <h2 class="sr-only">Work Experience</h2>
-            <SubTitle title="work" />
-			            <div class="grid grid-cols-1 gap-4">
-
-            {work.map((item) => (
-              <Work
-                url={item.url}
-                title={item.title}
-                description={item.description}
-              />
-            ))}
-					</div>
-          </section>
-
-          <section>
-            <h2 class="sr-only">Projects</h2>
-            <SubTitle title="projects" />
-            <div class="grid grid-cols-1 gap-4">
-              {projects.map((project) => (
-                <Project
-                  title={project.title}
-                  url={project.url}
-                  description={project.description}
-                />
-              ))}
+            <div class="mb-10">
+                <p class="font-normal text-base leading-relaxed text-600">
+                    Hey! I'm a fullstack engineer who builds products end to end, from React
+                    frontends to APIs, databases, and cloud infrastructure. I love making things
+                    that feel good to use. Right now I run
+                    <a
+                        href="https://pallas.so"
+                        class="text-accent dark:text-accent-light font-medium hover:underline underline-offset-2"
+                        rel="noopener noreferrer">Pallas</a
+                    >, where I've built healthcare platforms, SaaS products, and developer tools for
+                    clients. Looking for a fullstack or design engineering role where I can obsess
+                    over the details.
+                </p>
             </div>
-          </section>
-        </div>
-      </div>
-    </section>
-  </div>
+
+            <div class="mb-7 mt-16">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <section>
+                        <h2 class="sr-only">Work Experience</h2>
+                        <SubTitle title="work" />
+                        <div class="grid grid-cols-1 gap-4">
+                            {
+                                work.map((item) => (
+                                    <Work
+                                        url={item.url}
+                                        title={item.title}
+                                        description={item.description}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="sr-only">Projects</h2>
+                        <SubTitle title="projects" />
+                        <div class="grid grid-cols-1 gap-4">
+                            {
+                                projects.map((project) => (
+                                    <Project
+                                        title={project.title}
+                                        url={project.url}
+                                        description={project.description}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+    </div>
 </Layout>

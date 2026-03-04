@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "warn",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "eslint/no-unused-vars": "warn",
+    "unicorn/no-array-for-each": "off",
+    "react/exhaustive-deps": "off",
+    "typescript/no-explicit-any": "off",
+    "import/no-unassigned-import": "off"
+  },
+  "plugins": ["react", "typescript", "unicorn", "import"]
+}
