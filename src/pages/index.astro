@@ -13,6 +13,12 @@ const description =
 
 const projects = [
     {
+        title: "beacon",
+        description:
+            "Smart travel companion for collaborative trip planning. Your plans, always portable.",
+        url: "/projects/beacon",
+    },
+    {
         title: "tracklister",
         description:
             "AI-powered app that converts tracklists to Spotify playlists using vector embeddings and Cloudflare edge functions.",
@@ -92,7 +98,7 @@ const jsonLd = {
 };
 ---
 
-<Layout title={title} description={description} image="/web-app-manifest-512x512.png">
+<Layout title={title} description={description} >
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
     <div class="container p-4 mx-auto">
