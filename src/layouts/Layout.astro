@@ -19,6 +19,7 @@ import "../styles/global.css";
 import { SEO } from "astro-seo";
 import Footer from "../components/Footer.astro";
 import ThemeIcon from "../components/ThemeIcon.astro";
+import Analytics from "@vercel/analytics/astro";
 
 const { title, description, image } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -74,6 +75,7 @@ const ogImage = image || "/og.svg";
       }}
     />
 
+    <Analytics />
 
     <!-- global metadata -->
     <meta charset="utf-8" />
