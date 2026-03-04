@@ -6,7 +6,9 @@ pubDate: 2026-03-03
 
 ## what & why
 
-trip planning is scattered across group chats, shared docs, screenshots of Google Maps, and half-finished spreadsheets. beacon pulls it all into one place — a real-time shared workspace for building trips together.
+trip planning is scattered across group chats, shared docs, screenshots of Google Maps, and half-finished spreadsheets. beacon pulls it all into one place, a real-time shared workspace for building trips together.
+
+depending on the country, Apple Maps or Google Maps is better, so beacon lets you switch between them seamlessly.
 
 your plans aren't locked in. markdown import/export means you can plan with any tool, any LLM, or just a text editor. the app is the interface, not the cage.
 
@@ -16,6 +18,7 @@ your plans aren't locked in. markdown import/export means you can plan with any 
 - **location management** — save, organize, and share places
 - **markdown interop** — import/export plans as markdown, bring your own tools
 - **live sync** — everyone sees the same thing, always up to date
+- **map provider switching** — seamlessly switch between Apple Maps and Google Maps
 - **Apple Sign-In** — one tap to get started
 
 ## tech stack
