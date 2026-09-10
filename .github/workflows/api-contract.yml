@@ -1,0 +1,39 @@
+name: API contract
+
+on:
+  pull_request:
+    paths: ["apps/api/**", ".github/workflows/api-contract.yml"]
+  push:
+    paths: ["apps/api/**", ".github/workflows/api-contract.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.1"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache: false
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run openapi --check
+      - run: go install github.com/oasdiff/oasdiff@v1.31.0
+      - run: oasdiff breaking --allow-external-refs=false --fail-on WARN baseline/openapi-v1.json openapi.json
+      - run: cargo fmt --manifest-path client/Cargo.toml --all -- --check
+      - run: cargo test --locked --manifest-path client/Cargo.toml
+      - run: bun run smoke

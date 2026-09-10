@@ -1,0 +1,29 @@
+{
+  "name": "@web2026/api-prototype",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.1",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "bun scripts/serve.ts",
+    "openapi": "bun scripts/openapi.ts",
+    "smoke": "bun scripts/smoke.ts",
+    "deploy": "alchemy deploy --yes",
+    "prepare": "effect-language-service patch"
+  },
+  "dependencies": {
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "13.0.0",
+    "@effect/language-service": "0.87.2",
+    "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/bun": "1.4.1",
+    "alchemy": "2.0.0-beta.76",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

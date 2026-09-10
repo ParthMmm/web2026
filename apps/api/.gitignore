@@ -1,0 +1,10 @@
+node_modules/
+.alchemy/
+.wrangler/
+.env*
+!.env.example
+*.tsbuildinfo
+client/target/
+generator-check/target/
+client/generated/
+artifacts/local/

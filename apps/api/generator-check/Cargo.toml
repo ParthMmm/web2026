@@ -1,0 +1,11 @@
+[package]
+name = "photo-generator-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+photo_probe_sdk = { path = "../client/generated", default-features = false, features = ["rustls"] }
+serde_json = "=1.0.149"
