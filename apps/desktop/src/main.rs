@@ -8,7 +8,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Separate limits keep thumbnail browsing from retaining full-size previews.
+fn benchmark_seconds_from_env() -> Option<u64> {
+    match std::env::var("PHOTO_BENCH_SECONDS") {
+        Ok(value) => {
+            let seconds = value
+                .parse::<u64>()
+                .expect("PHOTO_BENCH_SECONDS must be a positive integer");
+            assert!(
+                seconds > 0,
+                "PHOTO_BENCH_SECONDS must be a positive integer"
+            );
+            Some(seconds)
+        }
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            panic!("PHOTO_BENCH_SECONDS must be valid UTF-8")
+        }
+    }
+}
+
 struct BoundedCache {
     inner: Entity<RetainAllImageCache>,
     recent: VecDeque<Resource>,
@@ -115,7 +133,12 @@ struct Gallery {
 }
 
 impl Gallery {
-    fn new(inputs: Vec<PathBuf>, window: &Window, cx: &mut Context<Self>) -> Self {
+    fn new(
+        inputs: Vec<PathBuf>,
+        benchmark_seconds: Option<u64>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut gallery = Self {
             library: None,
             thumbnails: Vec::new(),
@@ -142,11 +165,9 @@ impl Gallery {
             inactive_frames: 0,
             preview_latencies_ms: Vec::new(),
             preview_samples: Vec::new(),
-            benchmark_seconds: std::env::var("PHOTO_BENCH_SECONDS")
-                .ok()
-                .and_then(|s| s.parse().ok()),
+            benchmark_seconds,
             next_preview_at: 1,
-            show_fps: std::env::var_os("PHOTO_BENCH_SECONDS").is_none(),
+            show_fps: benchmark_seconds.is_none(),
             last_render: Instant::now(),
         };
         if let Some(seconds) = gallery.benchmark_seconds {
@@ -154,28 +175,6 @@ impl Gallery {
             cx.spawn_in(window, async move |this, cx| {
                 smol::Timer::after(Duration::from_secs(seconds)).await;
                 let _ = this.update_in(cx, |view, window, cx| view.finish_benchmark(window, cx));
-            })
-            .detach();
-        }
-        if let Some(seconds) = gallery.benchmark_seconds
-            && std::env::var_os("PHOTO_BENCH_KEEP_ACTIVE").is_some()
-        {
-            // Opt-in harness control, never enabled during normal interactive use.
-            cx.spawn_in(window, async move |this, cx| {
-                for _ in 0..seconds * 10 {
-                    smol::Timer::after(Duration::from_millis(100)).await;
-                    if this
-                        .update_in(cx, |_, window, cx| {
-                            // A key window can still be occluded. Restore its
-                            // ordering too, not just its active-window state.
-                            cx.activate(true);
-                            window.activate_window();
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
             })
             .detach();
         }
@@ -598,6 +597,8 @@ actions!(photos, [Quit]);
 
 fn main() {
     let inputs = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let benchmark_seconds = benchmark_seconds_from_env();
+    let benchmark_mode = benchmark_seconds.is_some();
     gpui_kit::application().run(move |cx| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
@@ -606,22 +607,31 @@ fn main() {
             items: vec![MenuItem::action("Quit", Quit)],
             disabled: false,
         }]);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(1200.), px(820.)),
-                    cx,
-                ))),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Photo prototype".into()),
-                    ..Default::default()
-                }),
+        let mut window_options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                None,
+                size(px(1200.), px(820.)),
+                cx,
+            ))),
+            titlebar: Some(TitlebarOptions {
+                title: Some("Photo prototype".into()),
                 ..Default::default()
-            },
-            |window, cx| cx.new(|cx| Gallery::new(inputs, window, cx)),
-        )
+            }),
+            ..Default::default()
+        };
+        if benchmark_mode {
+            // GUI benchmarks must not activate or repeatedly raise the
+            // window over the user's work. They also opt out of GPUI's
+            // inactive-window throttle so focus is not a test prerequisite.
+            window_options.focus = false;
+            window_options.inactive_frame_interval = None;
+        }
+        cx.open_window(window_options, |window, cx| {
+            cx.new(|cx| Gallery::new(inputs, benchmark_seconds, window, cx))
+        })
         .expect("open photo window");
-        cx.activate(true);
+        if !benchmark_mode {
+            cx.activate(true);
+        }
     });
 }

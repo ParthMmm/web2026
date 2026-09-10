@@ -30,7 +30,6 @@ parser.add_argument("--count", type=int, default=20)
 parser.add_argument("--seconds", type=int, default=30)
 parser.add_argument("--output", type=Path, required=True, help="New directory outside Git, or benchmarks/local/")
 parser.add_argument("--mode", choices=["gui", "pipeline"], default="gui")
-parser.add_argument("--keep-active", action="store_true", help="Keep the GUI window active during each timed run")
 args = parser.parse_args()
 if args.count < 1 or args.seconds < 10:
     parser.error("count must be positive and seconds at least 10")
@@ -53,7 +52,8 @@ metadata = {
     "hardware": subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip(),
     "ram_bytes": int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True)),
     "os": subprocess.check_output(["sw_vers", "-productVersion"], text=True).strip(),
-    "keep_active": args.keep_active,
+    "window_activation": "disabled for GUI benchmarks",
+    "presentation_visibility": "not measured; coverage or minimization can stop delivery",
     "vips": subprocess.check_output(["vips", "--version"], text=True).strip(),
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),
     "cache_definition": "cold = empty derivative cache; warm = all thumbnails + exact requested large previews cached, fresh process; OS file cache not flushed",
@@ -129,9 +129,6 @@ for pipeline in (["gui"] if args.mode == "gui" else ["rust", "vips"]):
             results["warm_preparation"] = json.loads(warming.stdout.splitlines()[-1])
             (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")
         env = dict(os.environ, PHOTO_CACHE_DIR=str(cache.resolve()), PHOTO_BENCH_SECONDS=str(args.seconds))
-        env.pop("PHOTO_BENCH_KEEP_ACTIVE", None)
-        if args.keep_active:
-            env["PHOTO_BENCH_KEEP_ACTIVE"] = "1"
         command = [str(root / "target/release/photo-desktop")] if pipeline == "gui" else [str(root / "target/release/benchmark-pipeline"), pipeline, str(cache)]
         name = state if pipeline == "gui" else pipeline + "-" + state
         results["runs"][name] = run(name, command + [str(p.resolve()) for p in selected], env)
