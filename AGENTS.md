@@ -20,15 +20,12 @@ The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` f
 
 ### Issue tracker
 
-Use GitHub Issues. Before reading, publishing, or updating tickets,
-read `docs/agents/issue-tracker.md`.
+Use GitHub Issues for ParthMmm/web2026. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Use the five canonical triage labels. Before triaging or labeling
-issues, read `docs/agents/triage-labels.md`.
+Use the five canonical triage labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Use a single root context. Before exploring domain behavior or
-architecture, read `docs/agents/domain.md`.
+Use a single root context. See `docs/agents/domain.md`.
