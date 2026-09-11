@@ -20,6 +20,11 @@ serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 smol = { version = "=2.0.2", optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+block = "=0.1.6"
+cocoa = "=0.26.0"
+objc = "=0.2.7"
+
 [dev-dependencies]
 tempfile = "=3.27.0"
 

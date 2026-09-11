@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
 use image::{ImageDecoder, ImageReader, codecs::jpeg::JpegEncoder, imageops::FilterType};
+#[cfg(feature = "desktop")]
+pub mod photos;
+
 use std::{
     collections::VecDeque,
     fs,

@@ -1,6 +1,7 @@
 use gpui::{prelude::*, *};
 use gpui_kit as gpui;
-use photo_prototype::{Event, Library, Pipeline, PreviewKind};
+use gpui_kit::base::Button;
+use photo_prototype::{Event, Library, Pipeline, PreviewKind, photos};
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,
@@ -144,7 +145,7 @@ impl Gallery {
             thumbnails: Vec::new(),
             selected: None,
             large: None,
-            status: "Choose JPEGs or a folder to import".into(),
+            status: "Choose JPEGs, a folder, or Photos to import".into(),
             scanning: false,
             completed: 0,
             failed: 0,
@@ -232,8 +233,24 @@ impl Gallery {
     }
 
     fn import(&mut self, inputs: Vec<PathBuf>, cx: &mut Context<Self>) {
+        self.start_import(inputs, None, cx);
+    }
+
+    fn import_photos(&mut self, inputs: Vec<PathBuf>, cx: &mut Context<Self>) {
+        self.start_import(inputs.clone(), Some(inputs), cx);
+    }
+
+    fn start_import(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        cleanup_on_failure: Option<Vec<PathBuf>>,
+        cx: &mut Context<Self>,
+    ) {
         // One import session at a time: no overlapping workers or stale completion messages.
         if self.library.is_some() || self.scanning {
+            if let Some(paths) = cleanup_on_failure {
+                photos::cleanup_import(&paths);
+            }
             return;
         }
         self.scanning = true;
@@ -249,6 +266,11 @@ impl Gallery {
                 .background_executor()
                 .spawn(async move { Library::open(&inputs, cache, Pipeline::Vips) })
                 .await;
+            if result.is_err()
+                && let Some(paths) = cleanup_on_failure
+            {
+                photos::cleanup_import(&paths);
+            }
             let _ = this.update(cx, |view, cx| {
                 view.scanning = false;
                 match result {
@@ -266,6 +288,12 @@ impl Gallery {
     }
 
     fn choose(&mut self, cx: &mut Context<Self>) {
+        if self.library.is_some() || self.scanning {
+            return;
+        }
+        self.scanning = true;
+        self.status = "Choose JPEGs…".into();
+        cx.notify();
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: true,
@@ -273,8 +301,68 @@ impl Gallery {
             prompt: Some("Import JPEGs".into()),
         });
         cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(paths))) = paths.await {
-                let _ = this.update(cx, |view, cx| view.import(paths, cx));
+            let result = paths.await;
+            let _ = this.update(cx, |view, cx| {
+                view.scanning = false;
+                match result {
+                    Ok(Ok(Some(paths))) => view.import(paths, cx),
+                    Ok(Ok(None)) => view.status = "No JPEGs selected".into(),
+                    Ok(Err(error)) => view.status = format!("Import failed: {error:#}"),
+                    Err(error) => view.status = format!("Import failed: {error:#}"),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn choose_photos(&mut self, cx: &mut Context<Self>) {
+        if self.library.is_some() || self.scanning {
+            return;
+        }
+        self.scanning = true;
+        let root = match photos::import_root() {
+            Ok(root) => root,
+            Err(error) => {
+                self.scanning = false;
+                self.status = format!("Photos import failed: {error:#}");
+                cx.notify();
+                return;
+            }
+        };
+        let receiver = match photos::open(root) {
+            Ok(receiver) => receiver,
+            Err(error) => {
+                self.scanning = false;
+                self.status = format!("Photos import failed: {error:#}");
+                cx.notify();
+                return;
+            }
+        };
+        self.status = "Choose photos in the Photos picker…".into();
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let result = smol::unblock(move || receiver.recv()).await;
+            let cleanup_on_update_failure = match &result {
+                Ok(Ok(paths)) if !paths.is_empty() => Some(paths.clone()),
+                _ => None,
+            };
+            let update_result = this.update(cx, |view, cx| {
+                view.scanning = false;
+                match result {
+                    Ok(Ok(paths)) if paths.is_empty() => {
+                        view.status = "No Photos selected".into();
+                    }
+                    Ok(Ok(paths)) => view.import_photos(paths, cx),
+                    Ok(Err(error)) => view.status = format!("Photos import failed: {error}"),
+                    Err(error) => view.status = format!("Photos import failed: {error}"),
+                }
+                cx.notify();
+            });
+            if update_result.is_err()
+                && let Some(paths) = cleanup_on_update_failure
+            {
+                photos::cleanup_import(&paths);
             }
         })
         .detach();
@@ -540,16 +628,30 @@ impl Render for Gallery {
                     .items_center()
                     .gap_4()
                     .child(
-                        div()
-                            .id("import")
-                            .cursor_pointer()
+                        Button::new("import")
+                            .disabled(self.scanning || self.library.is_some())
+                            .px_2()
+                            .py_1()
+                            .styles(|styles| styles.disabled(|style| style.opacity(0.5)))
+                            .focus_visible(|style| style.opacity(0.7))
                             .on_click(cx.listener(|view, _, _, cx| view.choose(cx)))
                             .child("Import JPEGs…"),
                     )
                     .child(
-                        div()
-                            .id("fps-toggle")
-                            .cursor_pointer()
+                        Button::new("import-photos")
+                            .disabled(self.scanning || self.library.is_some())
+                            .px_2()
+                            .py_1()
+                            .styles(|styles| styles.disabled(|style| style.opacity(0.5)))
+                            .focus_visible(|style| style.opacity(0.7))
+                            .on_click(cx.listener(|view, _, _, cx| view.choose_photos(cx)))
+                            .child("Import from Photos…"),
+                    )
+                    .child(
+                        Button::new("fps-toggle")
+                            .px_2()
+                            .py_1()
+                            .focus_visible(|style| style.opacity(0.7))
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.show_fps = !view.show_fps;
                                 cx.notify();

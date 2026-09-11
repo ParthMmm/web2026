@@ -31,6 +31,8 @@ cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features 
 
 Alternatively launch without an argument and choose **Import JPEGs…**. One import session per process; restart to choose another library. Select a thumbnail to open a larger preview. Cmd-Q quits. **Show/Hide performance** toggles gpui-fps. Right-click its headline to switch MAX FPS (estimated sustainable redraw rate) to presented FPS; click to collapse it. Its default grading budget is 60 Hz.
 
+On macOS 13 and later, choose **Import from Photos…** to open the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into app-managed storage, and other image representations are converted to JPEG with the system `sips` tool. The selected files are copied while the provider's temporary URLs are valid. Cancelled or failed selections are removed. The default import location is `~/Library/Application Support/dev.parth.photo-prototype/imports/v1`; set `PHOTO_IMPORT_DIR` to override it. The copied files then use the same local JPEG import and preview pipeline as file selections.
+
 Selecting a folder imports JPEGs from all nested subfolders into one grid. Files in different folders can share a filename. Selecting overlapping folders or files imports each canonical source path once. Folder names do not become albums.
 
 Originals are read-only and never uploaded. Cached JPEGs live in `~/Library/Caches/dev.parth.photo-prototype/v1`, overridable with `PHOTO_CACHE_DIR`. Photos library packages and Photo Booth are excluded; symlinks are skipped. Other unreadable folders fail the scan with an error.
@@ -45,7 +47,7 @@ One thumbnail lane and one interactive-preview lane allow at most two encoder jo
 
 ```sh
 cargo fmt --manifest-path apps/desktop/Cargo.toml --all -- --check
-cargo test --locked --manifest-path apps/desktop/Cargo.toml
+cargo test --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo check --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo build --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bins
 python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --output apps/desktop/benchmarks/local/pipeline-run

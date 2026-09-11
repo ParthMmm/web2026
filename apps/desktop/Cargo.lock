@@ -4924,9 +4924,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blake3",
+ "block",
+ "cocoa 0.26.0",
  "gpui-fps",
  "gpui-kit",
  "image",
+ "objc",
  "serde",
  "serde_json",
  "smol",
