@@ -697,6 +697,31 @@ impl Render for Gallery {
 
 actions!(photos, [Quit]);
 
+fn configure_benchmark_window(window_options: &mut WindowOptions) {
+    // GPUI 0.3.4's macOS frame source follows NSWindowOcclusionState. A
+    // covered normal window stops receiving CVDisplayLink ticks even when it
+    // remains dirty. PopUp uses a non-activating panel at the popup level, so
+    // the benchmark stays visible to the compositor without taking focus.
+    window_options.focus = false;
+    window_options.inactive_frame_interval = None;
+    window_options.kind = WindowKind::PopUp;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn benchmark_window_is_non_activating_and_unthrottled() {
+        let mut options = WindowOptions::default();
+        configure_benchmark_window(&mut options);
+
+        assert!(!options.focus);
+        assert_eq!(options.inactive_frame_interval, None);
+        assert_eq!(options.kind, WindowKind::PopUp);
+    }
+}
+
 fn main() {
     let inputs = std::env::args_os().skip(1).map(PathBuf::from).collect();
     let benchmark_seconds = benchmark_seconds_from_env();
@@ -722,11 +747,7 @@ fn main() {
             ..Default::default()
         };
         if benchmark_mode {
-            // GUI benchmarks must not activate or repeatedly raise the
-            // window over the user's work. They also opt out of GPUI's
-            // inactive-window throttle so focus is not a test prerequisite.
-            window_options.focus = false;
-            window_options.inactive_frame_interval = None;
+            configure_benchmark_window(&mut window_options);
         }
         cx.open_window(window_options, |window, cx| {
             cx.new(|cx| Gallery::new(inputs, benchmark_seconds, window, cx))
