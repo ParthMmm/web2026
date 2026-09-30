@@ -13,9 +13,11 @@ visual-check = ["desktop", "gpui-kit/test-support"]
 [dependencies]
 anyhow = "=1.0.102"
 blake3 = "=1.8.3"
-gpui-kit = { version = "=0.6.1", optional = true, default-features = false, features = ["profiler"] }
+gpui-kit = { version = "=0.6.1", optional = true, default-features = false, features = ["assets", "component", "profiler"] }
 gpui-fps = { version = "=0.6.1", optional = true }
-image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png"] }
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+kamadak-exif = "=0.6.1"
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 smol = { version = "=2.0.2", optional = true }

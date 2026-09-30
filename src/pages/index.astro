@@ -11,7 +11,6 @@ const title = "Parth Mangrola";
 const description =
 	"Full-stack engineer building products end to end — frontends, APIs, databases, and the infrastructure underneath.";
 
-/* The two flagships carry the page; everything else is the supporting index. */
 const FLAGSHIPS = new Set(["Beacon", "Versos"]);
 const otherProjects = projects.filter((p) => !FLAGSHIPS.has(p.title));
 
@@ -99,8 +98,6 @@ const jsonLd = {
     padding-block: clamp(2.5rem, 6vw, 4.5rem) 0;
   }
 
-  /* Ranked by size before anything else. One phrase carries the orange
-     highlight as a surface; green stays in hairlines and markers. */
   .thesis {
     margin: 0;
     max-width: 14ch;

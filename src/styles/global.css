@@ -59,13 +59,9 @@
   --color-cream-900: oklch(0.3 0.016 85);
   --color-cream-950: oklch(0.23 0.012 85);
 
-  /* Display scale. The page ranks by size before anything else, so the
-	   hero needs to be genuinely large rather than one notch above a heading. */
   --text-display: clamp(2.75rem, 7.5vw, 5.25rem);
   --text-feature: clamp(1.5rem, 2.6vw, 2rem);
 
-  /* Layout: one spine. The rail holds section labels in the margin;
-	   the content column keeps prose near a 62-character measure. */
   --rail: 7rem;
   --gutter: 2.5rem;
   --measure: 44rem;
@@ -293,7 +289,6 @@ p {
   text-wrap: pretty;
 }
 
-/* Tabular figures wherever the mono voice carries data. */
 .font-mono {
   font-feature-settings: "tnum";
 }

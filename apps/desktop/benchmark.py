@@ -2,6 +2,7 @@
 """Measure local JPEG workflows. Originals are read-only; reports omit source paths."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import statistics
@@ -22,6 +23,37 @@ def require_display():
     ], text=True, timeout=30).strip()
     if state != "ready":
         raise RuntimeError("GUI benchmark blocked: unlock the Mac and wake its display first")
+
+
+def gui_passed(result, count, cold):
+    intervals = result.get("present_interval_samples")
+    frames = result.get("presented_frames")
+    draws = result.get("draw_samples")
+    trace_draws = result.get("trace_draw_events")
+    superseded = result.get("superseded_draw_events")
+    pending = result.get("pending_draw_events")
+    complete = (
+        result.get("frame_timing_complete") is True
+        and type(intervals) is int and intervals > 100
+        and type(frames) is int and frames == intervals + 1
+        and type(superseded) is int and superseded >= 0
+        and type(pending) is int and pending == 0
+        and type(draws) is int and draws == frames + superseded
+        and type(trace_draws) is int and trace_draws == draws
+    )
+    within_budgets = all(
+        type(result.get(key)) in (int, float)
+        and math.isfinite(result[key]) and 0 <= result[key] <= limit
+        for key, limit in result["budgets"].items()
+    )
+    return (
+        complete and within_budgets
+        and result.get("photos") == count and result.get("failed") == 0
+        and result.get("preview_ready_samples", 0) >= 3
+        and result.get("preview_attempts") == result.get("preview_ready_samples") == result.get("preview_decoded_samples")
+        and result.get("preview_failures") == 0 and result.get("decode_failures") == 0
+        and (cold or result.get("preview_cache_hits") == result.get("preview_attempts"))
+    )
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -57,7 +89,7 @@ metadata = {
     "presentation_visibility": "not measured; minimization or display restrictions can still stop delivery",
     "vips": subprocess.check_output(["vips", "--version"], text=True).strip(),
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),
-    "cache_definition": "cold = empty derivative cache; warm = all thumbnails + exact requested large previews cached, fresh process; OS file cache not flushed",
+    "cache_definition": "cold = empty library; warm = library already holds every photo, its grid derivative and the exact requested large previews, fresh process; OS file cache not flushed",
     "scope": "fixed-duration browsing window; cold import may still be running" if args.mode == "gui" else "complete thumbnail import",
 }
 
@@ -100,37 +132,34 @@ def run(name, command, env):
             "present_interval_p99_ms": 33.34, "preview_ready_p95_ms": preview_budget,
             "sampled_family_peak_rss_bytes": 512 * 1024 * 1024,
             "last_render_age_ms": 250, "max_render_gap_ms": 250,
+            "first_present_ms": 250, "last_present_age_ms": 250, "max_present_gap_ms": 250,
             "thumbnail_cache_peak_entries": 64, "preview_cache_peak_entries": 2,
             "thumbnail_peak_in_flight": 4, "preview_peak_in_flight": 1,
         }
-        result["passed"] = (
-            result["photos"] == count and result["failed"] == 0
-            and result["draw_samples"] > 100 and result["preview_ready_samples"] >= 3
-            and result["preview_attempts"] == result["preview_ready_samples"] == result["preview_decoded_samples"]
-            and result["preview_failures"] == 0 and result["decode_failures"] == 0
-            and (name == "cold" or result["preview_cache_hits"] == result["preview_attempts"])
-            and all(result.get(key) is not None and result[key] <= limit for key, limit in result["budgets"].items())
-        )
+        result["passed"] = gui_passed(result, count, name == "cold")
+
     print(name, json.dumps(result), flush=True)
     return result
 
 results = {"environment": metadata, "runs": {}}
-for pipeline in (["gui"] if args.mode == "gui" else ["rust", "vips"]):
-    cache = args.output / (pipeline + "-cache")
+target_dir = Path(os.environ.get("CARGO_TARGET_DIR", root / "target"))
+pipeline_binary = str(target_dir / "release/benchmark-pipeline")
+for pipeline in (["gui"] if args.mode == "gui" else ["pipeline"]):
+    library = (args.output / (pipeline + "-library")).resolve()
     for state in ["cold", "warm"]:
         if pipeline == "gui" and state == "warm":
-            # Match Gallery::benchmark's deterministic request times and rows.
+            # Match the GUI benchmark script's deterministic request times and rows.
             rows = (count + 3) // 4
             indices = sorted({((second * 4) % rows) * 4 for second in range(1, args.seconds - 1, 3)})
             warming_env = dict(os.environ, PHOTO_PREWARM_INDICES=",".join(map(str, indices)))
             warming = subprocess.run(
-                [str(root / "target/release/benchmark-pipeline"), "vips", str(cache)] + [str(p.resolve()) for p in selected],
+                [pipeline_binary, str(library)] + [str(p.resolve()) for p in selected],
                 env=warming_env, check=True, capture_output=True, text=True, timeout=max(120, count * 10),
             )
             results["warm_preparation"] = json.loads(warming.stdout.splitlines()[-1])
             (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")
-        env = dict(os.environ, PHOTO_CACHE_DIR=str(cache.resolve()), PHOTO_BENCH_SECONDS=str(args.seconds))
-        command = [str(root / "target/release/photo-desktop")] if pipeline == "gui" else [str(root / "target/release/benchmark-pipeline"), pipeline, str(cache)]
+        env = dict(os.environ, PHOTO_LIBRARY_DIR=str(library), PHOTO_BENCH_SECONDS=str(args.seconds))
+        command = [str(target_dir / "release/photo-desktop")] if pipeline == "gui" else [pipeline_binary, str(library)]
         name = state if pipeline == "gui" else pipeline + "-" + state
         results["runs"][name] = run(name, command + [str(p.resolve()) for p in selected], env)
         (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")

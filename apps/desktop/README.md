@@ -1,6 +1,6 @@
 # Photo prototype
 
-Local-only GPUI performance gate for [issue #3](https://github.com/ParthMmm/web2026/issues/3). This is not the finished photo manager: no database, authentication, uploads, editing, or public publishing.
+Local-only macOS photo library built with GPUI Kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
 
 ## Run on macOS
 
@@ -29,41 +29,76 @@ The recorded checks used an existing 8.18.3 install; archived-formula installati
 cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bin photo-desktop -- "$HOME/Pictures"
 ```
 
-Alternatively launch without an argument and choose **Import JPEGs…**. One import session per process; restart to choose another library. Select a thumbnail to open a larger preview. Cmd-Q quits. **Show/Hide performance** toggles gpui-fps. Right-click its headline to switch MAX FPS (estimated sustainable redraw rate) to presented FPS; click to collapse it. Its default grading budget is 60 Hz.
+Arguments are JPEG files or folders to import on launch. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the toolbar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
-On macOS 13 and later, choose **Import from Photos…** to open the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into app-managed storage, and other image representations are converted to JPEG with the system `sips` tool. The selected files are copied while the provider's temporary URLs are valid. Cancelled or failed selections are removed. The default import location is `~/Library/Application Support/dev.parth.photo-prototype/imports/v1`; set `PHOTO_IMPORT_DIR` to override it. The copied files then use the same local JPEG import and preview pipeline as file selections.
+- **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
+- **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
+- **Failures:** files that couldn't be imported appear under **N not imported…** in the toolbar (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
+- **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) toggles gpui-fps. Right-click its headline to switch MAX FPS (estimated sustainable redraw rate) to presented FPS; click to collapse it. Its default grading budget is 60 Hz.
 
-Selecting a folder imports JPEGs from all nested subfolders into one grid. Files in different folders can share a filename. Selecting overlapping folders or files imports each canonical source path once. Folder names do not become albums.
+The theme follows the system's light or dark appearance.
 
-Originals are read-only and never uploaded. Cached JPEGs live in `~/Library/Caches/dev.parth.photo-prototype/v1`, overridable with `PHOTO_CACHE_DIR`. Photos library packages and Photo Booth are excluded; symlinks are skipped. Other unreadable folders fail the scan with an error.
+On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. Copies that duplicate a photo already in the library, or that fail to import, are deleted. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
+
+Selecting a folder imports JPEGs from all nested subfolders. Photos library packages and Photo Booth are excluded, and symlinks are skipped. Folder names do not become albums.
+
+## The library
+
+The library lives in `~/Library/Application Support/dev.parth.photo-prototype/library`; set `PHOTO_LIBRARY_DIR` to use another one. It contains a SQLite catalog (`catalog.sqlite`) and generated `derivatives/`. Originals are only read, never modified, moved, or uploaded.
+
+- **Identity and duplicates.** A photo's identity is the BLAKE3 hash of its bytes. Importing the same bytes from another path adds a known location instead of a second photo. The inspector shows "Found in N places". Re-importing a known, unchanged path (same size and modification time) skips hashing entirely.
+- **Missing and moved originals.** On open, sources that no longer exist are flagged. The grid marks a photo whose every known original is missing, and the inspector explains how to reconnect it: import the file from its new location. Existing previews stay available. If a file's content changes in place, it becomes a new photo. The old photo is removed once none of its sources still hold its bytes.
+- **Failures.** Each failed file is recorded with a readable reason, for example "Not a readable JPEG" or "The JPEG is incomplete or damaged". A later successful import clears the record. Failures persist across launches until retried or cleared.
+- **Derivatives.** libvips produces WebP renditions at 480 px (grid), 1200 px (mobile), and 2400 px (desktop) on the long edge, never upscaled. Renditions apply EXIF orientation, are converted to sRGB from the embedded ICC profile, and carry no metadata: no EXIF, GPS, ICC, or XMP chunks. The grid rendition is made during import. The larger ones are prepared in the background and on demand for the viewer. Recipe version 1 uses quality 82, which is provisional. A changed recipe version or a missing file is regenerated.
+- **Metadata.** ISO, exposure time, aperture, focal length, camera, lens, and capture time (with its UTC offset, when recorded) are read locally from EXIF and stored in the catalog. GPS and serial numbers are ignored. Malformed metadata never fails an import.
 
 ## Processing and memory bounds
 
-The grid virtualizes four-column rows. Encoded 480-pixel thumbnails and 2400-pixel previews stay on disk. GPUI caches retain at most **64 thumbnail / 2 viewer entries**, with at most **4 / 1 in-flight decodes**. Pending loads are settled before eviction, including loads that scroll off-screen; reports measure the underlying cache entries, not just an outer list of keys. Available thumbnails remain visible until a larger preview arrives. Image work stays off the UI thread.
+The grid virtualizes rows. Columns follow the window width (at least 168 px per tile), and the inspector collapses below 760 px. Encoded renditions stay on disk. GPUI caches retain at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Pending loads are settled before eviction, including loads that scroll off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
 
-One thumbnail lane and one interactive-preview lane allow at most two encoder jobs. New thumbnails wait while an interactive request is pending/running, but an already-running thumbnail cannot delay the separate preview lane. The latest pending preview replaces older pending requests. Tests cover recursive imports, overlapping selections, unchanged originals, reuse, invalid JPEGs, image bounds, and interactive priority behind an expensive import.
+Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
+
+Library tests (`tests/library.rs`) cover:
+
+- persistence across restarts, and originals left unchanged;
+- nested and overlapping imports;
+- content duplicates;
+- damaged files, which are remembered, retried, and clearable;
+- EXIF orientation;
+- Display P3, untagged, and invalid ICC profiles;
+- metadata extraction, including that the serial number never reaches disk and that derivatives are stripped of metadata;
+- malformed metadata;
+- moved originals and in-place content replacement;
+- preview priority behind imports, and repeated-preview cache hits;
+- web-size preparation;
+- deletion of app-owned duplicate copies;
+- rejection of other libvips versions.
 
 ## Verify
 
 ```sh
 cargo fmt --manifest-path apps/desktop/Cargo.toml --all -- --check
 cargo test --locked --manifest-path apps/desktop/Cargo.toml --features desktop
+cargo test --locked --manifest-path apps/desktop/Cargo.toml --features visual-check --lib failures_sheet
 cargo check --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo build --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bins
 python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --output apps/desktop/benchmarks/local/pipeline-run
 caffeinate -dimsu python3 apps/desktop/benchmark.py "$HOME/Pictures" --count 200 --seconds 30 --output apps/desktop/benchmarks/local/gui-run
 ```
 
-Repeat the GUI command with counts 20, 200, and the full authorized library. Output directories must be new. The harness samples evenly across the folder tree and omits source names/paths from JSON. Caches and raw reports are ignored by Git. Encoder stderr and scene captures can contain private material; keep them local.
+Repeat the GUI command with counts 20, 200, and the full authorized library. Output directories must be new. Each run creates its own library inside the output directory, so benchmarks never touch your real library. The harness samples evenly across the folder tree and omits source names and paths from JSON. Libraries and raw reports are ignored by Git. Encoder stderr and scene captures can contain private material; keep them local.
+
+`benchmark-pipeline <library-directory> <JPEG-or-folder>...` imports without a window and prints one JSON summary. `PHOTO_PREWARM_INDICES` also renders the desktop previews for those grid positions, which the warm GUI run requires.
 
 ### Conditions and measurement
 
-- **Cold:** empty derivative cache, not a flushed OS file cache. Repeated selections within that run can hit derivatives created earlier in the same run.
-- **Warm:** complete all thumbnails **and the exact deterministic large-preview request sequence** before starting a fresh GUI process. Every requested large derivative must report a hit. Decoded GPUI images are not preloaded into the new process.
+- **Cold:** empty library, not a flushed OS file cache. Repeated selections within that run can hit derivatives created earlier in the same run.
+- **Warm:** the library already holds every photo, its grid rendition, **and the exact deterministic large-preview request sequence** before a fresh GUI process starts. Every requested large derivative must report a hit. Decoded GPUI images are not preloaded into the new process.
 - **GUI scope:** a fixed 30-second browsing window while imports continue, not a complete cold import. Larger cold libraries show placeholders when scrolling outpaces thumbnail production. The warm workload exercises fully populated rows. Pipeline mode measures complete thumbnail imports.
 - **Window behavior:** GUI benchmarks use a non-activating popup-level window. They set `focus = false`, do not call `cx.activate`, and do not repeatedly force the window to the front. This keeps GPUI 0.3.4's macOS frame source running when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
-- Benchmark mode disables the HUD/manual selection, scrolls automatically, requests a preview every three seconds, and sustains frame demand. An independent deadline ends the run even when rendering stops. Failed runs remain failed.
+- Benchmark mode uses four columns regardless of width, disables manual selection and web-size preparation, scrolls automatically, requests a preview every three seconds, and sustains frame demand. An independent deadline ends the run even when rendering stops. Failed runs remain failed.
 - File readiness ends when the generated derivative reaches the GUI. Decoded readiness ends when GPUI's image cache resolves it. **Neither proves pixels reached the display.** Draw and present-interval histograms are not GPU execution timings. The maximum gap measures time between Gallery render calls; initial render invocation is reported separately.
+- Frame intervals come from every newly drawn target-window frame submission, including inactive frames. They measure time between `present_end` events, not physical display scanout. Ordered trace accounting includes draws superseded before presentation; a pass requires zero trailing unpresented draws and exact draw coverage. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
 - RSS samples sum the app and encoder children every 100 ms. Short-lived peaks can be missed; shared pages can be counted more than once. An unsampled run reports null, not zero memory.
 
 ### Budgets
@@ -75,14 +110,30 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 | Large-preview file readiness p95, cold / warm | 1500 / 200 ms |
 | Sampled process-family RSS | 512 MiB |
 | Last-render age / maximum inter-render gap | 250 / 250 ms |
+| First presentation / last-presentation age / maximum presentation gap | 250 / 250 / 250 ms |
 | Thumbnail / viewer cache entries | 64 / 2 |
 | Thumbnail / viewer in-flight decodes | 4 / 1 |
 
-A pass also requires more than 100 draws, at least three previews, matching attempted/file-ready/decoded counts, no import/preview/decode failures, and all warm requests hitting large derivatives. Decoded latency is reported separately, without a separate pass budget. These are prototype targets for this Mac, not universal guarantees.
+A pass also requires more than 100 measured presentation intervals, complete ordered frame coverage, at least three previews, matching attempted/file-ready/decoded counts, no import/preview/decode failures, and all warm requests hitting large derivatives. Decoded latency is reported separately, without a separate pass budget. These are prototype targets for this Mac, not universal guarantees.
 
 ## Measured evidence
 
-**Gate status: PASS for the current 30-second GUI workload.** The earlier `gui-20-reviewed` warm failure is retained as regression evidence, not replaced by a favorable result. The render-gap cause is now understood: pinned GPUI 0.3.4 stops its macOS `CVDisplayLink` source when a normal window is fully occluded, even when the window is dirty and inactive-window throttling is disabled.
+On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
+
+| Photos | Cache | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 24 | Cold | 0.95 | 16.98 / 19.81 | 150.52 | 208.98 | 166.44 |
+| 24 | Warm | 0.95 | 17.46 / 23.86 | 66.73 | 17.24 | 153.25 |
+| 200 | Cold | 1.33 | 17.25 / 20.03 | 150.00 | 277.53 | 268.67 |
+| 200 | Warm | 1.46 | 17.28 / 23.88 | 52.57 | 16.60 | 254.64 |
+
+Each run completed ten previews without failures, accounted for one superseded draw, and had zero pending draws. Every warm preview hit its large derivative. Both 200-photo runs reached the 64/2 cache and 4/1 decode limits without exceeding them. Reports remain in `benchmarks/local/fix-20260929/final-24/` and `final-200/`. These synthetic fixtures do not replace the real-photo matrix or establish the cause of earlier frame variation.
+
+The older figures below use GPUI’s activity-filtered presentation histogram and are not directly comparable to the current full-trace intervals. The measurements below are from issue #3, taken before the persistent library replaced the JPEG cache and the UI moved to GPUI Kit components. After those changes, a 24-photo smoke run of the same harness passed every budget. Cold: draw p95 0.93 ms, present p95/p99 17.7/19.9 ms, preview-ready p95 784 ms. Warm: draw p95 1.13 ms, present p95/p99 17.7/33.0 ms, preview-ready p95 13 ms, all four preview requests cache hits. Pipeline mode re-imported the unchanged 24 photos in 0.07 s. Rerun the full matrix below before relying on it for larger libraries.
+
+Earlier checks were not consistently green after the persistent-library changes. On September 29, 2026, two fresh 12-second runs with 24 generated JPEGs each failed frame-interval budgets. The first cold run recorded p95 23.81 ms against 20 ms while a separate pipeline check ran. An isolated rerun passed cold, but warm recorded p95 21.00 ms and p99 33.341 ms against 20 ms and 33.34 ms. All four runs completed every preview without import or decode failures, and draw p95 stayed below 1.4 ms. The cause of the frame-interval variation remains unresolved. Both reports remain locally under `benchmarks/local/pickup-20260929/`. These generated fixtures do not replace the full real-photo matrix.
+
+The earlier 30-second GUI workload passed before the persistent-library changes. The earlier `gui-20-reviewed` warm failure is retained as regression evidence, not replaced by a favorable result. Its render-gap cause is understood: pinned GPUI 0.3.4 stops its macOS `CVDisplayLink` source when a normal window is fully occluded, even when the window is dirty and inactive-window throttling is disabled.
 
 Measured on **Apple M1 Pro, 32 GiB, macOS 26.6.2**, Rust **1.97.1**, libvips **8.18.3**, using owner-authorized JPEGs under Pictures. The full tree contains **944 JPEGs / 17.35 GB**, median **20.92 MB**. Twenty- and 200-photo samples contain 368 MB and 3.74 GB respectively. Lightroom provenance was supplied by the owner, not independently established.
 
@@ -105,6 +156,8 @@ Earlier failures informed fixes and were not discarded: thumbnail-only warming p
 
 ### Native UI check
 
+The September 29, 2026 check found a panic when opening **Not imported…**: the sheet builder read Gallery while Gallery was already being updated during rendering. The builder now captures the failure list before opening the sheet; Retry and Clear still update the live Gallery. A headless GPUI regression test renders the actual Gallery and sheet, verifies Retry/Clear callbacks and focus restoration, and confirms the empty sheet’s controls do nothing. All 32 unit and 15 library tests pass with `visual-check`. The test reproduces the original borrow panic when the old builder is restored. The repaired binary starts and exits cleanly, but the native input driver could not reliably focus its window, so repaired-sheet interaction through macOS input remains unverified.
+
 Inspected actual app-owned **2400×1640 Metal scene captures** with real images. Native pointer events selected a photo and toggled the FPS HUD off. Captures confirmed aligned columns and fitted portrait/landscape images; the sizing check caught and fixed intrinsic-image overflow. Native Cmd-Q through System Events exited successfully. These are scene/interaction checks, not OS screenshots or frame-presentation proofs. Screen-recording capture was denied and was not required.
 
 For local visual inspection, `visual-check` enables GPUI's test-support scene renderer. It writes only this app's scene at four and eight seconds; interact during that interval, then quit normally:
@@ -118,8 +171,14 @@ Never commit these captures. Production benchmark binaries use `--features deskt
 
 ## Pipeline choice and remaining product work
 
-Select **libvips**. Complete cold imports of twenty evenly sampled JPEGs measured Rust **2.19 thumbnails/sec / 357 MiB** sampled family RSS versus libvips **3.90/sec / 58 MiB**. Both produce max-480-pixel JPEG thumbnails at quality 85; encoder quality scales and resize filters are not equivalent. The Rust `image`/zune-jpeg baseline applies orientation and a triangle resize, without full ICC conversion. Libvips provides shrink-on-load, orientation handling, and sRGB conversion. This is a workflow comparison, not an equal-quality codec benchmark.
+**libvips** was selected, and the Rust `image` pipeline has since been removed. The `image` crate now only reads image headers for dimensions. Tests also use it to write JPEG fixtures with EXIF and ICC data. Complete cold imports of twenty evenly sampled JPEGs measured Rust **2.19 thumbnails/sec / 357 MiB** sampled family RSS versus libvips **3.90/sec / 58 MiB**. Both produce max-480-pixel JPEG thumbnails at quality 85; encoder quality scales and resize filters are not equivalent. The Rust `image`/zune-jpeg baseline applies orientation and a triangle resize, without full ICC conversion. Libvips provides shrink-on-load, orientation handling, and sRGB conversion. This is a workflow comparison, not an equal-quality codec benchmark.
 
-Before distribution, bundle the supported libvips library or helper, audit licenses, and verify ICC/orientation fixtures. Cache validation currently checks image headers/dimensions, not a full decode; its path/size/mtime identity is not content deduplication or protection against in-place source changes. Production color/privacy fixtures, cache recovery/quota, content identity, SQLite, keyboard grid navigation, and accessible controls remain product work. Clickable prototype divs are not a finished accessibility system. Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6.
+Remaining product work:
 
-Native browsing and the behavior-level tests pass; the performance gate remains blocked by the intermittent render gap. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
+- Bundle the supported libvips library or helper, and audit licenses, before distribution.
+- Tune the WebP quality with real photos and settle on a final value.
+- Add derivative quota and cleanup of orphaned files.
+- Verify the new grid tile names, selection state, and activation actions with VoiceOver. Native accessibility-tree inspection did not expose the GPUI descendants, so screen-reader behavior is unverified.
+- Add upload and publishing.
+
+Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.

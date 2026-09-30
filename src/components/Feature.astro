@@ -3,7 +3,6 @@ type Props = {
 	title: string;
 	description: string;
 	url: string;
-	/** Short mono tag: what the thing is built on. */
 	stack: string;
 };
 
@@ -30,8 +29,6 @@ const { title, description, url, stack } = Astro.props;
     padding-block-start: 0;
   }
 
-  /* The media is the dominant element of the chapter, so it runs the full
-     content width and the caption hangs beneath it rather than beside it. */
   .media {
     margin-block-end: 1.25rem;
   }

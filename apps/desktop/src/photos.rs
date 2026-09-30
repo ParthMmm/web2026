@@ -6,22 +6,16 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const IMPORT_DIRECTORY_NAME: &str = "dev.parth.photo-prototype/imports/v1";
 const MAX_SESSION_ATTEMPTS: u32 = 100;
 const JPEG_TYPE_IDENTIFIER: &str = "public.jpeg";
 const IMAGE_TYPE_IDENTIFIER: &str = "public.image";
 const COMPATIBLE_REPRESENTATION_MODE: isize = 2;
 const STATE_IVAR: &str = "photoImportState";
 
-/// Return the app-managed root used for copied Photos assets.
-pub fn import_root() -> Result<PathBuf> {
-    if let Some(path) = std::env::var_os("PHOTO_IMPORT_DIR") {
-        return Ok(PathBuf::from(path));
-    }
-    let home = std::env::var_os("HOME").context("HOME is required")?;
-    Ok(PathBuf::from(home)
-        .join("Library/Application Support")
-        .join(IMPORT_DIRECTORY_NAME))
+/// Return the app-managed root used for copied Photos assets. Imported copies
+/// become the photos' originals, so they live beside the library catalog.
+pub fn import_root(library_root: &Path) -> PathBuf {
+    std::env::var_os("PHOTO_IMPORT_DIR").map_or_else(|| library_root.join("imports"), PathBuf::from)
 }
 
 /// Create a unique, empty directory owned by one Photos import.
