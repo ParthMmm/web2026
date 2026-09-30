@@ -3,7 +3,7 @@
 
 use crate::{
     derivative::DerivativeSize,
-    metadata::{CaptureTime, ExposureTime, PhotoMetadata},
+    metadata::{CaptureTime, ExposureTime, FilmSimulation, PhotoMetadata},
 };
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -16,7 +16,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 /// Content identity: the BLAKE3 hash of the original's bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -184,6 +184,15 @@ impl Catalog {
                 COMMIT;",
             )?;
         }
+        if version < 2 {
+            connection.execute_batch(
+                "BEGIN;
+                ALTER TABLE photos ADD COLUMN film_simulation TEXT;
+                ALTER TABLE photos ADD COLUMN film_metadata_checked INTEGER NOT NULL DEFAULT 0;
+                PRAGMA user_version = 2;
+                COMMIT;",
+            )?;
+        }
         Ok(Self { connection })
     }
 
@@ -208,6 +217,37 @@ impl Catalog {
                 photo_from_row,
             )
             .optional()?)
+    }
+
+    /// Returns photo IDs whose film metadata has not been checked.
+    pub fn pending_film_metadata(&self) -> Result<Vec<PhotoId>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id FROM photos WHERE film_metadata_checked = 0 ORDER BY id")?;
+        Ok(statement
+            .query_map([], |row| Ok(PhotoId(row.get::<_, String>(0)?.into())))?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn film_metadata_checked(&self, id: &PhotoId) -> Result<bool> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT film_metadata_checked FROM photos WHERE id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(true))
+    }
+
+    pub fn set_film_metadata(&mut self, id: &PhotoId, film: Option<FilmSimulation>) -> Result<()> {
+        self.connection.execute(
+            "UPDATE photos SET film_simulation = ?2, film_metadata_checked = 1
+             WHERE id = ?1 AND film_metadata_checked = 0",
+            params![id.as_str(), film.map(FilmSimulation::as_str)],
+        )?;
+        Ok(())
     }
 
     pub fn source(&self, path: &Path) -> Result<Option<SourceRecord>> {
@@ -240,6 +280,15 @@ impl Catalog {
         Ok(rows)
     }
 
+    pub fn photo_source_paths(&self, id: &PhotoId) -> Result<Vec<PathBuf>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT path FROM sources WHERE photo_id = ?1 ORDER BY missing, path")?;
+        Ok(statement
+            .query_map([id.as_str()], |row| path_from_row(row, 0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     pub fn contains_photo(&self, id: &PhotoId) -> Result<bool> {
         Ok(self
             .connection
@@ -257,8 +306,8 @@ impl Catalog {
         transaction.execute(
             "INSERT INTO photos (id, byte_size, width, height, imported_at, iso,
                 exposure_numerator, exposure_denominator, f_number, focal_length_mm,
-                camera_make, camera_model, lens, captured_local, captured_offset)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                camera_make, camera_model, lens, captured_local, captured_offset, film_simulation, film_metadata_checked)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 1)",
             params![
                 photo.id.as_str(),
                 signed(photo.stamp.byte_size),
@@ -275,6 +324,7 @@ impl Catalog {
                 metadata.lens,
                 metadata.captured_at.as_ref().map(CaptureTime::local),
                 metadata.captured_at.as_ref().and_then(CaptureTime::offset),
+                metadata.film_simulation.map(FilmSimulation::as_str),
             ],
         )?;
         upsert_source(&transaction, photo.id, photo.source, photo.stamp, now)?;
@@ -404,7 +454,7 @@ impl Catalog {
 const PHOTO_SELECT: &str = "
     SELECT p.id, p.byte_size, p.width, p.height, p.imported_at,
         p.iso, p.exposure_numerator, p.exposure_denominator, p.f_number, p.focal_length_mm,
-        p.camera_make, p.camera_model, p.lens, p.captured_local, p.captured_offset,
+        p.camera_make, p.camera_model, p.lens, p.captured_local, p.captured_offset, p.film_simulation,
         MIN(CAST(CAST(s.missing AS TEXT) || s.path AS BLOB)) AS preferred,
         COUNT(s.path) AS source_count
     FROM photos p JOIN sources s ON s.photo_id = p.id";
@@ -430,6 +480,10 @@ fn photo_from_row(row: &Row<'_>) -> rusqlite::Result<PhotoRecord> {
         byte_size: unsigned(row.get("byte_size")?),
         imported_at: row.get("imported_at")?,
         metadata: PhotoMetadata {
+            film_simulation: row
+                .get::<_, Option<String>>("film_simulation")?
+                .as_deref()
+                .and_then(FilmSimulation::from_name),
             iso: row.get("iso")?,
             exposure_time: exposure.and_then(|(n, d)| ExposureTime::new(n, d)),
             f_number: row.get("f_number")?,

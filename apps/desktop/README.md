@@ -182,3 +182,26 @@ Remaining product work:
 - Add upload and publishing.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
+
+## Camera film simulation export
+
+Imports preserve recognized Fujifilm film simulations from JPEG MakerNote EXIF. The inspector shows the recorded camera setting, such as Classic Chrome or Astia. It does not infer a simulation from a Lightroom profile or claim that the exported pixels use that setting. Missing, unsupported, and malformed camera tags stay absent. The in-process parser follows ExifTool's FujiFilm.pm mappings and handles Fuji's little-endian MakerNote offsets independently of TIFF byte order. It does not require ExifTool at runtime.
+
+Schema v2 adds the film value and a separate checked marker. Existing catalogs backfill one photo per background job after previews, imports, and grid repairs. Each job verifies the source's BLAKE3 identity and checks file identity and modification stamps around EXIF extraction. Missing or changed sources remain pending until a later open or import. Reading uses one opened file and a streaming hash, without buffering the entire JPEG. Originals and metadata-free derivatives stay unchanged.
+
+Explicitly export public records from a catalog:
+
+```sh
+cargo run --locked --manifest-path apps/desktop/Cargo.toml --bin export-film-metadata -- \
+  /path/to/library /path/to/film-metadata.json
+```
+
+The command drains pending film jobs and writes `{ "version": 1, "photos": [...] }` through an atomic file replacement. Each record contains only `id`, `capturedAt: null`, `state: { "_tag": "Draft" }`, and optional `filmSimulation`. It omits paths, local capture times, GPS, serial numbers, camera/lens details, and arbitrary EXIF/XMP. If any legacy photo remains unchecked because its originals are missing or changed, export fails without writing an incomplete file. Reconnect or reimport those originals, then retry.
+
+This is a handoff to the API contract probe. Upload, cloud persistence, and a public gallery remain future work.
+
+### Real JPEG performance evidence
+
+The retained September 29, 2026 japan25 run used 223 JPEGs totaling 5.5 GB. After the 30-second cold window, only 59 thumbnails were ready. Draw p95 was 1.43 ms, presentation p95/p99 was 17.34/18.31 ms, preview latency was 1008.29 ms, sampled family RSS was 661.97 MiB, and maximum draw gap was 449.55 ms. The cold run failed the memory and gap budgets and did not complete import.
+
+The warm run had all 223 thumbnails ready. Draw p95 was 1.60 ms, presentation p95/p99 was 17.34/17.89 ms, preview latency was 14.63 ms, sampled family RSS was 305.80 MiB, and maximum draw gap was 117.21 ms. It passed. The synthetic results above do not supersede this real cold failure. Local evidence remains under `benchmarks/local/japan25-223-20260929` and stays ignored.

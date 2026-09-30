@@ -7,12 +7,14 @@ use crate::{
         Catalog, DerivativeRecord, ImportFailure, NewPhoto, PhotoId, PhotoRecord, SourceStamp,
     },
     derivative::{self, DerivativeSize, RECIPE_VERSION},
-    metadata::read_source_exif,
+    metadata::{SourceExif, read_source_exif_reader},
 };
 use anyhow::{Context, Result};
 use std::{
     collections::{HashSet, VecDeque},
     fs,
+    io::{BufReader, Seek},
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
         Arc, Condvar, Mutex, MutexGuard,
@@ -114,6 +116,10 @@ pub enum Event {
         size: DerivativeSize,
         message: String,
     },
+    MetadataUpdated {
+        photo: PhotoRecord,
+    },
+    FilmMetadataFinished,
     FailuresCleared,
 }
 
@@ -134,6 +140,8 @@ struct Queue {
     requests: VecDeque<ImportRequest>,
     sources: VecDeque<PendingSource>,
     grid_repairs: VecDeque<PhotoId>,
+    film_metadata: VecDeque<PhotoId>,
+    film_metadata_running: bool,
     web_sizes: VecDeque<(PhotoId, DerivativeSize)>,
     clear_failures: bool,
     preview: Option<PhotoId>,
@@ -150,6 +158,7 @@ impl Queue {
             || !self.requests.is_empty()
             || !self.sources.is_empty()
             || !self.grid_repairs.is_empty()
+            || !self.film_metadata.is_empty()
             || (prepare_web_sizes && !self.web_sizes.is_empty())
     }
 }
@@ -159,6 +168,7 @@ enum Job {
     Scan(ImportRequest),
     Import(PendingSource),
     Derivative(PhotoId, DerivativeSize),
+    FilmMetadata(PhotoId),
 }
 
 struct Shared {
@@ -229,6 +239,9 @@ impl Library {
         });
         {
             let mut queue = shared.queue();
+            queue
+                .film_metadata
+                .extend(shared.catalog().pending_film_metadata()?);
             for photo in &photos {
                 if !shared.has_current_derivative(&photo.id, DerivativeSize::Grid)? {
                     queue.grid_repairs.push_back(photo.id.clone());
@@ -273,6 +286,62 @@ impl Library {
     /// Reads the catalog again. Blocks on the catalog lock; not for UI threads.
     pub fn current_photos(&self) -> Result<Vec<PhotoRecord>> {
         self.shared.catalog().photos()
+    }
+
+    /// Writes only probe-compatible public records. Pending legacy metadata
+    /// must finish first; failed source reads require a relink or later retry.
+    pub fn export_film_metadata(&self, destination: &Path) -> Result<()> {
+        let catalog = self.shared.catalog();
+        anyhow::ensure!(
+            catalog.pending_film_metadata()?.is_empty(),
+            "Film metadata is incomplete. Wait for background work, then reconnect or reimport unreadable originals."
+        );
+        let photos = catalog.photos()?;
+        let manifest = FilmMetadataExport {
+            version: 1,
+            photos: photos
+                .iter()
+                .map(|photo| PublicPhoto {
+                    id: photo.id.as_str(),
+                    captured_at: None,
+                    state: PublicState::Draft,
+                    film_simulation: photo.metadata.film_simulation.map(|film| film.as_str()),
+                })
+                .collect(),
+        };
+        let bytes = serde_json::to_vec_pretty(&manifest)?;
+        drop(catalog);
+        let parent = destination
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let temporary = parent.join(format!(
+            ".film-metadata-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        let result = (|| -> Result<()> {
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            fs::rename(&temporary, destination)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
+    }
+
+    pub fn film_metadata_busy(&self) -> bool {
+        let queue = self.shared.queue();
+        queue.film_metadata_running || !queue.film_metadata.is_empty()
     }
 
     /// Import failures recorded before this session, ordered by path.
@@ -338,6 +407,48 @@ impl Drop for Library {
     }
 }
 
+#[derive(serde::Serialize)]
+struct FilmMetadataExport<'a> {
+    version: u32,
+    photos: Vec<PublicPhoto<'a>>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicPhoto<'a> {
+    id: &'a str,
+    captured_at: Option<&'a str>,
+    state: PublicState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    film_simulation: Option<&'a str>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(tag = "_tag")]
+enum PublicState {
+    Draft,
+}
+
+fn refresh_film_metadata(
+    shared: &Shared,
+    id: &PhotoId,
+    path: &Path,
+    events: &mut Vec<Event>,
+) -> Result<()> {
+    if shared.catalog().film_metadata_checked(id)? {
+        return Ok(());
+    }
+    let (actual, exif) = read_hashed_source(path)?;
+    anyhow::ensure!(&actual == id, "Original content changed; import it again");
+    shared
+        .catalog()
+        .set_film_metadata(id, exif.metadata.film_simulation)?;
+    if let Some(photo) = shared.catalog().photo(id)? {
+        events.push(Event::MetadataUpdated { photo });
+    }
+    Ok(())
+}
+
 fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
     loop {
         let job = {
@@ -363,6 +474,9 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
                 Job::Import(source)
             } else if let Some(id) = queue.grid_repairs.pop_front() {
                 Job::Derivative(id, DerivativeSize::Grid)
+            } else if let Some(id) = queue.film_metadata.pop_front() {
+                queue.film_metadata_running = true;
+                Job::FilmMetadata(id)
             } else if let Some((id, size)) = queue.web_sizes.pop_front() {
                 Job::Derivative(id, size)
             } else {
@@ -377,6 +491,21 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
             Job::Scan(request) => scan(shared, request),
             Job::Import(source) => import_one(shared, source),
             Job::Derivative(id, size) => vec![derivative_event(shared, id, size)],
+            Job::FilmMetadata(id) => {
+                let mut events = Vec::new();
+                let paths = shared.catalog().photo_source_paths(&id).unwrap_or_default();
+                for path in paths {
+                    if refresh_film_metadata(shared, &id, &path, &mut events).is_ok() {
+                        break;
+                    }
+                }
+                let mut queue = shared.queue();
+                queue.film_metadata_running = false;
+                if queue.film_metadata.is_empty() {
+                    events.push(Event::FilmMetadataFinished);
+                }
+                events
+            }
         };
         for event in events {
             if sender.send(event).is_err() {
@@ -517,6 +646,7 @@ fn import_source(
 ) -> Result<ImportOutcome> {
     let path = source.path.as_path();
     let stamp = SourceStamp::read(path).context("Couldn't read the file")?;
+    let source_identity = fs::metadata(path)?;
     let known = shared.catalog().source(path)?;
     // Bind lookups before branching: a catalog guard held in an `if let`
     // condition would live through the branch and deadlock nested locks.
@@ -525,6 +655,7 @@ fn import_source(
         _ => None,
     };
     if let (Some(known), Some(photo)) = (&known, unchanged_photo) {
+        refresh_film_metadata(shared, &photo.id, path, events)?;
         ensure_grid(shared, &photo.id, path)?;
         if known.missing || photo.source_missing {
             shared.catalog().set_source_missing(path, false)?;
@@ -533,9 +664,18 @@ fn import_source(
         return Ok(ImportOutcome::Unchanged(photo.id));
     }
 
-    let id = hash_file(path)?;
+    let (id, exif) = read_hashed_source(path)?;
     let existing = shared.catalog().photo(&id)?;
-    if let Some(existing) = existing {
+    if existing.is_some() {
+        if !shared.catalog().film_metadata_checked(&id)? {
+            shared
+                .catalog()
+                .set_film_metadata(&id, exif.metadata.film_simulation)?;
+            if let Some(photo) = shared.catalog().photo(&id)? {
+                events.push(Event::MetadataUpdated { photo });
+            }
+        }
+        let existing = shared.catalog().photo(&id)?.context("Photo disappeared")?;
         let same_path = known.as_ref().is_some_and(|known| known.photo_id == id);
         let was_missing = existing.source_missing;
         if source.owned && !was_missing && !same_path {
@@ -554,7 +694,6 @@ fn import_source(
         };
     }
 
-    let exif = read_source_exif(path);
     let (mut width, mut height) = image::ImageReader::open(path)?
         .with_guessed_format()?
         .into_dimensions()
@@ -564,6 +703,13 @@ fn import_source(
     }
     let grid = shared.derivative_path(&id, DerivativeSize::Grid);
     let (grid_width, grid_height) = derivative::render(path, &grid, DerivativeSize::Grid)?;
+    let current_identity = fs::metadata(path)?;
+    anyhow::ensure!(
+        SourceStamp::read(path)? == stamp
+            && source_identity.dev() == current_identity.dev()
+            && source_identity.ino() == current_identity.ino(),
+        "Original changed during import; retry it"
+    );
     {
         let mut catalog = shared.catalog();
         catalog.insert_photo(NewPhoto {
@@ -677,13 +823,26 @@ fn ensure_derivative(
     Ok((output, false))
 }
 
-fn hash_file(path: &Path) -> Result<PhotoId> {
-    let file = fs::File::open(path).context("Couldn't read the file")?;
+fn read_hashed_source(path: &Path) -> Result<(PhotoId, SourceExif)> {
+    let before = SourceStamp::read(path)?;
+    let mut file = fs::File::open(path)?;
+    let opened = file.metadata()?;
     let mut hasher = blake3::Hasher::new();
-    hasher
-        .update_reader(file)
-        .context("Couldn't read the file")?;
-    Ok(PhotoId::from_hash(hasher.finalize()))
+    hasher.update_reader(&mut file)?;
+    let id = PhotoId::from_hash(hasher.finalize());
+    file.rewind()?;
+    let exif = read_source_exif_reader(&mut BufReader::new(&mut file))?;
+    let current = fs::metadata(path)?;
+    let after = file.metadata()?;
+    anyhow::ensure!(
+        opened.dev() == current.dev()
+            && opened.ino() == current.ino()
+            && opened.len() == after.len()
+            && opened.modified()? == after.modified()?
+            && SourceStamp::read(path)? == before,
+        "Original changed while reading metadata"
+    );
+    Ok((id, exif))
 }
 
 fn remove_copy(shared: &Shared, path: &Path) {

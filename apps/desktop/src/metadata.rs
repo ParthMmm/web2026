@@ -4,7 +4,12 @@
 //! private tags are never read into the catalog.
 
 use exif::{Exif, In, Reader, Tag, Value};
-use std::{fmt, fs::File, io::BufReader, path::Path};
+use std::{
+    fmt,
+    fs::File,
+    io::{BufRead, BufReader, Seek},
+    path::Path,
+};
 
 /// Exposure time as the camera recorded it, in seconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,11 +93,127 @@ impl fmt::Display for CaptureTime {
     }
 }
 
+/// Camera setting recorded in Fujifilm MakerNote data, independent of the
+/// Lightroom rendering profile. Only recognized camera values are constructed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FilmSimulation(&'static str);
+
+const COLOR_FILMS: &[(u16, &str)] = &[
+    (0x000, "Provia"),
+    (0x100, "F1/Studio Portrait"),
+    (0x110, "F1a/Studio Portrait Enhanced Saturation"),
+    (0x120, "Astia"),
+    (0x130, "F1c/Studio Portrait Increased Sharpness"),
+    (0x200, "Velvia"),
+    (0x300, "F3/Studio Portrait Ex"),
+    (0x400, "F4/Velvia"),
+    (0x500, "Pro Neg. Std"),
+    (0x501, "Pro Neg. Hi"),
+    (0x600, "Classic Chrome"),
+    (0x700, "Eterna"),
+    (0x800, "Classic Negative"),
+    (0x900, "Bleach Bypass"),
+    (0xa00, "Nostalgic Neg"),
+    (0xb00, "Reala ACE"),
+];
+const MONO_FILMS: &[(u16, &str)] = &[
+    (0x300, "Monochrome"),
+    (0x301, "Monochrome + Red Filter"),
+    (0x302, "Monochrome + Yellow Filter"),
+    (0x303, "Monochrome + Green Filter"),
+    (0x310, "Sepia"),
+    (0x500, "Acros"),
+    (0x501, "Acros + Red Filter"),
+    (0x502, "Acros + Yellow Filter"),
+    (0x503, "Acros + Green Filter"),
+];
+
+impl FilmSimulation {
+    pub fn as_str(self) -> &'static str {
+        self.0
+    }
+
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        COLOR_FILMS
+            .iter()
+            .chain(MONO_FILMS)
+            .find_map(|(_, label)| (*label == name).then_some(Self(label)))
+    }
+}
+
+impl fmt::Display for FilmSimulation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+/// Fuji offsets are relative to the MakerNote and always little endian,
+/// including when the surrounding TIFF is big endian. Tags and mappings follow
+/// ExifTool's FujiFilm.pm FilmMode and Saturation tables.
+fn read_fuji_film_simulation(note: &[u8]) -> Option<FilmSimulation> {
+    if note.get(..8)? != b"FUJIFILM" || note.len() > 65535 {
+        return None;
+    }
+    let short = |offset: usize| -> Option<u16> {
+        Some(u16::from_le_bytes(
+            note.get(offset..offset.checked_add(2)?)?.try_into().ok()?,
+        ))
+    };
+    let long = |offset: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(
+            note.get(offset..offset.checked_add(4)?)?.try_into().ok()?,
+        ))
+    };
+    let offset = usize::try_from(long(8)?).ok()?;
+    if offset < 12 {
+        return None;
+    }
+    let count = usize::from(short(offset)?);
+    let entries = offset.checked_add(2)?;
+    note.get(entries..entries.checked_add(count.checked_mul(12)?)?)?;
+    let mut film = None;
+    let mut saturation = None;
+    for index in 0..count {
+        let entry = entries + index * 12;
+        let tag = short(entry)?;
+        let slot = match tag {
+            0x1401 => &mut film,
+            0x1003 => &mut saturation,
+            _ => continue,
+        };
+        if slot.is_some() || short(entry + 2)? != 3 || long(entry + 4)? != 1 {
+            return None;
+        }
+        *slot = Some(short(entry + 8)?);
+    }
+    if let Some(label) = saturation.and_then(|value| {
+        MONO_FILMS
+            .iter()
+            .find_map(|(code, label)| (*code == value).then_some(*label))
+    }) {
+        return Some(FilmSimulation(label));
+    }
+    if saturation.is_some_and(|value| {
+        !matches!(
+            value,
+            0 | 0x80 | 0x100 | 0xc0 | 0xe0 | 0x180 | 0x200 | 0x400 | 0x4c0 | 0x4e0 | 0x8000
+        )
+    }) {
+        return None;
+    }
+    film.and_then(|value| {
+        COLOR_FILMS
+            .iter()
+            .find_map(|(code, label)| (*code == value).then_some(FilmSimulation(label)))
+    })
+}
+
 /// Typed shooting details. Every field is optional: Lightroom only writes what
 /// the export preset includes, and absent values stay absent.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct PhotoMetadata {
+    pub film_simulation: Option<FilmSimulation>,
     pub iso: Option<u32>,
     pub exposure_time: Option<ExposureTime>,
     pub f_number: Option<f64>,
@@ -153,18 +274,36 @@ impl SourceExif {
 
 /// Missing or malformed EXIF yields empty metadata; it never fails an import.
 pub fn read_source_exif(path: &Path) -> SourceExif {
-    let Some(exif) = File::open(path).ok().and_then(|file| {
-        Reader::new()
-            .read_from_container(&mut BufReader::new(file))
-            .ok()
-    }) else {
-        return SourceExif {
+    File::open(path)
+        .ok()
+        .and_then(|file| read_source_exif_reader(&mut BufReader::new(file)).ok())
+        .unwrap_or(SourceExif {
             orientation: 1,
             ..SourceExif::default()
-        };
+        })
+}
+
+pub(crate) fn read_source_exif_reader(
+    reader: &mut (impl BufRead + Seek),
+) -> std::io::Result<SourceExif> {
+    let exif = match Reader::new().read_from_container(reader) {
+        Ok(exif) => exif,
+        Err(exif::Error::Io(error)) => return Err(error),
+        Err(_) => {
+            return Ok(SourceExif {
+                orientation: 1,
+                ..SourceExif::default()
+            });
+        }
     };
-    SourceExif {
+    Ok(SourceExif {
         metadata: PhotoMetadata {
+            film_simulation: exif
+                .get_field(Tag::MakerNote, In::PRIMARY)
+                .and_then(|field| match &field.value {
+                    Value::Undefined(bytes, _) => read_fuji_film_simulation(bytes),
+                    _ => None,
+                }),
             iso: uint(&exif, Tag::PhotographicSensitivity).filter(|iso| *iso > 0),
             exposure_time: rational(&exif, Tag::ExposureTime)
                 .and_then(|(numerator, denominator)| ExposureTime::new(numerator, denominator)),
@@ -185,7 +324,7 @@ pub fn read_source_exif(path: &Path) -> SourceExif {
             .and_then(|value| u16::try_from(value).ok())
             .filter(|value| (1..=8).contains(value))
             .unwrap_or(1),
-    }
+    })
 }
 
 fn uint(exif: &Exif, tag: Tag) -> Option<u32> {
@@ -262,6 +401,95 @@ fn trim_decimal(value: f64, places: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn note(tags: &[(u16, u16)]) -> Vec<u8> {
+        let mut bytes = b"FUJIFILM".to_vec();
+        bytes.extend_from_slice(&12_u32.to_le_bytes());
+        bytes.extend_from_slice(&(tags.len() as u16).to_le_bytes());
+        for (tag, value) in tags {
+            bytes.extend_from_slice(&tag.to_le_bytes());
+            bytes.extend_from_slice(&3_u16.to_le_bytes());
+            bytes.extend_from_slice(&1_u32.to_le_bytes());
+            bytes.extend_from_slice(&value.to_le_bytes());
+            bytes.extend_from_slice(&[0, 0]);
+        }
+        bytes.extend_from_slice(&[0; 4]);
+        bytes
+    }
+
+    #[test]
+    fn fuji_color_and_monochrome_mappings_are_complete_and_monochrome_wins() {
+        for (code, label) in COLOR_FILMS {
+            assert_eq!(
+                read_fuji_film_simulation(&note(&[(0x1401, *code)]))
+                    .unwrap()
+                    .as_str(),
+                *label
+            );
+        }
+        for (code, label) in MONO_FILMS {
+            assert_eq!(
+                read_fuji_film_simulation(&note(&[(0x1401, 0), (0x1003, *code)]))
+                    .unwrap()
+                    .as_str(),
+                *label
+            );
+        }
+        assert_eq!(read_fuji_film_simulation(&note(&[(0x1003, 0)])), None);
+        assert_eq!(read_fuji_film_simulation(&note(&[(0x1401, 0xdead)])), None);
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0), (0x1003, 0xdead)])),
+            None
+        );
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0x600), (0x1003, 0x8000)]))
+                .unwrap()
+                .as_str(),
+            "Classic Chrome"
+        );
+    }
+
+    #[test]
+    fn fuji_parser_rejects_truncation_offsets_types_counts_and_duplicate_tags() {
+        let valid = note(&[(0x1401, 0x600), (0x1003, 0x80)]);
+        for length in 0..38 {
+            assert_eq!(
+                read_fuji_film_simulation(&valid[..length]),
+                None,
+                "length {length}"
+            );
+        }
+        for offset in [0_u32, 8, 11, 65535, u32::MAX] {
+            let mut invalid = valid.clone();
+            invalid[8..12].copy_from_slice(&offset.to_le_bytes());
+            assert_eq!(read_fuji_film_simulation(&invalid), None);
+        }
+        for (offset, bytes) in [
+            (0, b"NOTAFUJI".as_slice()),
+            (12, &[255, 255]),
+            (16, &[4, 0]),
+            (18, &[2, 0, 0, 0]),
+        ] {
+            let mut invalid = valid.clone();
+            invalid[offset..offset + bytes.len()].copy_from_slice(bytes);
+            assert_eq!(read_fuji_film_simulation(&invalid), None);
+        }
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0x600), (0x1401, 0x600)])),
+            None
+        );
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1003, 0x500), (0x1003, 0x500)])),
+            None
+        );
+        let mut offset_note = valid.clone();
+        offset_note[8..12].copy_from_slice(&20_u32.to_le_bytes());
+        offset_note.splice(12..12, [0; 8]);
+        assert_eq!(
+            read_fuji_film_simulation(&offset_note).unwrap().as_str(),
+            "Classic Chrome"
+        );
+    }
 
     fn metadata() -> PhotoMetadata {
         PhotoMetadata {

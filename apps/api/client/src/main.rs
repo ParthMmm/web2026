@@ -3,10 +3,35 @@ use serde_json::{Value, from_value, to_value};
 
 fn main() -> anyhow::Result<()> {
     let base_url = std::env::args().nth(1).ok_or_else(|| {
-        anyhow::anyhow!("Usage: photo-contract-client <base-url>; set PROBE_TOKEN")
+        anyhow::anyhow!(
+            "Usage: photo-contract-client <base-url> [film-metadata.json]; set PROBE_TOKEN"
+        )
     })?;
     let token = std::env::var("PROBE_TOKEN")?;
     let client = Client::new(&base_url, &token)?;
+    if let Some(path) = std::env::args_os().nth(2) {
+        let manifest: FilmMetadataExport = serde_json::from_slice(&std::fs::read(path)?)?;
+        anyhow::ensure!(
+            manifest.version == 1,
+            "Unsupported film metadata export version"
+        );
+        for photo in &manifest.photos {
+            anyhow::ensure!(
+                photo.caption.is_none()
+                    && photo.captured_at.is_none()
+                    && matches!(photo.state, photo_contract_client::PhotoState::Draft),
+                "Expected privacy-safe Draft export records"
+            );
+            anyhow::ensure!(
+                client.echo_photo(photo)? == *photo,
+                "Exported photo round-trip mismatch"
+            );
+        }
+        println!(
+            "PASS: {} exported catalog photo round-trips",
+            manifest.photos.len()
+        );
+    }
     let fixtures: Value = serde_json::from_str(include_str!("../../fixtures/contract.json"))?;
 
     for value in fixtures["validPhotos"].as_array().unwrap() {
@@ -55,7 +80,16 @@ fn main() -> anyhow::Result<()> {
         client.list_photos(None)?;
     }
     println!(
-        "PASS: 2 photo round-trips, 2 pages, 2 structured errors, 6 validation errors, 10 repeated requests"
+        "PASS: {} fixture photo round-trips, 2 pages, 2 structured errors, {} validation errors, 10 repeated requests",
+        fixtures["validPhotos"].as_array().unwrap().len(),
+        fixtures["invalidPhotos"].as_array().unwrap().len()
     );
     Ok(())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FilmMetadataExport {
+    version: u32,
+    photos: Vec<Photo>,
 }

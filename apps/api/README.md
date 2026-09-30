@@ -1,6 +1,6 @@
 # Effect → Rust contract prototype
 
-[Issue #4](https://github.com/ParthMmm/web2026/issues/4). A stateless contract probe, not the gallery API. It stores nothing, uploads nothing, and only echoes synthetic photo metadata and serves two fixed pages. The test bearer token is not production authentication.
+[Issue #4](https://github.com/ParthMmm/web2026/issues/4). A stateless contract probe, not the gallery API. It stores nothing, uploads nothing, and echoes photo metadata and serves two fixed fixture pages. The test bearer token is not production authentication.
 
 ## Boundaries and versions
 
@@ -80,3 +80,16 @@ Keep operation IDs `probe.echoPhoto` and `probe.listPhotos` stable. An absent `c
 For lagging installed clients, add optional response fields while retaining old fields and behavior. The older-client fixture proves that this client ignores unknown object fields. Do not remove fields, require new request fields, change null semantics, or add response union variants that older clients cannot decode under the same version. Introduce a new version and a migration/deprecation window for those changes. Schema diffing is necessary, not sufficient: keep semantic fixtures and real Worker smoke tests.
 
 References: [Effect HTTP API](https://alchemy.run/cloudflare/apis/effect-http-api), [Alchemy Worker](https://alchemy.run/providers/cloudflare/workers/worker/), [OpenAPI Generator Rust](https://openapi-generator.tech/docs/generators/rust/), [Progenitor](https://github.com/oxidecomputer/progenitor), [oasdiff](https://github.com/oasdiff/oasdiff).
+
+## Film simulation handoff
+
+`Photo` accepts an optional string `filmSimulation`, for example `Classic Chrome`. It means the camera simulation recorded in preserved EXIF. It does not name a Lightroom rendering profile or guarantee the JPEG's final appearance. Older JSON without the key remains valid. Explicit null and non-string values fail validation, matching the optional caption contract. The v1 operation IDs and retained baseline remain unchanged.
+
+The desktop's explicit `export-film-metadata` command writes a versioned manifest of privacy-safe probe records. Exercise those exact records through the real local HTTP server and the Rust client:
+
+```sh
+cd apps/api
+bun run smoke /path/to/film-metadata.json
+```
+
+The client checks manifest version 1 and compares each echoed record with the exported input. It also runs the shared contract fixtures and error probes. The desktop has no HTTP dependency, and this stateless probe does not publish images or store a cloud gallery.

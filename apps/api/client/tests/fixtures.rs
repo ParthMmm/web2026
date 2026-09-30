@@ -34,3 +34,14 @@ fn older_clients_accept_new_object_fields_without_losing_known_fields() {
     let photo: Photo = from_value(value).unwrap();
     assert_eq!(photo.id, "x");
 }
+
+#[test]
+fn optional_film_simulation_rejects_explicit_null_and_non_strings() {
+    for film in [json!(null), json!(42), json!({"name":"Classic Chrome"})] {
+        assert!(
+            from_value::<Photo>(json!({"id":"x","capturedAt":null,
+            "state":{"_tag":"Draft"},"filmSimulation":film}))
+            .is_err()
+        );
+    }
+}
