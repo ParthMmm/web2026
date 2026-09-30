@@ -2,6 +2,8 @@
 title: "Beacon"
 description: "Smart travel companion for collaborative trip planning"
 pubDate: 2026-03-03
+applicationCategory: "TravelApplication"
+operatingSystem: "iOS"
 ---
 
 ## what and why

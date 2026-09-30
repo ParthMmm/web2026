@@ -13,6 +13,9 @@ const projects = defineCollection({
     /** Set on each write-up of a project that has been rebuilt more than once. */
     version: z.string().optional(),
     period: z.string().optional(),
+    /** schema.org SoftwareApplication fields for the write-up's structured data. */
+    applicationCategory: z.string().optional(),
+    operatingSystem: z.string().optional(),
   })
 });
 

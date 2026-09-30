@@ -3,6 +3,8 @@ export type Record = {
 	description: string;
 	/** Omitted when there is nowhere to go. The list renders those as plain text. */
 	url?: string;
+	/** The thing itself, when it lives somewhere other than the write-up. */
+	site?: string;
 };
 
 /** The footer renders the label only, so these carry no description. */
@@ -57,26 +59,36 @@ export const projects: Record[] = [
 		description:
 			"Playlist builder for DJ sets, formerly Tracklister. Gemini parses the tracklist, then a fuzzy matching engine finds each track on Apple Music.",
 		url: "/projects/versos",
+		site: "https://versos.studio/",
 	},
 	{
 		title: "Orbis",
 		description:
 			"Self-hosted library for DJ sets and mixes. A SwiftUI app for iPhone, iPad, and Mac, backed by a Bun and Effect server over Tailscale.",
-		url: "https://github.com/ParthMmm/orbis",
+		url: "/projects/orbis",
+		site: "https://github.com/ParthMmm/orbis",
 	},
 	{
 		title: "Mana Margherita",
 		description:
 			"Swiss tournament app for Magic: The Gathering nights with friends. Pairings, Commander pods, a synced timer, and ELO, on Convex.",
-		url: "https://mana-margherita.p11a.xyz/",
+		url: "/projects/mana-margherita",
+		site: "https://mana-margherita.p11a.xyz/",
 	},
 	{
 		title: "Auriom",
 		description:
 			"Social platform for music lovers. Built during Buildspace Nights and Weekends S2.",
-		url: "https://github.com/ParthMmm/auriom",
+		url: "/projects/auriom",
+		site: "https://github.com/ParthMmm/auriom",
 	},
 ];
+
+/** "https://github.com/ParthMmm/orbis" reads as "github.com/ParthMmm/orbis". */
+export const siteLabel = (url: string): string => {
+	const { host, pathname } = new URL(url);
+	return `${host.replace(/^www\./u, "")}${pathname}`.replace(/\/$/u, "");
+};
 
 export const elsewhere: Link[] = [
 	{ title: "GitHub", url: "https://github.com/ParthMmm" },

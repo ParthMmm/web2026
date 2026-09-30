@@ -3,44 +3,61 @@ import Chapter from "../components/Chapter.astro";
 import Feature from "../components/Feature.astro";
 import IndexRow from "../components/IndexRow.astro";
 import BeaconMarkdown from "../components/media/BeaconMarkdown.astro";
+import ManaPairings from "../components/media/ManaPairings.astro";
+import OrbisResume from "../components/media/OrbisResume.astro";
 import TracklistParse from "../components/media/TracklistParse.astro";
 import { profile, projects, work } from "../data/site";
 import Layout from "../layouts/Layout.astro";
 
 const title = "Parth Mangrola";
 const description =
-	"Full-stack engineer building products end to end — frontends, APIs, databases, and the infrastructure underneath.";
+	"Parth Mangrola is a full-stack engineer. He runs Pallas, building products for clients, and makes apps for the things he's into: trip planning, DJ sets, and Magic: The Gathering nights.";
 
-const FLAGSHIPS = new Set(["Beacon", "Versos"]);
+/* The flagships carry the page; everything else is the supporting index. */
+const FLAGSHIPS = new Set(["Beacon", "Versos", "Orbis", "Mana Margherita"]);
 const otherProjects = projects.filter((p) => !FLAGSHIPS.has(p.title));
+
+const absolute = (url: string): string => new URL(url, profile.site).toString();
 
 const jsonLd = {
 	"@context": "https://schema.org",
-	"@type": "Person",
-	name: profile.name,
-	jobTitle: profile.role,
+	"@type": "ProfilePage",
 	url: profile.site,
-	sameAs: [
-		"https://github.com/ParthMmm",
-		"https://www.linkedin.com/in/parthmangrola",
-		"https://twitter.com/parthmangrola",
-	],
-	worksFor: { "@type": "Organization", name: "Pallas", url: "https://pallas.so" },
-	knowsAbout: [
-		"React",
-		"TypeScript",
-		"Node.js",
-		"PostgreSQL",
-		"AWS",
-		"Cloudflare",
-		"Full Stack Development",
-		"Software Engineering",
-	],
-	workExample: work.map((item) => ({
-		"@type": "CreativeWork",
-		name: item.title,
-		description: item.description,
-	})),
+	mainEntity: {
+		"@type": "Person",
+		name: profile.name,
+		jobTitle: profile.role,
+		description,
+		url: profile.site,
+		image: absolute("/og/index.png"),
+		sameAs: [
+			"https://github.com/ParthMmm",
+			"https://www.linkedin.com/in/parthmangrola",
+			"https://twitter.com/parthmangrola",
+		],
+		worksFor: { "@type": "Organization", name: "Pallas", url: "https://pallas.so" },
+		knowsAbout: [
+			"TypeScript",
+			"React",
+			"React Native",
+			"SwiftUI",
+			"Effect",
+			"Convex",
+			"Node.js",
+			"PostgreSQL",
+			"Cloudflare",
+			"AWS",
+		],
+	},
+	hasPart: [...projects, ...work]
+		.filter((item) => item.url)
+		.map((item) => ({
+			"@type": "CreativeWork",
+			name: item.title,
+			description: item.description,
+			url: absolute(item.url ?? ""),
+			author: { "@type": "Person", name: profile.name },
+		})),
 };
 ---
 
@@ -49,36 +66,66 @@ const jsonLd = {
 
   <section class="opening" aria-labelledby="thesis">
     <h1 id="thesis" class="thesis">
-      I build products <mark>end to end</mark>.
+      Hey! I'm Parth. <span class="quiet">I build apps for the things I'm&nbsp;into.</span>
     </h1>
-    <p class="sub">
-      Frontends, APIs, databases, and the infrastructure underneath.
-    </p>
-    <p class="lede">
-      I run <a href="https://pallas.so" rel="noopener noreferrer">Pallas</a>, where I've
-      shipped healthcare platforms, compliance SaaS, and developer tools for clients. I'm
-      looking for a full-stack or design engineering role — somewhere the details matter.
-    </p>
+    <div class="spine now">
+      <div class="rail">
+        <p class="rail-label">Now</p>
+      </div>
+      <p class="lede flow">
+        I run <a href="https://pallas.so" rel="noopener noreferrer">Pallas</a>, where I've
+        built healthcare platforms, SaaS products, and developer tools for clients. I like
+        making things that feel good to use, and I'm looking for a full-stack or design
+        engineering role.
+      </p>
+    </div>
   </section>
 
   <Chapter label="Projects">
-    <Feature
-      title="Beacon"
-      description="A real-time shared workspace for planning trips together. Your plans aren't locked in — import and export the whole itinerary as markdown."
-      url="/projects/beacon"
-      stack="Expo · Convex · Better Auth · Turborepo"
-    >
-      <BeaconMarkdown />
-    </Feature>
+    <div class="features">
+      <Feature
+        title="Beacon"
+        description="A real-time shared workspace for planning trips together. Your plans aren't locked in — import and export the whole itinerary as markdown."
+        url="/projects/beacon"
+        stack="Expo · Convex · Better Auth · Turborepo"
+        tone="green"
+      >
+        <BeaconMarkdown />
+      </Feature>
 
-    <Feature
-      title="Versos"
-      description="Paste a tracklist from a DJ set and get a playlist. An LLM cleans the messy text, then a matching engine finds each track in the catalogue. Three rebuilds in, formerly Tracklister."
-      url="/projects/versos"
-      stack="TanStack Start · Hono · Effect · BullMQ"
-    >
-      <TracklistParse />
-    </Feature>
+      <Feature
+        title="Versos"
+        description="Paste a tracklist from a DJ set and get a playlist. An LLM cleans the messy text, then a matching engine finds each track in the catalogue. Now on its fifth version, formerly Tracklister."
+        url="/projects/versos"
+        site="https://versos.studio/"
+        stack="TanStack Start · Hono · Effect · BullMQ"
+        tone="orange"
+      >
+        <TracklistParse />
+      </Feature>
+
+      <Feature
+        title="Orbis"
+        description="A private library for DJ sets and mixes. Paste a YouTube or SoundCloud link, the audio downloads to a server I own, and a native app plays it on iPhone, iPad, or Mac, picking up wherever I left off."
+        url="/projects/orbis"
+        site="https://github.com/ParthMmm/orbis"
+        stack="SwiftUI · Bun · Effect · SQLite · Tailscale"
+        tone="green"
+      >
+        <OrbisResume />
+      </Feature>
+
+      <Feature
+        title="Mana Margherita"
+        description="Swiss tournaments for Magic: The Gathering nights with friends. Proper pairings and tiebreakers, Commander pods, hidden ELO, and a round timer synced to every screen, including the TV."
+        url="/projects/mana-margherita"
+        site="https://mana-margherita.p11a.xyz/"
+        stack="Convex · TanStack Start · Expo · SwiftUI"
+        tone="orange"
+      >
+        <ManaPairings />
+      </Feature>
+    </div>
 
     <ul class="index tail">
       {otherProjects.map((project) => <IndexRow {...project} />)}
@@ -98,32 +145,39 @@ const jsonLd = {
     padding-block: clamp(2.5rem, 6vw, 4.5rem) 0;
   }
 
+  /* One size, one weight. The claim is full ink and its explanation continues
+     on the same baseline a rung down, so hierarchy comes from tone alone. */
   .thesis {
-    margin: 0;
-    max-width: 14ch;
+    margin: 0 0 clamp(2.5rem, 6vw, 4rem);
+    max-width: 20ch;
     font-size: var(--text-display);
     font-weight: 500;
-    line-height: 0.98;
-    letter-spacing: -0.042em;
+    line-height: 1.08;
+    letter-spacing: -0.034em;
     color: var(--color-ink-1);
   }
 
-  .sub {
-    margin-block: clamp(1.25rem, 2.5vw, 1.75rem) 0;
-    max-width: 26ch;
-    font-size: clamp(1.125rem, 1.9vw, 1.5rem);
-    font-weight: 400;
-    line-height: 1.25;
-    letter-spacing: -0.018em;
-    color: var(--color-ink-3);
+  .quiet {
+    color: var(--color-ink-4);
   }
-
   .lede {
-    margin-block: 1.75rem 0;
+    margin: 0;
     max-width: 34rem;
     font-size: 1rem;
     line-height: 1.65;
     color: var(--color-ink-2);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(3rem, 7vw, 4rem) 2rem;
+  }
+
+  @media (min-width: 60rem) {
+    .features {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   .index {

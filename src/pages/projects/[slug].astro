@@ -1,0 +1,53 @@
+---
+import type { GetStaticPaths } from "astro";
+import { getCollection, render } from "astro:content";
+import Article from "../../components/Article.astro";
+import ContentWrapper from "../../components/ContentWrapper.astro";
+import { profile, projects, siteLabel } from "../../data/site";
+import Layout from "../../layouts/Layout.astro";
+
+/* Single-file write-ups. Projects rebuilt more than once keep a folder of
+   versions and their own page, like versos.astro. */
+export const getStaticPaths = (async () => {
+	const entries = await getCollection("projects", ({ id }) => !id.includes("/"));
+	return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}) satisfies GetStaticPaths;
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+const record = projects.find((project) => project.url === `/projects/${entry.id}`);
+const { title } = entry.data;
+const description = record?.description ?? entry.data.description;
+const site = record?.site;
+const isRepo = site?.startsWith("https://github.com/") ?? false;
+
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "SoftwareApplication",
+	name: title,
+	description,
+	url: site ?? new URL(`/projects/${entry.id}`, profile.site).toString(),
+	applicationCategory: entry.data.applicationCategory,
+	operatingSystem: entry.data.operatingSystem,
+	datePublished: entry.data.pubDate.toISOString().slice(0, 10),
+	author: { "@type": "Person", name: profile.name, url: profile.site },
+	codeRepository: isRepo ? site : undefined,
+};
+---
+
+<Layout title={`${title} — Parth Mangrola`} {description}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  <Article
+    section="Projects"
+    sectionUrl="/projects"
+    {title}
+    {description}
+    url={site}
+    urlLabel={site && (isRepo ? "View on GitHub" : `Visit ${siteLabel(site)}`)}
+  >
+    <ContentWrapper>
+      <Content />
+    </ContentWrapper>
+  </Article>
+</Layout>
