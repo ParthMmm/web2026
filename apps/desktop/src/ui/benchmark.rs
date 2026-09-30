@@ -43,7 +43,6 @@ pub(super) fn configure_window(window_options: &mut WindowOptions) {
     window_options.kind = WindowKind::PopUp;
 }
 
-/// What the script should do on this frame.
 pub(super) struct Step {
     pub(super) scroll_row: usize,
     pub(super) preview_index: Option<usize>,

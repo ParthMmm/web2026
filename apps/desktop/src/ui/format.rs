@@ -46,7 +46,6 @@ pub(super) fn count(value: usize, singular: &str, plural: &str) -> String {
     format!("{} {noun}", number(value))
 }
 
-/// One sentence describing a finished import run.
 pub(super) fn import_summary(summary: &ImportSummary) -> String {
     let already = summary.duplicates + summary.unchanged;
     let mut parts = Vec::new();

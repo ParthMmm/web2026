@@ -580,7 +580,6 @@ impl Gallery {
         cx.notify();
     }
 
-    /// Runs the benchmark script for this frame and measures preview decode.
     pub(super) fn benchmark_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(benchmark) = &mut self.benchmark else {
             return;
