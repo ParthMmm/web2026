@@ -22,7 +22,7 @@ const current = versions.at(-1)?.version;
 <div class="versions" data-versions>
   <div class="tabs" role="tablist" aria-label="Versions">
     {
-      versions.map(({ version, title, period }) => {
+      versions.map(({ version, title }) => {
         const selected = version === current;
         return (
           <button
@@ -36,7 +36,6 @@ const current = versions.at(-1)?.version;
           >
             <span class="tab-version">{version}</span>
             <span class="tab-name">{title}</span>
-            {period && <span class="tab-period">{period}</span>}
           </button>
         );
       })
@@ -44,7 +43,7 @@ const current = versions.at(-1)?.version;
   </div>
 
   {
-    versions.map(({ version, description, Content }) => (
+    versions.map(({ version, title, description, period, Content }) => (
       <section
         role="tabpanel"
         id={`panel-${version}`}
@@ -53,6 +52,10 @@ const current = versions.at(-1)?.version;
         tabindex="0"
         hidden={version !== current}
       >
+        <p class="meta">
+          {version} · {title}
+          {period && ` · ${period}`}
+        </p>
         <p class="lede">{description}</p>
         <ContentWrapper>
           <Content />
@@ -90,13 +93,13 @@ const current = versions.at(-1)?.version;
 
       tab.addEventListener("keydown", (event) => {
         const last = tabs.length - 1;
-        const targets: Record<string, number> = {
-          ArrowLeft: index === 0 ? last : index - 1,
-          ArrowRight: index === last ? 0 : index + 1,
-          End: last,
-          Home: 0,
-        };
-        const target = tabs[targets[event.key] ?? -1];
+        const targets = new Map([
+          ["ArrowLeft", index === 0 ? last : index - 1],
+          ["ArrowRight", index === last ? 0 : index + 1],
+          ["End", last],
+          ["Home", 0],
+        ]);
+        const target = tabs[targets.get(event.key) ?? -1];
         if (!target) {
           return;
         }
@@ -107,24 +110,30 @@ const current = versions.at(-1)?.version;
     }
 
     const linked = location.hash.slice(1);
-    if (panels.some((panel) => panel.id === linked)) {
+    if (panels.some((panel) => panel.dataset.version === linked)) {
       select(linked, false);
     }
   }
 </script>
 
 <style>
+  .versions {
+    container-type: inline-size;
+  }
+
   .tabs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-    gap: 0.5rem;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    gap: 0.375rem;
     margin-block-end: 2.25rem;
   }
 
   [role="tab"] {
     display: grid;
     gap: 0.125rem;
-    padding: 0.75rem 0.875rem;
+    min-width: 0;
+    padding: 0.625rem 0.75rem;
     border: 1px solid var(--color-line);
     border-radius: 8px;
     background: none;
@@ -155,18 +164,34 @@ const current = versions.at(-1)?.version;
 
   .tab-version {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     color: var(--color-primary-strong);
   }
 
   .tab-name {
-    font-size: 0.9375rem;
+    overflow: hidden;
+    font-size: 0.8125rem;
     font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .tab-period {
+  /* Five names do not fit a phone-width column; the panel's meta line
+     repeats the name, so the tabs can drop to version numbers alone. */
+  @container (max-width: 36rem) {
+    .tab-name {
+      display: none;
+    }
+
+    [role="tab"] {
+      text-align: center;
+    }
+  }
+
+  .meta {
+    margin-block: 0 0.5rem;
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--color-ink-3);
   }
 

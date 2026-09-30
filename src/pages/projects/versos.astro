@@ -6,7 +6,7 @@ import Versions from "../../components/Versions.astro";
 
 const title = "Versos";
 const description =
-	"Turns a DJ set's tracklist into a playlist. Started as Tracklister and rebuilt three times, from one Next.js app to Cloudflare to Effect and Apple Music.";
+	"Turns a DJ set's tracklist into a playlist. Started as Tracklister in 2024 and now on its fifth version, going from one Next.js app to Cloudflare, a queued monorepo, and finally Effect and Apple Music.";
 
 const entries = await getCollection("projects", ({ id }) => id.startsWith("versos/"));
 entries.sort((a, b) => a.data.pubDate.valueOf() - b.data.pubDate.valueOf());
