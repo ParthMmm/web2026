@@ -37,8 +37,40 @@ const linkAttrs = isExternal ? { target: "_blank", rel: "noopener noreferrer" } 
     color: var(--color-ink-1);
   }
 
+  /* A tangerine arrow slides out of the title on hover or focus: ↗ leaves
+     the site, → stays on it. */
+  .title a::after {
+    content: "→";
+    display: inline-block;
+    margin-inline-start: 0.375rem;
+    color: var(--color-highlight);
+    font-weight: 600;
+    opacity: 0;
+    translate: -0.375rem 0;
+    transition:
+      opacity 160ms ease-out,
+      translate 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .title a[target="_blank"]::after {
+    content: "↗";
+  }
+
+  .title a:focus-visible::after {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .title a:hover::after {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
   .desc {
     margin: 0;
+    max-width: 34rem;
     font-size: 0.875rem;
     line-height: 1.5;
     color: var(--color-ink-3);

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.parthm.dev/sitemap-0.xml
+Sitemap: https://www.parthm.dev/sitemap-index.xml

@@ -1,0 +1,157 @@
+---
+/* A Swiss event two rounds in, with eight players. The names are sample
+   data, but the numbers follow the rules the app implements: 3 points a win,
+   OMW% with the 33% floor as the first tiebreaker, and round 3 pairing equal
+   points without rematches. Parth and Maya are both 2–0; Parth leads on OMW%
+   (his opponents went 1–1 and 1–1, Maya's went 0–2 and 1–1). */
+const round = { number: 3, remaining: "38:12" };
+
+const pairings = [
+	{ a: "Parth", b: "Maya", table: 1 },
+	{ a: "Jonah", b: "Priya", table: 2 },
+	{ a: "Leo", b: "Ana", table: 3 },
+	{ a: "Sam", b: "Noor", table: 4 },
+];
+
+const standings = [
+	{ name: "Parth", omw: "50%", points: 6 },
+	{ name: "Maya", omw: "42%", points: 6 },
+	{ name: "Jonah", omw: "75%", points: 3 },
+	{ name: "Priya", omw: "67%", points: 3 },
+];
+---
+
+<figure class="panel">
+  <div class="cols">
+    <div class="col">
+      <p class="cap">Round {round.number} · {round.remaining} left on every screen</p>
+      <ul class="pairings">
+        {
+          pairings.map((p) => (
+            <li>
+              <span class="table">{p.table}</span>
+              <span class="match">
+                {p.a} <span class="vs">vs</span> {p.b}
+              </span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div class="col">
+      <p class="cap">Standings</p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Player</th>
+            <th scope="col">Pts</th>
+            <th scope="col">OMW</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            standings.map((s) => (
+              <tr>
+                <td>{s.name}</td>
+                <td class="num">{s.points}</td>
+                <td class="num quiet">{s.omw}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @container (min-width: 30rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-3);
+  }
+
+  .pairings {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  .pairings li {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    gap: 0 0.75rem;
+    align-items: baseline;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .table {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-primary-strong);
+  }
+
+  .match {
+    color: var(--color-ink-1);
+  }
+
+  .vs {
+    color: var(--color-ink-3);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  th {
+    padding: 0 0 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: start;
+    color: var(--color-ink-3);
+  }
+
+  td {
+    padding: 0.3125rem 0;
+    color: var(--color-ink-1);
+  }
+
+  th:not(:first-child),
+  .num {
+    width: 3.5rem;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quiet {
+    color: var(--color-ink-3);
+  }
+</style>

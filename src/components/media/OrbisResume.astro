@@ -1,0 +1,130 @@
+---
+/* A pasted link filed as a Set, and one Playback Position shared across
+   devices. The set is illustrative sample data. */
+const set = {
+	link: "youtube.com/watch?v=…",
+	title: "Special Request at The Lot Radio",
+	tags: ["jungle", "breaks"],
+	length: "1:58:30",
+};
+
+const devices = [
+	{ name: "iPhone", state: "Paused at 47:12" },
+	{ name: "Mac", state: "Resumes at 47:12" },
+];
+
+const PROGRESS = 47.2 / 118.5;
+---
+
+<figure class="panel">
+  <div class="cols">
+    <div class="col">
+      <p class="cap">Pasted</p>
+      <p class="link">{set.link}</p>
+      <p class="title">{set.title}</p>
+      <p class="meta">{set.tags.join(" · ")} · {set.length} · Downloaded</p>
+    </div>
+    <div class="col">
+      <p class="cap">Picked up anywhere</p>
+      <ul>
+        {
+          devices.map((d) => (
+            <li>
+              <span class="device">{d.name}</span>
+              <span class="bar" style={`--progress: ${PROGRESS}`} />
+              <span class="state">{d.state}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @container (min-width: 30rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-3);
+  }
+
+  .link {
+    margin: 0 0 0.625rem;
+    font-size: 0.8125rem;
+    color: var(--color-ink-3);
+  }
+
+  .title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-ink-1);
+  }
+
+  .meta {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-3);
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
+    align-items: center;
+    font-size: 0.8125rem;
+  }
+
+  .device {
+    color: var(--color-ink-1);
+  }
+
+  .bar {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to right,
+      var(--color-primary) calc(var(--progress) * 100%),
+      var(--color-line) 0
+    );
+  }
+
+  .state {
+    grid-column: 2;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-3);
+  }
+</style>

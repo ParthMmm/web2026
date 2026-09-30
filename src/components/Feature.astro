@@ -1,39 +1,54 @@
 ---
+import { siteLabel } from "../data/site";
+
 type Props = {
 	title: string;
 	description: string;
 	url: string;
-	/** Short mono tag: what the thing is built on. */
+	/** Short tag: what the thing is built on. */
 	stack: string;
+	tone: "green" | "orange";
+	/** The thing itself, linked beside the stack when it lives elsewhere. */
+	site?: string;
 };
 
-const { title, description, url, stack } = Astro.props;
+const { title, description, url, stack, tone, site } = Astro.props;
 ---
 
-<section class="feature">
+<section class={`feature tone-${tone}`}>
   <div class="media"><slot /></div>
   <div class="caption">
     <h3 class="name">
       <a href={url}>{title}</a>
     </h3>
     <p class="desc">{description}</p>
-    <p class="stack">{stack}</p>
+    <p class="stack">
+      {stack}
+      {
+        site && (
+          <a class="site" href={site} target="_blank" rel="noopener noreferrer">
+            {siteLabel(site)}
+          </a>
+        )
+      }
+    </p>
   </div>
 </section>
 
 <style>
+  /* Media and caption take two rows of the parent grid, so side-by-side
+     features share panel heights and their captions start on one line. */
   .feature {
-    padding-block: clamp(3rem, 7vw, 5rem) 0;
+    display: grid;
+    grid-row: span 2;
+    grid-template-rows: subgrid;
+    row-gap: 1.25rem;
   }
 
-  .feature:first-child {
-    padding-block-start: 0;
-  }
-
-  /* The media is the dominant element of the chapter, so it runs the full
-     content width and the caption hangs beneath it rather than beside it. */
+  /* The figure lays itself out against the card, not the viewport. */
   .media {
-    margin-block-end: 1.25rem;
+    display: grid;
+    container-type: inline-size;
   }
 
   .caption {
@@ -57,14 +72,25 @@ const { title, description, url, stack } = Astro.props;
   .name::before {
     content: "";
     flex: none;
-    width: 0.5rem;
-    height: 0.5rem;
+    width: 0.625rem;
+    height: 0.625rem;
     border-radius: 2px;
-    background-color: var(--color-primary);
+    background-color: var(--tone-fill);
+  }
+
+  /* Hovering the project turns its marker a quarter-turn into a diamond. */
+  @media (hover: hover) and (pointer: fine) {
+    .name::before {
+      transition: rotate 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .feature:hover .name::before {
+      rotate: 45deg;
+    }
   }
 
   .name a {
-    text-decoration-color: var(--color-primary-quiet);
+    text-decoration-color: color-mix(in oklch, var(--tone-fill) 55%, transparent);
   }
 
   .desc {
@@ -77,8 +103,19 @@ const { title, description, url, stack } = Astro.props;
 
   .stack {
     margin: 0;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-size: 0.8125rem;
     color: var(--color-ink-3);
+  }
+
+  .site {
+    color: var(--color-ink-2);
+  }
+
+  .site::after {
+    content: " ↗";
+    color: var(--tone-fill);
   }
 </style>

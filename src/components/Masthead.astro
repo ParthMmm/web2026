@@ -16,7 +16,9 @@ const isHome = Astro.url.pathname === "/";
         </a>
       )
     }
-    <p class="meta">{profile.role} · {profile.status}</p>
+    <p class="meta">
+      {profile.role} · <span class="status"><span class="dot" aria-hidden="true"></span>{profile.status}</span>
+    </p>
   </div>
   <ThemeIcon />
 </header>
@@ -62,12 +64,49 @@ const isHome = Astro.url.pathname === "/";
      26rem, which dropped it from every subpage on a phone. */
   .meta {
     margin: 0;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 400;
     line-height: 1.5;
-    letter-spacing: 0.01em;
     color: var(--color-ink-3);
     text-wrap: pretty;
+  }
+
+  .status {
+    white-space: nowrap;
+  }
+
+  /* A live indicator: availability is current, so it breathes. */
+  .dot {
+    position: relative;
+    display: inline-block;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    margin-inline-end: 0.375rem;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    vertical-align: 0.0625rem;
+  }
+
+  .dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    animation: ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes ping {
+    75%,
+    100% {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot::after {
+      display: none;
+    }
   }
 </style>

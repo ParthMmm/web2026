@@ -57,7 +57,7 @@ const plan = [
     gap: 1.5rem;
   }
 
-  @media (min-width: 48rem) {
+  @container (min-width: 30rem) {
     .cols {
       grid-template-columns: 1fr 1fr;
       gap: clamp(1.5rem, 4vw, 3rem);
@@ -66,9 +66,8 @@ const plan = [
 
   .cap {
     margin: 0 0 0.75rem;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    letter-spacing: 0.04em;
+    font-size: 0.75rem;
+    font-weight: 500;
     color: var(--color-ink-3);
   }
 
@@ -108,8 +107,8 @@ const plan = [
   }
 
   .time {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
     color: var(--color-primary-strong);
   }
 
@@ -119,8 +118,7 @@ const plan = [
 
   .note {
     grid-column: 2;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--color-ink-3);
   }
 </style>

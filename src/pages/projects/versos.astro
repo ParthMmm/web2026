@@ -3,8 +3,10 @@ import { getCollection, render } from "astro:content";
 import Article from "../../components/Article.astro";
 import Layout from "../../layouts/Layout.astro";
 import Versions from "../../components/Versions.astro";
+import { siteLabel } from "../../data/site";
 
 const title = "Versos";
+const SITE = "https://versos.studio/";
 const description =
 	"Turns a DJ set's tracklist into a playlist. Started as Tracklister in 2024 and now on its fifth version, going from one Next.js app to Cloudflare, a queued monorepo, and finally Effect and Apple Music.";
 
@@ -29,6 +31,7 @@ const jsonLd = {
 	"@type": "SoftwareApplication",
 	name: "Versos",
 	alternateName: "Tracklister",
+	url: SITE,
 	applicationCategory: "WebApplication",
 	operatingSystem: "Any",
 	author: {
@@ -44,7 +47,14 @@ const jsonLd = {
 
 <Layout title={`${title} — Parth Mangrola`} {description}>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-  <Article section="Projects" sectionUrl="/projects" {title} {description}>
+  <Article
+    section="Projects"
+    sectionUrl="/projects"
+    {title}
+    {description}
+    url={SITE}
+    urlLabel={`Visit ${siteLabel(SITE)}`}
+  >
     <Versions {versions} />
   </Article>
 </Layout>
