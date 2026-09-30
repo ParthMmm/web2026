@@ -1,25 +1,17 @@
 ---
-import "@fontsource/inter/300.css";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
-import "@fontsource/inter/900.css";
-import "@fontsource/commit-mono/300.css";
-import "@fontsource/commit-mono/400.css";
-import "@fontsource/commit-mono/500.css";
-import "@fontsource/commit-mono/700.css";
-import "@fontsource/geist-mono";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
+import "../styles/global.css";
+
+import { SEO } from "astro-seo";
+import Footer from "../components/Footer.astro";
+import Masthead from "../components/Masthead.astro";
+
 type Props = {
 	title: string;
 	description: string;
 	image?: string;
 };
-import "../styles/global.css";
-import Analytics from "@vercel/analytics/astro";
-import { SEO } from "astro-seo";
-import Footer from "../components/Footer.astro";
-import ThemeIcon from "../components/ThemeIcon.astro";
 
 const { title, description, image } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -28,6 +20,7 @@ const ogImage = image || "/og.png";
 
 <html lang="en">
   <head>
+    <meta charset="utf-8" />
     <SEO
       title={title}
       description={description}
@@ -40,7 +33,7 @@ const ogImage = image || "/og.png";
           url: canonicalURL.toString(),
         },
         image: {
-          alt: "Parth Mangrola Website Screenshot",
+          alt: "Parth Mangrola",
           width: 1200,
           height: 630,
           type: "image/png",
@@ -56,13 +49,13 @@ const ogImage = image || "/og.png";
         title,
         description,
         image: ogImage,
-        imageAlt: "Parth Mangrola Website Screenshot"
+        imageAlt: "Parth Mangrola",
       }}
       extend={{
         meta: [
           { name: "viewport", content: "width=device-width,initial-scale=1" },
           { name: "generator", content: Astro.generator },
-          { name: "theme-color", content: "#FFFCF0" },
+          { name: "theme-color", content: "#fcf6e9" },
           { name: "apple-mobile-web-app-capable", content: "yes" },
           { name: "apple-mobile-web-app-status-bar-style", content: "default" },
         ],
@@ -74,36 +67,51 @@ const ogImage = image || "/og.png";
         ],
       }}
     />
-
-
-    <!-- global metadata -->
-    <meta charset="utf-8" />
-
   </head>
-  <body class="bg-paper antialiased text-900 font-sans">
-    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-paper focus:text-950 focus:rounded focus:ring-2 focus:ring-accent">Skip to content</a>
-    <div class="fixed top-4 right-4 z-50">
-      <ThemeIcon />
+  <body>
+    <a href="#main" class="skip">Skip to content</a>
+    <div class="page">
+      <Masthead />
+      <main id="main">
+        <slot />
+      </main>
+      <Footer />
     </div>
-    <main
-    id="main"
-    class="flex flex-col items-center justify-center w-full px-4 md:px-0 mt-8 md:max-w-3xl mx-auto"
-    >
-      <slot />
-
-      <div class="container p-4 mx-auto">
-      <Footer  />
-      </div>
-    </main>
-    <Analytics />
   </body>
 </html>
 
 <style is:global>
-  html {
-    font-family: "Inter", system-ui, sans-serif;
+  body {
+    min-height: 100vh;
+    margin: 0;
+    /* Runs standalone (apple-mobile-web-app-capable + manifest display), so
+       there is no browser chrome to keep content clear of the notch or the
+       home indicator. Safe areas are physical geometry, so these stay
+       physical rather than logical. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    background-color: var(--color-canvas);
+    color: var(--color-ink-1);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
   }
-  html.dark {
-    font-family: "Commit Mono", monospace;
+
+  .skip {
+    position: absolute;
+    inset-inline-start: -9999px;
+  }
+
+  .skip:focus {
+    inset-inline-start: 1.5rem;
+    top: calc(1.5rem + env(safe-area-inset-top));
+    z-index: 10;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--color-canvas);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
   }
 </style>

@@ -1,30 +1,144 @@
 ---
 ---
 
-<section class="content-wrapper w-full prose max-w-none
-  prose-headings:font-light prose-headings:tracking-tight prose-headings:text-wrap-balance
-  prose-h1:text-950 prose-h1:text-3xl
-  prose-h2:text-950 prose-h2:text-xl
-  prose-h3:text-950 prose-h3:text-lg
-  prose-p:text-800 prose-p:leading-relaxed
-  prose-strong:text-900
-  prose-ul:text-800
-  prose-li:text-800
-  prose-li:marker:text-400
-  prose-a:text-accent dark:prose-a:text-accent-light
-  prose-a:no-underline prose-a:underline-offset-2
-  prose-code:text-accent-muted prose-code:text-sm
-  prose-blockquote:text-600 prose-blockquote:border-300
-  prose-hr:border-200
-  prose-pre:bg-black prose-pre:text-paper">
-    <slot/>
-  </section>
+<div class="content">
+  <slot />
+</div>
 
-<style>
-  @media (hover: hover) and (pointer: fine) {
-    .content-wrapper :global(a):hover {
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
+<style is:global>
+  /* Long-form prose on the same ladder as the rest of the page: hierarchy
+     from size and space, not colour. */
+  .content {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-ink-2);
+  }
+
+  .content > :first-child {
+    margin-block-start: 0;
+  }
+
+  .content h2,
+  .content h3 {
+    margin-block: 2.5rem 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.014em;
+    color: var(--color-ink-1);
+  }
+
+  .content h2 {
+    font-size: 1.25rem;
+  }
+
+  .content h3 {
+    font-size: 1.0625rem;
+  }
+
+  .content p,
+  .content ul,
+  .content ol {
+    margin-block: 1rem;
+  }
+
+  /* Preflight resets list-style; prose needs its markers back. */
+  .content ul {
+    padding-inline-start: 1.25rem;
+    list-style: disc;
+  }
+
+  .content ol {
+    padding-inline-start: 1.5rem;
+    list-style: decimal;
+  }
+
+  .content ol ul,
+  .content ul ul {
+    margin-block: 0.375rem;
+  }
+
+  .content li {
+    margin-block: 0.375rem;
+  }
+
+  .content li::marker {
+    color: var(--color-ink-4);
+  }
+
+  .content strong {
+    font-weight: 500;
+    color: var(--color-ink-1);
+  }
+
+  .content blockquote {
+    margin-inline: 0;
+    padding-inline-start: 1.25rem;
+    border-inline-start: 1px solid var(--color-line-strong);
+    color: var(--color-ink-3);
+  }
+
+  .content hr {
+    margin-block: 2.5rem;
+    border: 0;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .content :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    color: var(--color-ink-1);
+  }
+
+  /* Code blocks keep their own dark surface in both themes: a snippet is
+     content, not chrome, and it should not restate the page background. */
+  .content .expressive-code {
+    margin-block: 1.5rem;
+  }
+
+  /* Long code lines run past the frame — 585px of a 925px line is off-screen
+     on a phone — and macOS overlay scrollbars are invisible at rest, so the
+     block reads as merely truncated. This is the CSS-only scroll shadow: the
+     first layer is painted in the code background and scrolls with the
+     content (background-attachment: local), so it covers the second layer
+     only once you reach the end. The cue therefore appears exactly when
+     something is hidden and disappears when nothing is. Selector is
+     .content .expressive-code .frame pre because the library's own
+     .expressive-code .frame pre sets the `background` shorthand at the same
+     specificity and loads later, which resets these layers. */
+  .content .expressive-code .frame pre {
+    overflow-x: auto;
+    background-color: var(--ec-codeBg);
+    background-image:
+      linear-gradient(to left, var(--ec-codeBg) 0%, var(--ec-codeBg) 100%),
+      linear-gradient(to left, rgb(0 0 0 / 55%) 0%, rgb(0 0 0 / 0%) 100%);
+    background-position: 100% 0, 100% 0;
+    background-repeat: no-repeat, no-repeat;
+    background-size: 28px 100%, 28px 100%;
+    background-attachment: local, scroll;
+  }
+
+  .content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+
+  .content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+
+  .content th,
+  .content td {
+    padding-block: 0.5rem;
+    padding-inline: 0 0.75rem;
+    text-align: start;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .content th {
+    font-weight: 500;
+    color: var(--color-ink-1);
   }
 </style>

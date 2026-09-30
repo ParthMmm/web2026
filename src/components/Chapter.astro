@@ -1,0 +1,49 @@
+---
+type Props = {
+	label: string;
+	/** The section's accessible name. Falls back to the visible rail label. */
+	title?: string;
+};
+
+const { label, title } = Astro.props;
+const id = `chapter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+---
+
+<section aria-labelledby={id} class="chapter">
+  <hr class="rule" />
+  <div class="spine">
+    <div class="rail">
+      <h2 id={id} class="rail-label">{title ?? label}</h2>
+    </div>
+    <div class="flow">
+      <slot />
+    </div>
+  </div>
+</section>
+
+<style>
+  /* The rule opens the chapter, so the space has to sit on both sides of it:
+     padding on .chapter alone lands entirely above the rule and leaves it
+     glued to the title. Roughly 3:1 above to below, so the rule reads as a
+     chapter boundary rather than as an underline for the first record.
+     Footer and Article already space their own .spine the same way. */
+  .chapter {
+    padding-block-start: 2rem;
+    padding-block-end: 2rem;
+  }
+
+  .chapter .spine {
+    padding-block-start: 1.25rem;
+  }
+
+  @media (min-width: 48rem) {
+    .chapter {
+      padding-block-start: 2.5rem;
+      padding-block-end: 2.5rem;
+    }
+
+    .chapter .spine {
+      padding-block-start: 1.75rem;
+    }
+  }
+</style>

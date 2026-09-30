@@ -1,0 +1,126 @@
+---
+/* Beacon's differentiating feature in its own words: "markdown import/export
+   means you can plan with any tool, any LLM, or just a text editor." This
+   shows that round trip. The trip content is illustrative sample data, not a
+   capture of the shipping app. */
+const source = [
+	{ t: "# Lisbon", k: "h" },
+	{ t: "", k: "b" },
+	{ t: "## Thu 12", k: "h2" },
+	{ t: "- 09:30 Time Out Market", k: "li" },
+	{ t: "- 14:00 Torre de Belém", k: "li" },
+	{ t: "- 19:00 dinner, Alfama", k: "li" },
+];
+
+const plan = [
+	{ time: "09:30", place: "Time Out Market", note: "Cais do Sodré" },
+	{ time: "14:00", place: "Torre de Belém", note: "Belém" },
+	{ time: "19:00", place: "Dinner", note: "Alfama" },
+];
+---
+
+<figure class="panel">
+  <div class="cols">
+    <div class="col">
+      <p class="cap">Markdown in</p>
+      <pre>{source.map((l) => l.t).join("\n")}</pre>
+    </div>
+    <div class="col">
+      <p class="cap">Itinerary out</p>
+      <p class="day">Thursday 12</p>
+      <ul>
+        {
+          plan.map((s) => (
+            <li>
+              <span class="time">{s.time}</span>
+              <span class="place">{s.place}</span>
+              <span class="note">{s.note}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 48rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-3);
+  }
+
+  pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--color-ink-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .day {
+    margin: 0 0 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-ink-1);
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+    gap: 0 0.75rem;
+    align-items: baseline;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-primary-strong);
+  }
+
+  .place {
+    color: var(--color-ink-1);
+  }
+
+  .note {
+    grid-column: 2;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-ink-3);
+  }
+</style>

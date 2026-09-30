@@ -1,164 +1,143 @@
 ---
-import Project from "../components/Project.astro";
-import SubTitle from "../components/SubTitle.astro";
-import ThemeIcon from "../components/ThemeIcon.astro";
-import Work from "../components/Work.astro";
+import Chapter from "../components/Chapter.astro";
+import Feature from "../components/Feature.astro";
+import IndexRow from "../components/IndexRow.astro";
+import BeaconMarkdown from "../components/media/BeaconMarkdown.astro";
+import TracklistParse from "../components/media/TracklistParse.astro";
+import { profile, projects, work } from "../data/site";
 import Layout from "../layouts/Layout.astro";
-
-import "../styles/global.css";
 
 const title = "Parth Mangrola";
 const description =
-    "Fullstack engineer building products from frontend to infrastructure. Currently consulting at Pallas.";
+	"Full-stack engineer building products end to end — frontends, APIs, databases, and the infrastructure underneath.";
 
-const projects = [
-    {
-        title: "beacon",
-        description:
-            "Plan anywhere. Travel everywhere. Smart travel companion for collaborative trip planning.",
-        url: "/projects/beacon",
-    },
-    {
-        title: "tracklister",
-        description:
-            "AI-powered app that converts tracklists to Spotify playlists using vector embeddings and Cloudflare edge functions.",
-        url: "/projects/tracklister",
-    },
-    {
-        title: "auriom",
-        description:
-            "The social platform for music lovers. Built as part of Buildspace's Nights and Weekends S2.",
-        url: "https://github.com/ParthMmm/auriom",
-    },
-    {
-        title: "labs",
-        description: "A collection of components and experiments.",
-        url: "https://labs.p11a.xyz/",
-    },
-];
-
-const work = [
-    {
-        title: "Carbon Law Group",
-        description:
-            "Sole engineer on full-stack SaaS for state filing compliance. Built Chrome extension that automates 30+ form fields.",
-    },
-    {
-        title: "Embic",
-        description:
-            "Built healthcare platform with admin dashboard for managing medical orgs and patient records. Fixed production bugs affecting 125+ users.",
-    },
-    {
-        title: "Penovar",
-        description: "Created landing page for clinical research facility.",
-    },
-
-    {
-        title: "Rhythm Events",
-        description: "Crafted animated landing page for events business.",
-    },
-    {
-        title: "Vitality Clinical Research",
-        description: "Created landing page for clinical research facility.",
-    },
-];
+/* The two flagships carry the page; everything else is the supporting index. */
+const FLAGSHIPS = new Set(["Beacon", "Versos"]);
+const otherProjects = projects.filter((p) => !FLAGSHIPS.has(p.title));
 
 const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    name: "Parth Mangrola",
-    jobTitle: "Fullstack Engineer",
-    url: "https://www.parthm.dev",
-    sameAs: [
-        "https://github.com/parthmangrola",
-        "https://www.linkedin.com/in/parthmangrola",
-        "https://twitter.com/parthmangrola",
-    ],
-    worksFor: {
-        "@type": "Organization",
-        name: "Pallas",
-        url: "https://pallas.so",
-    },
-    knowsAbout: [
-        "React",
-        "TypeScript",
-        "Node.js",
-        "PostgreSQL",
-        "AWS",
-        "Cloudflare",
-        "Full Stack Development",
-        "Software Engineering",
-    ],
-    workExample: work.map((item) => ({
-        "@type": "CreativeWork",
-        name: item.title,
-        description: item.description,
-        url: item.url,
-    })),
+	"@context": "https://schema.org",
+	"@type": "Person",
+	name: profile.name,
+	jobTitle: profile.role,
+	url: profile.site,
+	sameAs: [
+		"https://github.com/ParthMmm",
+		"https://www.linkedin.com/in/parthmangrola",
+		"https://twitter.com/parthmangrola",
+	],
+	worksFor: { "@type": "Organization", name: "Pallas", url: "https://pallas.so" },
+	knowsAbout: [
+		"React",
+		"TypeScript",
+		"Node.js",
+		"PostgreSQL",
+		"AWS",
+		"Cloudflare",
+		"Full Stack Development",
+		"Software Engineering",
+	],
+	workExample: work.map((item) => ({
+		"@type": "CreativeWork",
+		name: item.title,
+		description: item.description,
+	})),
 };
 ---
 
-<Layout title={title} description={description} >
-    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+<Layout {title} {description}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
-    <div class="container p-4 mx-auto">
-        <section class="w-full">
-            <header class="mt-20 mb-10">
-                <h1 class="font-black text-4xl md:text-5xl tracking-tighter text-950">
-                    Parth Mangrola
-                </h1>
-            </header>
+  <section class="opening" aria-labelledby="thesis">
+    <h1 id="thesis" class="thesis">
+      I build products <mark>end to end</mark>.
+    </h1>
+    <p class="sub">
+      Frontends, APIs, databases, and the infrastructure underneath.
+    </p>
+    <p class="lede">
+      I run <a href="https://pallas.so" rel="noopener noreferrer">Pallas</a>, where I've
+      shipped healthcare platforms, compliance SaaS, and developer tools for clients. I'm
+      looking for a full-stack or design engineering role — somewhere the details matter.
+    </p>
+  </section>
 
-            <div class="mb-10">
-                <p class="font-normal text-base leading-relaxed text-600">
-                    Hey! I'm a fullstack engineer who builds products end to end, from React
-                    frontends to APIs, databases, and cloud infrastructure. I love making things
-                    that feel good to use. Right now I run
-                    <a
-                        href="https://pallas.so"
-                        class="text-accent dark:text-accent-light font-medium hover:underline underline-offset-2"
-                        rel="noopener noreferrer">Pallas</a
-                    >, where I've built healthcare platforms, SaaS products, and developer tools for
-                    clients. Looking for a fullstack or design engineering role where I can obsess
-                    over the details.
-                </p>
-            </div>
+  <Chapter label="Projects">
+    <Feature
+      title="Beacon"
+      description="A real-time shared workspace for planning trips together. Your plans aren't locked in — import and export the whole itinerary as markdown."
+      url="/projects/beacon"
+      stack="Expo · Convex · Better Auth · Turborepo"
+    >
+      <BeaconMarkdown />
+    </Feature>
 
-            <div class="mb-7 mt-16">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <section>
-                        <h2 class="sr-only">Work Experience</h2>
-                        <SubTitle title="work" />
-                        <div class="grid grid-cols-1 gap-4">
-                            {
-                                work.map((item) => (
-                                    <Work
-                                        url={item.url}
-                                        title={item.title}
-                                        description={item.description}
-                                    />
-                                ))
-                            }
-                        </div>
-                    </section>
+    <Feature
+      title="Versos"
+      description="Paste a tracklist from a DJ set and get a playlist. An LLM cleans the messy text, then a matching engine finds each track in the catalogue. Three rebuilds in, formerly Tracklister."
+      url="/projects/versos"
+      stack="TanStack Start · Hono · Effect · BullMQ"
+    >
+      <TracklistParse />
+    </Feature>
 
-                    <section>
-                        <h2 class="sr-only">Projects</h2>
-                        <SubTitle title="projects" />
-                        <div class="grid grid-cols-1 gap-4">
-                            {
-                                projects.map((project) => (
-                                    <Project
-                                        title={project.title}
-                                        url={project.url}
-                                        description={project.description}
-                                    />
-                                ))
-                            }
-                        </div>
-                    </section>
-                </div>
-            </div>
-        </section>
-    </div>
+    <ul class="index tail">
+      {otherProjects.map((project) => <IndexRow {...project} />)}
+    </ul>
+  </Chapter>
+
+  <Chapter label="Work">
+    <ul class="index">
+      {work.map((item) => <IndexRow {...item} />)}
+    </ul>
+  </Chapter>
+
 </Layout>
+
+<style>
+  .opening {
+    padding-block: clamp(2.5rem, 6vw, 4.5rem) 0;
+  }
+
+  /* Ranked by size before anything else. One phrase carries the orange
+     highlight as a surface; green stays in hairlines and markers. */
+  .thesis {
+    margin: 0;
+    max-width: 14ch;
+    font-size: var(--text-display);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.042em;
+    color: var(--color-ink-1);
+  }
+
+  .sub {
+    margin-block: clamp(1.25rem, 2.5vw, 1.75rem) 0;
+    max-width: 26ch;
+    font-size: clamp(1.125rem, 1.9vw, 1.5rem);
+    font-weight: 400;
+    line-height: 1.25;
+    letter-spacing: -0.018em;
+    color: var(--color-ink-3);
+  }
+
+  .lede {
+    margin-block: 1.75rem 0;
+    max-width: 34rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--color-ink-2);
+  }
+
+  .index {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* The remaining projects are the tail of the same chapter, not a new
+     one, so they sit closer to the features than a chapter break would. */
+  .tail {
+    margin-block-start: clamp(2.5rem, 5vw, 3.5rem);
+  }
+</style>

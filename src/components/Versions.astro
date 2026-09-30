@@ -1,0 +1,184 @@
+---
+import type { render } from "astro:content";
+import ContentWrapper from "./ContentWrapper.astro";
+
+export type Version = {
+	version: string;
+	title: string;
+	description: string;
+	period?: string;
+	Content: Awaited<ReturnType<typeof render>>["Content"];
+};
+
+type Props = {
+	/** Oldest first. The last one is shown until the reader picks another. */
+	versions: Version[];
+};
+
+const { versions } = Astro.props;
+const current = versions.at(-1)?.version;
+---
+
+<div class="versions" data-versions>
+  <div class="tabs" role="tablist" aria-label="Versions">
+    {
+      versions.map(({ version, title, period }) => {
+        const selected = version === current;
+        return (
+          <button
+            type="button"
+            role="tab"
+            id={`tab-${version}`}
+            aria-controls={`panel-${version}`}
+            aria-selected={selected ? "true" : "false"}
+            tabindex={selected ? 0 : -1}
+            data-version={version}
+          >
+            <span class="tab-version">{version}</span>
+            <span class="tab-name">{title}</span>
+            {period && <span class="tab-period">{period}</span>}
+          </button>
+        );
+      })
+    }
+  </div>
+
+  {
+    versions.map(({ version, description, Content }) => (
+      <section
+        role="tabpanel"
+        id={`panel-${version}`}
+        data-version={version}
+        aria-labelledby={`tab-${version}`}
+        tabindex="0"
+        hidden={version !== current}
+      >
+        <p class="lede">{description}</p>
+        <ContentWrapper>
+          <Content />
+        </ContentWrapper>
+      </section>
+    ))
+  }
+</div>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-versions]")) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+
+    const select = (version: string, focus: boolean) => {
+      for (const tab of tabs) {
+        const selected = tab.dataset.version === version;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focus) {
+          tab.focus();
+        }
+      }
+      for (const panel of panels) {
+        panel.hidden = panel.dataset.version !== version;
+      }
+    };
+
+    for (const [index, tab] of tabs.entries()) {
+      tab.addEventListener("click", () => {
+        const version = tab.dataset.version ?? "";
+        select(version, false);
+        history.replaceState(null, "", `#${version}`);
+      });
+
+      tab.addEventListener("keydown", (event) => {
+        const last = tabs.length - 1;
+        const targets: Record<string, number> = {
+          ArrowLeft: index === 0 ? last : index - 1,
+          ArrowRight: index === last ? 0 : index + 1,
+          End: last,
+          Home: 0,
+        };
+        const target = tabs[targets[event.key] ?? -1];
+        if (!target) {
+          return;
+        }
+        event.preventDefault();
+        select(target.dataset.version ?? "", true);
+        history.replaceState(null, "", `#${target.dataset.version}`);
+      });
+    }
+
+    const linked = location.hash.slice(1);
+    if (panels.some((panel) => panel.id === linked)) {
+      select(linked, false);
+    }
+  }
+</script>
+
+<style>
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.5rem;
+    margin-block-end: 2.25rem;
+  }
+
+  [role="tab"] {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: none;
+    color: var(--color-ink-2);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  [role="tab"][aria-selected="true"] {
+    border-color: var(--color-primary);
+    color: var(--color-ink-1);
+  }
+
+  [role="tab"]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    [role="tab"] {
+      transition: background-color 150ms ease;
+    }
+    [role="tab"]:hover {
+      background-color: var(--color-hover);
+    }
+  }
+
+  .tab-version {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-primary-strong);
+  }
+
+  .tab-name {
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .tab-period {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-ink-3);
+  }
+
+  [role="tabpanel"]:focus-visible {
+    outline: none;
+  }
+
+  .lede {
+    margin-block: 0 2rem;
+    max-width: 34rem;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-ink-1);
+  }
+</style>

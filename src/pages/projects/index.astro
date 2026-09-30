@@ -1,59 +1,15 @@
 ---
-import Project from "../../components/Project.astro";
-import SubTitle from "../../components/SubTitle.astro";
+import Chapter from "../../components/Chapter.astro";
+import Record from "../../components/Record.astro";
+import { projects } from "../../data/site";
 import Layout from "../../layouts/Layout.astro";
-
-const title = "projects";
-const projects = [
-	{
-		title: "beacon",
-		description: "plan anywhere. travel everywhere",
-		url: "/projects/beacon",
-	},
-	{
-		title: "tracklister",
-		description: "turn a tracklist into a playlist",
-		url: "/projects/tracklister",
-		blog: "a",
-	},
-	{
-		title: "auriom",
-		description: "the social platform for music lovers",
-		url: "/projects/auriom",
-	},
-];
 ---
 
-<Layout {title} description="Personal website of Parth Mangrola">
-<div class="container p-4 mx-auto">
-<section class="w-full ">
-<div
-  class="grid grid-cols-1  gap-8"
+<Layout
+  title="Projects — Parth Mangrola"
+  description="Projects by Parth Mangrola: Beacon, Versos, Orbis, Mana Margherita, and Auriom."
 >
-
-  <div class="">
-    <SubTitle title="projects" />
-    <div class="grid grid-cols-1 gap-4">
-      {
-        projects.map((project) => (
-
-        <div class='mb-3'>
-        <div class="flex items-baseline">
-              <a
-                href={project.url}
-                class='no-underline mr-1
-              whitespace-nowrap shrink-0'
-              >
-                {project.title}
-              </a>
-              <div class="mx-2 w-full border-b border-dotted border-300" />
-                             <span class="shrink-0">{project.description}</span>
-          </div>
-        </div>
-        ))
-      }
-    </div>
-  </div>
-</section>
-</div>
+  <Chapter label="Projects">
+    {projects.map((project) => <Record {...project} />)}
+  </Chapter>
 </Layout>

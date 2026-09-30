@@ -1,0 +1,73 @@
+---
+import { profile } from "../data/site";
+import ThemeIcon from "./ThemeIcon.astro";
+
+const isHome = Astro.url.pathname === "/";
+---
+
+<header class="masthead">
+  <div class="identity">
+    {
+      isHome ? (
+        <span class="name">{profile.name}</span>
+      ) : (
+        <a href="/" class="name">
+          {profile.name}
+        </a>
+      )
+    }
+    <p class="meta">{profile.role} · {profile.status}</p>
+  </div>
+  <ThemeIcon />
+</header>
+<hr class="rule" />
+
+<style>
+  .masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-block: 1.75rem 1.25rem;
+  }
+
+  .identity {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    /* Lets the meta line wrap instead of forcing the row wider than the
+       viewport once the role or status string grows. */
+    min-width: 0;
+  }
+
+  /* The nameplate labels the document; it does not shout over it. The
+     page-defining statement is the opening line below. */
+  .name {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: -0.006em;
+    color: var(--color-ink-1);
+    text-decoration: none;
+  }
+
+  a.name {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--color-primary-quiet);
+  }
+
+  /* Role and availability read as one fact about the author, on the leading
+     edge. Previously the status sat opposite the toggle and was hidden below
+     26rem, which dropped it from every subpage on a phone. */
+  .meta {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    color: var(--color-ink-3);
+    text-wrap: pretty;
+  }
+</style>

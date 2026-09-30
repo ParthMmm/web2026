@@ -6,13 +6,27 @@
   ],
   "exclude": [
     "dist",
+    ".alchemy",
     "apps/api"
   ],
   "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
-    "strictNullChecks": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "strict": true,
+    "strictNullChecks": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "incremental": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
     "allowJs": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   }
 }

@@ -4,7 +4,7 @@ description: "Smart travel companion for collaborative trip planning"
 pubDate: 2026-03-03
 ---
 
-## what & why
+## what and why
 
 trip planning is scattered across group chats, shared docs, screenshots of Google Maps, and half-finished spreadsheets. beacon pulls it all into one place, a real-time shared workspace for building trips together.
 

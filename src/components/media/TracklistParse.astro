@@ -1,0 +1,104 @@
+---
+/* Not a mockup of an interface — the actual transformation Versos
+   performs, using the exact input/output pairs documented in the project's
+   own write-up. Nothing here is invented. */
+const rows = [
+	{ raw: "[47:58] Juelz & JAWNS - Enter The World", artist: "Juelz", title: "Enter The World" },
+	{ raw: "40:56 Special Request - Pull Up (Tim Reaper Remix)", artist: "Special Request", title: "Pull Up (Tim Reaper Remix)" },
+	{
+		raw: "[31:29] Joy Orbison & Vice Selex vs. Sage The Gemini & IAMSU! - Flight FM vs. Gas Pedal (RL Grime Edit)",
+		artist: "Joy Orbison & Vice Selex vs. Sage The Gemini & IAMSU!",
+		title: "Flight FM vs. Gas Pedal (RL Grime Edit)",
+	},
+];
+---
+
+<figure class="panel">
+  <div class="cols">
+    <div class="col">
+      <p class="cap">Pasted</p>
+      <ul>
+        {rows.map((r) => <li class="raw">{r.raw}</li>)}
+      </ul>
+    </div>
+    <div class="col">
+      <p class="cap">Matched</p>
+      <ul>
+        {
+          rows.map((r) => (
+            <li class="out">
+              <span class="artist">{r.artist}</span>
+              <span class="title">{r.title}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 48rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-3);
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+  }
+
+  li {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  /* Messy in, clean out — the quieter rung is the point of the figure. */
+  .raw {
+    color: var(--color-ink-2);
+    overflow-wrap: anywhere;
+  }
+
+  .out {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    overflow-wrap: anywhere;
+  }
+
+  .artist {
+    color: var(--color-primary-strong);
+  }
+
+  .title {
+    color: var(--color-ink-1);
+  }
+</style>

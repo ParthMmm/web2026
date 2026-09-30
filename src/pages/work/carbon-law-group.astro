@@ -1,0 +1,21 @@
+---
+import { getEntry, render } from "astro:content";
+import Article from "../../components/Article.astro";
+import ContentWrapper from "../../components/ContentWrapper.astro";
+import Layout from "../../layouts/Layout.astro";
+
+const title = "Carbon Law Group";
+const description =
+	"Sole engineer on a full-stack SaaS for state filing compliance. Shipped a Chrome extension that automates 30+ form fields.";
+
+const entry = await getEntry("work", "carbon-law-group");
+const { Content } = await render(entry!);
+---
+
+<Layout title={`${title} — Parth Mangrola`} {description}>
+  <Article section="Work" sectionUrl="/work" {title} {description}>
+    <ContentWrapper>
+      <Content />
+    </ContentWrapper>
+  </Article>
+</Layout>

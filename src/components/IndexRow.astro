@@ -1,0 +1,53 @@
+---
+type Props = {
+	title: string;
+	description: string;
+	url?: string;
+};
+
+const { title, description, url } = Astro.props;
+const isExternal = Boolean(url?.startsWith("http"));
+const linkAttrs = isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {};
+---
+
+<li class="row">
+  <h3 class="title">{url ? <a href={url} {...linkAttrs}>{title}</a> : title}</h3>
+  <p class="desc">{description}</p>
+</li>
+
+<style>
+  /* Deliberately quieter and denser than a Feature: these are the supporting
+     record, not the argument. One line each wherever the string allows. */
+  .row {
+    display: grid;
+    gap: 0.125rem 1.5rem;
+    padding-block: 0.6875rem;
+    border-block-start: 1px solid var(--color-line);
+  }
+
+  .row:first-child {
+    border-block-start: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-ink-1);
+  }
+
+  .desc {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-ink-3);
+  }
+
+  @media (min-width: 48rem) {
+    .row {
+      grid-template-columns: 13rem minmax(0, 1fr);
+      align-items: baseline;
+    }
+  }
+</style>

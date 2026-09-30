@@ -4,20 +4,32 @@ Personal portfolio site.
 
 ## Stack
 
-- [Astro](https://astro.build) + React
+- [Astro](https://astro.build), fully static
 - Tailwind CSS v4
-- Vercel
+- Cloudflare Workers static assets, deployed with [Alchemy](https://alchemy.run)
+- Bun
 
 ## Development
 
 ```sh
-pnpm install
-pnpm run dev
+bun install
+bun run dev
 ```
 
 ## Build
 
 ```sh
-pnpm run build
-pnpm run preview
+bun run build
+bun run preview
 ```
+
+## Deploy
+
+Alchemy's `default` profile authenticates the deployment. Run `bun alchemy login` if needed.
+
+```sh
+bun alchemy plan --stage prod
+bun run deploy
+```
+
+State lives in `.alchemy/` (ignored). Don't delete it while the Worker is deployed; it tracks ownership.

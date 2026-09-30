@@ -1,160 +1,141 @@
 ---
-
 ---
 
-<button
-  id="themeToggle"
-  type="button"
-  aria-label="Toggle theme"
-  title="Toggle between dark and light mode"
->
-  <span class="sr-only">Toggle theme</span>
-  <div class="icon-wrapper">
-    <svg class="theme-icon light-icon" width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-hidden="true">
-      <circle cx="168" cy="104" r="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <circle cx="88" cy="168" r="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <polyline points="152 216 152 160 88 96 88 40" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <line x1="88" y1="152" x2="88" y2="96" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <rect x="40" y="40" width="176" height="176" rx="8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <polyline points="136 40 136 72 156.69 92.69" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
+<button id="themeToggle" type="button" aria-label="Switch to dark theme">
+  <span class="icon-wrapper">
+    <svg class="theme-icon sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4.25" />
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" />
+      </g>
     </svg>
-    <svg class="theme-icon dark-icon" width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-hidden="true">
-      <path d="M48,216a24,24,0,0,1,24-24H208V32H72A24,24,0,0,0,48,56Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
-      <polyline points="48 216 48 224 192 224" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="16"/>
+    <svg class="theme-icon moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.25 8.25 0 1 0 10.2 10.2Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
-  </div>
+  </span>
 </button>
 
 <style>
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-  }
   #themeToggle {
-    border: 0;
-    background: none;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    min-width: 44px;
-    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-block: -0.375rem;
+    /* Optical outdent so the glyph, not the padding box, lands on the text
+       edge. Must follow the inline axis or it pulls the wrong way in RTL. */
+    margin-inline-end: -0.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--color-ink-3);
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    #themeToggle:hover {
+      background-color: var(--color-hover);
+      color: var(--color-ink-1);
+    }
+  }
+
+  #themeToggle:active {
+    background-color: var(--color-pressed);
   }
 
   .icon-wrapper {
     position: relative;
-    width: 24px;
-    height: 24px;
+    display: block;
+    width: 18px;
+    height: 18px;
   }
 
+  /* One glyph swaps for the other in place. This is state indication,
+     not decoration, so it is quick and it stops at the swap. */
   .theme-icon {
-    color: var(--color-900);
-    transition: color 0.15s ease;
     position: absolute;
     inset: 0;
+    transition: clip-path 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  .light-icon {
-    clip-path: circle(75% at 50% 50%);
-    transition: clip-path 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  }
-
-  .dark-icon {
-    clip-path: circle(0% at 50% 50%);
-    transition: clip-path 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  }
-
-  :global(.dark) .light-icon {
-    clip-path: circle(0% at 50% 50%);
-  }
-
-  :global(.dark) .dark-icon {
+  .sun {
     clip-path: circle(75% at 50% 50%);
   }
-
-  @media (hover: hover) and (pointer: fine) {
-    #themeToggle:hover .light-icon {
-      color: oklch(0.65 0.18 145);
-    }
-    #themeToggle:hover .dark-icon {
-      color: oklch(0.75 0.15 165);
-    }
-    #themeToggle:active .theme-icon {
-      color: var(--color-600);
-    }
+  .moon {
+    clip-path: circle(0% at 50% 50%);
+  }
+  :global(.dark) .sun {
+    clip-path: circle(0% at 50% 50%);
+  }
+  :global(.dark) .moon {
+    clip-path: circle(75% at 50% 50%);
   }
 </style>
 
 <script is:inline>
-  const theme = (() => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
-      return localStorage.getItem('theme') ?? "light";
+  (() => {
+    const stored = typeof localStorage !== "undefined" ? localStorage.getItem("theme") : null;
+    const theme =
+      stored ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+
+    const CANVAS = { light: "#fcf6e9", dark: "#1f1d17" };
+
+    const apply = (isDark) => {
+      document.documentElement.classList.toggle("dark", isDark);
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute("content", isDark ? CANVAS.dark : CANVAS.light);
+      const button = document.getElementById("themeToggle");
+      button?.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+    };
+
+    apply(theme === "dark");
+    localStorage.setItem("theme", theme);
+
+    /* The wordmark is the one thing on this site that keeps its colour. It
+       stays as shipped in both themes rather than following the canvas. */
+    const icon = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
+    if (icon) {
+      const pathD =
+        "M22.50-162L22.50 60L58.50 60L58.50-23.40L60-23.40C69.30-6 84 3 103.20 3C141.30 3 168.30-32.10 168.30-81C168.30-129.90 141.30-165 103.20-165C82.80-165 67.50-154.80 58.50-135.60L57-135.60L57-162ZM95.10-132C117-132 132.30-111 132.30-81C132.30-51 117-30 95.10-30C73.20-30 57.90-51 57.90-81C57.90-111 73.20-132 95.10-132ZM169.90 0L204.40 0L204.40-111C204.40-125.10 211-135 220.60-135C228.70-135 233.50-128.10 233.50-117L233.50 0L268 0L268-112.20C268-125.70 274.60-135 283.90-135C292-135 297.10-128.10 297.10-117L297.10 0L331.60 0L331.60-123C331.60-148.50 317.20-165 294.40-165C279.70-165 268.30-158.10 261.70-144.60L260.50-144.60C255.10-157.80 244.90-165 232-165C218.50-165 207.10-156.90 202.60-143.40L201.40-143.40L201.40-162L169.90-162Z";
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384"><rect width="384" height="384" fill="#010080"/><g fill="#c8ff4a" transform="translate(17.87,243.63) scale(0.9835)"><path d="${pathD}"/></g></svg>`;
+      icon.href = "data:image/svg+xml," + encodeURIComponent(svg);
     }
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-      return 'light';
-  })();
 
-  if (theme === 'light') {
-    document.documentElement.classList.remove('dark');
-  } else {
-    document.documentElement.classList.add('dark');
-  }
+    const toggle = () => {
+      const isDark = !document.documentElement.classList.contains("dark");
+      apply(isDark);
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+    };
 
-  window.localStorage.setItem('theme', theme);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#1e3a8a' : '#FFFCF0');
-
-  const setFavicon = (isDark) => {
-    const svgLink = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
-    if (!svgLink) return;
-    const bg = isDark ? '#010080' : '#FFFCF0';
-    const textFill = isDark ? '#c8ff4a' : '#100F0F';
-    const pathD = 'M22.50-162L22.50 60L58.50 60L58.50-23.40L60-23.40C69.30-6 84 3 103.20 3C141.30 3 168.30-32.10 168.30-81C168.30-129.90 141.30-165 103.20-165C82.80-165 67.50-154.80 58.50-135.60L57-135.60L57-162ZM95.10-132C117-132 132.30-111 132.30-81C132.30-51 117-30 95.10-30C73.20-30 57.90-51 57.90-81C57.90-111 73.20-132 95.10-132ZM169.90 0L204.40 0L204.40-111C204.40-125.10 211-135 220.60-135C228.70-135 233.50-128.10 233.50-117L233.50 0L268 0L268-112.20C268-125.70 274.60-135 283.90-135C292-135 297.10-128.10 297.10-117L297.10 0L331.60 0L331.60-123C331.60-148.50 317.20-165 294.40-165C279.70-165 268.30-158.10 261.70-144.60L260.50-144.60C255.10-157.80 244.90-165 232-165C218.50-165 207.10-156.90 202.60-143.40L201.40-143.40L201.40-162L169.90-162Z';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384"><rect width="384" height="384" fill="${bg}"/><g fill="${textFill}" transform="translate(17.87,243.63) scale(0.9835)"><path d="${pathD}"/></g></svg>`;
-    svgLink.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
-  };
-
-  setFavicon(theme === 'dark');
-
-  const toggleTheme = () => {
-    const element = document.documentElement;
-    element.classList.toggle("dark");
-    const isDark = element.classList.contains("dark");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#1e3a8a' : '#FFFCF0');
-    setFavicon(isDark);
-  };
-
-  const handleToggleClick = () => {
-    if (!document.startViewTransition) {
-      toggleTheme();
-      return;
-    }
-    const transition = document.startViewTransition(() => toggleTheme());
-    transition.ready.then(() => {
-      document.documentElement.animate(
-        [
-          { clipPath: 'inset(0 50% 0 50%)' },
-          { clipPath: 'inset(0 0 0 0)' },
-        ],
-        {
-          duration: 350,
-          easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-          pseudoElement: '::view-transition-new(root)',
-        }
-      );
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest?.("#themeToggle")) return;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduced || !document.startViewTransition) {
+        toggle();
+        return;
+      }
+      document.startViewTransition(toggle).ready.then(() => {
+        document.documentElement.animate(
+          [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }],
+          {
+            duration: 280,
+            easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+            pseudoElement: "::view-transition-new(root)",
+          },
+        );
+      });
     });
-  };
-
-  document.getElementById("themeToggle")?.addEventListener("click", handleToggleClick);
+  })();
 </script>

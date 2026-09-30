@@ -1,18 +1,21 @@
 ---
 import { getEntry, render } from "astro:content";
+import Article from "../../components/Article.astro";
+import ContentWrapper from "../../components/ContentWrapper.astro";
 import Layout from "../../layouts/Layout.astro";
 
-import ContentWrapper from "../../components/ContentWrapper.astro";
+const title = "Embic";
+const description =
+	"Healthcare platform with an admin dashboard for medical organizations and patient records. Fixed production bugs affecting 125+ users.";
 
-const title = "embic";
 const entry = await getEntry("work", "embic");
 const { Content } = await render(entry!);
 ---
 
-<Layout {title} description="Built healthcare platform with admin dashboard for managing medical orgs and patient records.">
-  <div class="container p-4 mx-auto">
-<ContentWrapper>
-      <Content/>
-</ContentWrapper>
-  </div>
+<Layout title={`${title} — Parth Mangrola`} {description}>
+  <Article section="Work" sectionUrl="/work" {title} {description}>
+    <ContentWrapper>
+      <Content />
+    </ContentWrapper>
+  </Article>
 </Layout>

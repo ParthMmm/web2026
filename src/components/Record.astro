@@ -1,0 +1,83 @@
+---
+type Props = {
+	title: string;
+	description: string;
+	url?: string;
+};
+
+const { title, description, url } = Astro.props;
+const isExternal = Boolean(url?.startsWith("http"));
+const linkAttrs = isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {};
+---
+
+<article class="record">
+  <h3 class="record-title">
+    {
+      url ? (
+        <a href={url} {...linkAttrs}>
+          {title}
+          {isExternal && (
+            <svg
+              class="external"
+              viewBox="0 0 24 24"
+              width="11"
+              height="11"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M5 3h6v2H5v14h14v-6h2v8H3V3h2zm8 0h8v8h-2V7h-2V5h-4V3zm0 8h-2v2H9v2h2v-2h2v-2zm4-4h-2v2h-2v2h2V9h2V7z"
+                fill="currentColor"
+              />
+            </svg>
+          )}
+        </a>
+      ) : (
+        title
+      )
+    }
+  </h3>
+  <p class="record-description">{description}</p>
+</article>
+
+<style>
+  /* Records are peers: one size, one rung, one baseline. The gap inside a
+     record is small and the gap between them is large, so grouping needs
+     no divider. Every record is a heading whether or not it links, so
+     heading navigation reaches all of them. */
+  .record + .record {
+    margin-block-start: 1.75rem;
+  }
+
+  .record-title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: -0.011em;
+    color: var(--color-ink-1);
+  }
+
+  .record-title a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+  }
+
+  .record-description {
+    margin-block-start: 0.25rem;
+    max-width: 34rem;
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--color-ink-2);
+  }
+
+  /* Sits on the metadata rung: it repeats what target="_blank" already
+     says, so it should not compete with the label it trails. */
+  .external {
+    flex: none;
+    color: var(--color-ink-4);
+    transform: translateY(-0.05em);
+  }
+</style>

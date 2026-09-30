@@ -4,8 +4,8 @@
   "description": "Parth Mangrola's personal website",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FEFCF0",
-  "theme_color": "#879A39",
+  "background_color": "#fcf6e9",
+  "theme_color": "#fcf6e9",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -27,7 +27,9 @@
     }
   ],
   "orientation": "portrait",
-  "categories": ["developer"],
+  "categories": [
+    "developer"
+  ],
   "lang": "en-US",
   "dir": "ltr"
 }

@@ -1,11 +1,12 @@
 ---
 import { getEntry, render } from "astro:content";
+import Article from "../../components/Article.astro";
 import ContentWrapper from "../../components/ContentWrapper.astro";
 import Layout from "../../layouts/Layout.astro";
-import "../../styles/global.css";
 
-const title = "Beacon - Plan anywhere. Travel everywhere.";
-const description = "Plan anywhere. Travel everywhere. Smart travel companion for collaborative trip planning.";
+const title = "Beacon";
+const description =
+	"Real-time shared workspace for planning trips together. Built on Expo and Convex, with markdown import and export.";
 
 const entry = await getEntry("projects", "beacon");
 const { Content } = await render(entry!);
@@ -14,46 +15,23 @@ const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "SoftwareApplication",
 	name: "Beacon",
-	applicationCategory: "WebApplication",
-	operatingSystem: "Any",
+	applicationCategory: "TravelApplication",
+	operatingSystem: "iOS",
 	author: {
 		"@type": "Person",
 		name: "Parth Mangrola",
 		url: "https://www.parthm.dev",
 	},
-	description: description,
-	offers: {
-		"@type": "Offer",
-		price: "0",
-		priceCurrency: "USD",
-	},
+	description,
+	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
 ---
 
-<Layout
-  title={title}
-  description={description}
->
+<Layout title={`${title} — Parth Mangrola`} {description}>
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-
-  <div class="container p-4 mx-auto">
+  <Article section="Projects" sectionUrl="/projects" {title} {description}>
     <ContentWrapper>
-      <article class="max-w-none">
-        <header class="mb-8">
-          <h1 class="flex items-center gap-2 align-middle decoration-[1px] underline decoration-accent underline-offset-4">
-            <span class="font-bold tracking-tighter">
-              Beacon
-            </span>
-          </h1>
-          <p class="text-lg text-600 mt-2">
-            {description}
-          </p>
-        </header>
-
-        <div class="project-content">
-          <Content/>
-        </div>
-      </article>
+      <Content />
     </ContentWrapper>
-  </div>
+  </Article>
 </Layout>

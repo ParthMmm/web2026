@@ -1,158 +1,456 @@
-@tailwind utilities;
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
 @plugin "@tailwindcss/typography";
 
-@variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------
+   Tokens
+
+   Mid-century palette: Kelly green (H 148) and Tangerine (H 55) held at
+   the sRGB chroma ceiling through the middle of each scale, grounded by a
+   warm paper cream (H 85). Every scale shares one lightness ladder, so the
+   same step is the same brightness across hues.
+
+   Scales live in @theme and replace Tailwind's green and orange, so
+   `bg-green-600` is Kelly. The shadcn semantic variables below point at
+   scale steps; components should reach for those, not raw steps.
+   --------------------------------------------------------------- */
 
 @theme {
-	--font-sans: "Inter", system-ui, sans-serif;
-	--font-mono: "Geist Mono", monospace;
+  --font-sans: "Inter Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
 
-	/* Flexoki base — light mode */
-	--color-black:   oklch(0.170 0.007 25.1);
-	--color-paper:   oklch(0.993 0.041 36.8);
-	--color-950:     oklch(0.224 0.009 31.3);
-	--color-900:     oklch(0.274 0.010 30.9);
-	--color-850:     oklch(0.322 0.013 33.7);
-	--color-800:     oklch(0.366 0.015 31.5);
-	--color-700:     oklch(0.455 0.017 34.3);
-	--color-600:     oklch(0.539 0.021 36.5);
-	--color-500:     oklch(0.619 0.025 34.5);
-	--color-400:     oklch(0.698 0.028 36.1);
-	--color-300:     oklch(0.775 0.032 37.2);
-	--color-200:     oklch(0.849 0.034 38.0);
-	--color-150:     oklch(0.884 0.036 37.0);
-	--color-100:     oklch(0.920 0.037 37.4);
-	--color-50:      oklch(0.957 0.038 37.0);
+  --color-green-50: oklch(0.975 0.02 148);
+  --color-green-100: oklch(0.945 0.057 148);
+  --color-green-200: oklch(0.89 0.151 148);
+  --color-green-300: oklch(0.82 0.204 148);
+  --color-green-400: oklch(0.74 0.208 148);
+  --color-green-500: oklch(0.66 0.191 148);
+  --color-green-600: oklch(0.57 0.165 148);
+  --color-green-700: oklch(0.48 0.135 148);
+  --color-green-800: oklch(0.39 0.104 148);
+  --color-green-900: oklch(0.3 0.074 148);
+  --color-green-950: oklch(0.23 0.053 148);
 
-	/* Flexoki accent — purple */
-	--color-accent:       oklch(0.456 0.086 252.7);
-	--color-accent-light: oklch(0.637 0.059 260.3);
-	--color-accent-muted: oklch(0.400 0.080 252.7);
+  --color-orange-50: oklch(0.975 0.009 55);
+  --color-orange-100: oklch(0.945 0.023 55);
+  --color-orange-200: oklch(0.89 0.054 55);
+  --color-orange-300: oklch(0.82 0.108 55);
+  --color-orange-400: oklch(0.74 0.182 55);
+  --color-orange-500: oklch(0.66 0.163 55);
+  --color-orange-600: oklch(0.57 0.141 55);
+  --color-orange-700: oklch(0.48 0.115 55);
+  --color-orange-800: oklch(0.39 0.089 55);
+  --color-orange-900: oklch(0.3 0.063 55);
+  --color-orange-950: oklch(0.23 0.046 55);
+
+  --color-cream-50: oklch(0.975 0.018 85);
+  --color-cream-100: oklch(0.945 0.03 85);
+  --color-cream-200: oklch(0.89 0.042 85);
+  --color-cream-300: oklch(0.82 0.045 85);
+  --color-cream-400: oklch(0.74 0.04 85);
+  --color-cream-500: oklch(0.66 0.034 85);
+  --color-cream-600: oklch(0.57 0.028 85);
+  --color-cream-700: oklch(0.48 0.024 85);
+  --color-cream-800: oklch(0.39 0.02 85);
+  --color-cream-900: oklch(0.3 0.016 85);
+  --color-cream-950: oklch(0.23 0.012 85);
+
+  /* Display scale. The page ranks by size before anything else, so the
+	   hero needs to be genuinely large rather than one notch above a heading. */
+  --text-display: clamp(2.75rem, 7.5vw, 5.25rem);
+  --text-feature: clamp(1.5rem, 2.6vw, 2rem);
+
+  /* Layout: one spine. The rail holds section labels in the margin;
+	   the content column keeps prose near a 62-character measure. */
+  --rail: 7rem;
+  --gutter: 2.5rem;
+  --measure: 44rem;
 }
 
+/* Wide-gamut enhancement. Same lightness and the same share of the P3
+   ceiling, so contrast is unchanged; only displays that can show the extra
+   chroma get it. Cream is low-chroma and needs no override. */
+@media (color-gamut: p3) {
+  :root {
+    --color-green-50: oklch(0.975 0.023 148);
+    --color-green-100: oklch(0.945 0.063 148);
+    --color-green-200: oklch(0.89 0.169 148);
+    --color-green-300: oklch(0.82 0.286 148);
+    --color-green-400: oklch(0.74 0.291 148);
+    --color-green-500: oklch(0.66 0.267 148);
+    --color-green-600: oklch(0.57 0.231 148);
+    --color-green-700: oklch(0.48 0.189 148);
+    --color-green-800: oklch(0.39 0.145 148);
+    --color-green-900: oklch(0.3 0.103 148);
+    --color-green-950: oklch(0.23 0.075 148);
+
+    --color-orange-50: oklch(0.975 0.011 55);
+    --color-orange-100: oklch(0.945 0.029 55);
+    --color-orange-200: oklch(0.89 0.069 55);
+    --color-orange-300: oklch(0.82 0.137 55);
+    --color-orange-400: oklch(0.74 0.209 55);
+    --color-orange-500: oklch(0.66 0.186 55);
+    --color-orange-600: oklch(0.57 0.161 55);
+    --color-orange-700: oklch(0.48 0.131 55);
+    --color-orange-800: oklch(0.39 0.101 55);
+    --color-orange-900: oklch(0.3 0.072 55);
+    --color-orange-950: oklch(0.23 0.052 55);
+  }
+}
+
+/* shadcn semantic variables. APCA against the surface each sits on:
+   foreground 101 · muted-foreground 78 · primary label on primary 68 ·
+   primary-strong as text 75. Primary is the Kelly fill; primary-strong is
+   the step dark enough to carry link text. Highlight is Tangerine at full
+   chroma and only takes ink text at display sizes (APCA 54). */
+:root {
+  --radius: 0.625rem;
+
+  --background: var(--color-cream-50);
+  --foreground: var(--color-cream-950);
+  --card: var(--color-cream-100);
+  --card-foreground: var(--color-cream-950);
+  --popover: var(--color-cream-50);
+  --popover-foreground: var(--color-cream-950);
+
+  --primary: var(--color-green-600);
+  --primary-foreground: var(--color-cream-50);
+  --primary-strong: var(--color-green-700);
+  --secondary: var(--color-cream-100);
+  --secondary-foreground: var(--color-cream-900);
+  --muted: var(--color-cream-100);
+  --muted-foreground: var(--color-cream-700);
+  --accent: var(--color-orange-100);
+  --accent-foreground: var(--color-orange-900);
+  --highlight: var(--color-orange-400);
+  --highlight-foreground: var(--color-cream-950);
+  --destructive: oklch(0.577 0.245 27.325);
+
+  --border: var(--color-cream-200);
+  --input: var(--color-cream-300);
+  --ring: var(--color-green-500);
+
+  --chart-1: var(--color-green-500);
+  --chart-2: var(--color-orange-400);
+  --chart-3: var(--color-green-800);
+  --chart-4: var(--color-orange-600);
+  --chart-5: var(--color-cream-500);
+
+  --sidebar: var(--color-cream-100);
+  --sidebar-foreground: var(--color-cream-950);
+  --sidebar-primary: var(--color-green-600);
+  --sidebar-primary-foreground: var(--color-cream-50);
+  --sidebar-accent: var(--color-orange-100);
+  --sidebar-accent-foreground: var(--color-orange-900);
+  --sidebar-border: var(--color-cream-200);
+  --sidebar-ring: var(--color-green-500);
+}
+
+/* Dark: espresso ground, cream ink. Green steps up to 400 so it keeps its
+   brightness against the dark surface (APCA 59 as text, 61 for ink on the
+   fill); Tangerine stays at 400 in both appearances. */
 .dark {
-	--font-sans: "Commit Mono", monospace;
+  --background: var(--color-cream-950);
+  --foreground: var(--color-cream-50);
+  --card: var(--color-cream-900);
+  --card-foreground: var(--color-cream-50);
+  --popover: var(--color-cream-900);
+  --popover-foreground: var(--color-cream-50);
 
-	/* Blue backgrounds — blue-4 as base */
-	--color-paper:  oklch(0.272 0.188 264.496);
-	--color-black:  oklch(0.346 0.239 264.496);
-	--color-50:     oklch(0.272 0.188 264.496);
-	--color-100:    oklch(0.198 0.137 264.496);
-	--color-150:    oklch(0.124 0.086 264.496);
-	--color-200:    oklch(0.05 0.034 264.496);
-	--color-300:    oklch(0.346 0.239 264.496);
+  --primary: var(--color-green-400);
+  --primary-foreground: var(--color-cream-950);
+  --primary-strong: var(--color-green-300);
+  --secondary: var(--color-cream-900);
+  --secondary-foreground: var(--color-cream-50);
+  --muted: var(--color-cream-900);
+  --muted-foreground: var(--color-cream-300);
+  --accent: var(--color-orange-900);
+  --accent-foreground: var(--color-orange-100);
+  --highlight: var(--color-orange-400);
+  --highlight-foreground: var(--color-cream-950);
+  --destructive: oklch(0.704 0.191 22.216);
 
-	/* Green text (high numbers = high contrast) */
-	--color-400:    oklch(0.887 0.261 125.389);
-	--color-500:    oklch(0.895 0.263 125.389);
-	--color-600:    oklch(0.903 0.266 125.389);
-	--color-700:    oklch(0.911 0.268 125.389);
-	--color-800:    oklch(0.919 0.27 125.389);
-	--color-850:    oklch(0.926 0.245 125.389);
-	--color-900:    oklch(0.934 0.21 125.389);
-	--color-950:    oklch(0.942 0.178 125.389);
+  --border: oklch(0.975 0.018 85 / 10%);
+  --input: oklch(0.975 0.018 85 / 15%);
+  --ring: var(--color-green-500);
 
-	/* Green accent */
-	--color-accent:       oklch(0.934 0.21 125.389);
-	--color-accent-light: oklch(0.95 0.148 125.389);
-	--color-accent-muted: oklch(0.903 0.266 125.389);
+  --chart-1: var(--color-green-400);
+  --chart-2: var(--color-orange-400);
+  --chart-3: var(--color-green-200);
+  --chart-4: var(--color-orange-300);
+  --chart-5: var(--color-cream-400);
+
+  --sidebar: var(--color-cream-900);
+  --sidebar-foreground: var(--color-cream-50);
+  --sidebar-primary: var(--color-green-400);
+  --sidebar-primary-foreground: var(--color-cream-950);
+  --sidebar-accent: var(--color-orange-900);
+  --sidebar-accent-foreground: var(--color-orange-100);
+  --sidebar-border: oklch(0.975 0.018 85 / 10%);
+  --sidebar-ring: var(--color-green-500);
 }
 
-/* --- Base polish --- */
+@theme inline {
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-quiet: color-mix(in oklch, var(--primary) 45%, transparent);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Legacy names the current pages still use, derived from the semantic
+	   variables so they follow the palette until the redesign replaces them. */
+  --color-canvas: var(--background);
+  --color-ink-1: var(--foreground);
+  --color-ink-2: color-mix(in oklch, var(--foreground) 85%, transparent);
+  --color-ink-3: color-mix(in oklch, var(--foreground) 70%, transparent);
+  --color-ink-4: color-mix(in oklch, var(--foreground) 55%, transparent);
+  --color-line: color-mix(in oklch, var(--foreground) 12%, transparent);
+  --color-line-strong: color-mix(in oklch, var(--foreground) 20%, transparent);
+  --color-hover: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --color-pressed: color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* --- Base --- */
 
 html {
-	color-scheme: light;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	font-feature-settings: "cv01", "cv02", "cv03", "cv04", "cv05";
+  color-scheme: light;
+  background-color: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 html.dark {
-	color-scheme: dark;
+  color-scheme: dark;
 }
 
-h1, h2, h3, h4 {
-	text-wrap: balance;
+body {
+  font-synthesis-weight: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
 }
 
 p {
-	text-wrap: pretty;
+  text-wrap: pretty;
 }
 
-/* Focus ring for interactive elements */
+/* Tabular figures wherever the mono voice carries data. */
+.font-mono {
+  font-feature-settings: "tnum";
+}
+
+/* --- Focus --- */
+
 :focus-visible {
-	outline: 2px solid var(--color-accent);
-	outline-offset: 2px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-/* Hairline borders on retina */
-:root {
-	--border-hairline: 1px;
-}
-@media only screen and (min-device-pixel-ratio: 2),
-	only screen and (min-resolution: 192dpi) {
-	:root {
-		--border-hairline: 0.5px;
-	}
-}
+/* --- Links ---
+   A link is underlined at rest so it is distinguishable from a plain
+   title without hovering. The underline is quiet; the hover takes it
+   to full ink rather than adding anything new. */
 
-/* Hover effects only on hover-capable devices */
 a[href] {
-	text-decoration: underline;
-	text-underline-offset: 3px;
-	text-decoration-thickness: 1px;
-	text-decoration-color: var(--color-300);
-}
-a[href]:hover {
-	text-decoration-color: var(--color-accent);
-}
-.dark a[href] {
-	text-decoration: none;
-}
-.dark a[href]::after {
-	content: "";
-	display: inline-block;
-	width: 0.75em;
-	height: 0.75em;
-	margin-left: 0.2em;
-	vertical-align: middle;
-	background: currentColor;
-	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 5H3V7H11V5Z'/%3E%3Cpath d='M5 7H3V19H5V7Z'/%3E%3Cpath d='M19 19H3V21H19V21Z'/%3E%3Cpath d='M19 13H17V19H19V13Z'/%3E%3Cpath d='M11 13H9V15H11V13Z'/%3E%3Cpath d='M13 11H11V13H13V11Z'/%3E%3Cpath d='M15 9H13V11H15V9Z'/%3E%3Cpath d='M17 7H15V9H17V7Z'/%3E%3Cpath d='M19 5H17V7H19V5Z'/%3E%3Cpath d='M21 3H19V11H21V3Z'/%3E%3Cpath d='M21 3H13V5H21V3Z'/%3E%3C/svg%3E");
-	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 5H3V7H11V5Z'/%3E%3Cpath d='M5 7H3V19H5V7Z'/%3E%3Cpath d='M19 19H3V21H19V21Z'/%3E%3Cpath d='M19 13H17V19H19V13Z'/%3E%3Cpath d='M11 13H9V15H11V13Z'/%3E%3Cpath d='M13 11H11V13H13V11Z'/%3E%3Cpath d='M15 9H13V11H15V9Z'/%3E%3Cpath d='M17 7H15V9H17V7Z'/%3E%3Cpath d='M19 5H17V7H19V5Z'/%3E%3Cpath d='M21 3H19V11H21V3Z'/%3E%3Cpath d='M21 3H13V5H21V3Z'/%3E%3C/svg%3E");
-	-webkit-mask-size: contain;
-	mask-size: contain;
-	-webkit-mask-repeat: no-repeat;
-	mask-repeat: no-repeat;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--color-primary-quiet);
 }
 
 @media (hover: hover) and (pointer: fine) {
-	a[href] {
-		transition: color 150ms ease, text-decoration-color 150ms ease;
-	}
-	a[href]:active {
-		transform: scale(0.97);
-	}
+  a[href] {
+    transition:
+      text-decoration-color 150ms ease,
+      color 150ms ease;
+  }
+  a[href]:hover {
+    color: var(--color-primary-strong);
+    text-decoration-color: var(--color-primary-strong);
+  }
 }
 
-/* Reduced motion: kill all transitions */
+/* Prose links are sparse — one or two per page — so they carry the primary as
+   text. List titles stay ink and let the underline do it, otherwise nine
+   record titles in a column read as a wall of colour. */
+.lede a[href],
+.content a[href] {
+  color: var(--color-primary-strong);
+  text-decoration-color: var(--color-primary-quiet);
+}
+
+/* The single loud moment on the page: the highlight as a surface. */
+mark {
+  background-color: var(--color-highlight);
+  color: var(--color-highlight-foreground);
+  padding-inline: 0.14em;
+  padding-block: 0.02em;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+::selection {
+  background-color: var(--color-highlight);
+  color: var(--color-highlight-foreground);
+}
+
+/* --- Motion ---
+   The page is still by default. The only movement is the theme
+   transition, which explains a state change. */
+
 @media (prefers-reduced-motion: reduce) {
-	*, *::before, *::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-	}
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-/* Theme toggle: horizontal split via View Transition API */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-	animation: none;
-	mix-blend-mode: normal;
+  animation: none;
+  mix-blend-mode: normal;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	::view-transition-old(root),
-	::view-transition-new(root) {
-		animation: none !important;
-	}
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Layout primitives
+
+   Every band on the page — masthead, opening, chapters, footer —
+   shares one grid, so the whole document reads against a single
+   left spine. The rail holds the section name in the margin and
+   stays with you while you read that section.
+   --------------------------------------------------------------- */
+
+@layer components {
+  .page {
+    width: 100%;
+    max-width: calc(var(--rail) + var(--gutter) + var(--measure));
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  .spine {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem var(--gutter);
+  }
+
+  .spine > .rail {
+    grid-column: 1;
+  }
+
+  .rail-label {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    /* Matches the first record title's line box so the two share a baseline. */
+    line-height: 1.4875rem;
+    letter-spacing: 0.01em;
+    color: var(--color-ink-3);
+  }
+
+  .rule {
+    border: 0;
+    border-top: 1px solid var(--color-line);
+    margin: 0;
+  }
+
+  /* Derived from where the grid actually stops fitting, not a device preset:
+	   rail 7rem + gutter 2.5rem + a 33rem measure + 5rem margins = 47.5rem.
+	   Collapsing at 60rem threw away the rail for 200px of usable width. */
+  @media (min-width: 48rem) {
+    .page {
+      padding-inline: 2.5rem;
+    }
+
+    .spine {
+      grid-template-columns: var(--rail) minmax(0, var(--measure));
+    }
+
+    .spine > .rail {
+      grid-column: 1;
+    }
+
+    .spine > .flow {
+      grid-column: 2;
+    }
+
+    /* The margin annotation tracks your position through a chapter. */
+    .rail-label {
+      position: sticky;
+      top: 2.5rem;
+    }
+  }
 }

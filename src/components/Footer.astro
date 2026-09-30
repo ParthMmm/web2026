@@ -1,42 +1,62 @@
 ---
+import { elsewhere } from "../data/site";
 ---
-<footer class='py-6'>
-  <div class="container mx-auto p-4">
-    <div class="flex flex-wrap justify-center items-center gap-4">
-      <ul class="flex flex-row gap-6">
-        <li>
-          <a href="https://github.com/ParthMmm"
-            rel='noopener noreferrer'
-            target="_blank"
-            class="text-sm font-normal uppercase tracking-wide text-500"
-          >github</a>
-        </li>
-        <li>
-          <a href="https://www.linkedin.com/in/parthmangrola/"
-            rel='noopener noreferrer'
-            target="_blank"
-            class="text-sm font-normal uppercase tracking-wide text-500"
-          >linkedin</a>
-        </li>
-        <li>
-          <a href="https://drive.google.com/file/d/170kgQ0N4xIQd-kuW4DpQa2enXMxeLrfq/view?usp=sharing"
-            rel='noopener noreferrer'
-            target="_blank"
-            class="text-sm font-normal uppercase tracking-wide text-500"
-          >resume</a>
-        </li>
-      </ul>
+
+<footer>
+  <hr class="rule" />
+  <div class="spine">
+    <div class="rail">
+      <h2 class="rail-label">Elsewhere</h2>
     </div>
+    <ul class="flow links">
+      {
+        elsewhere.map((link) => (
+          <li>
+            <a href={link.url} rel="noopener noreferrer" target="_blank">
+              {link.title}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
   </div>
 </footer>
 
 <style>
+  /* Same 3:1 split as a chapter rule, so the footer divider opens the footer
+     instead of closing the chapter above it. */
   footer {
-    border-top: var(--border-hairline) solid var(--color-200);
+    padding-block-start: 2rem;
+    padding-block-end: 4rem;
   }
-  @media (hover: hover) and (pointer: fine) {
-    footer a:hover {
-      color: var(--color-accent);
+
+  .spine {
+    padding-block-start: 1.25rem;
+  }
+
+  /* Denser than the body of the page, same alignment and ink. */
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .links a {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-ink-1);
+  }
+
+  @media (min-width: 48rem) {
+    footer {
+      padding-block-start: 2.5rem;
+    }
+
+    .spine {
+      padding-block-start: 1.75rem;
     }
   }
 </style>
