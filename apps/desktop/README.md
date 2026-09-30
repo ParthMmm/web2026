@@ -200,8 +200,10 @@ The command drains pending film jobs and writes `{ "version": 1, "photos": [...]
 
 This is a handoff to the API contract probe. Upload, cloud persistence, and a public gallery remain future work.
 
+On September 30, 2026, all 94 authorized `japan-v2` JPEGs imported without failures. Extraction matched ExifTool's 22 Classic Chrome and four Astia values; the remaining 68 records omitted film simulation. All 94 exported records survived the local HTTP probe and Rust client round-trip. Original SHA-256 hashes stayed unchanged, and all 94 derivatives contained no EXIF, XMP, or ICC chunks. A copied v1 catalog of 223 `japan25` photos migrated and completed its absent-metadata backfill in 4.60 seconds; a repeated export took 0.17 seconds. These timings measure the CLI backfill and export. Local evidence remains under `benchmarks/local/film-simulation-20260930`.
+
 ### Real JPEG performance evidence
 
-The retained September 29, 2026 japan25 run used 223 JPEGs totaling 5.5 GB. After the 30-second cold window, only 59 thumbnails were ready. Draw p95 was 1.43 ms, presentation p95/p99 was 17.34/18.31 ms, preview latency was 1008.29 ms, sampled family RSS was 661.97 MiB, and maximum draw gap was 449.55 ms. The cold run failed the memory and gap budgets and did not complete import.
+The retained September 29, 2026 japan25 run used 223 JPEGs totaling 5.5 GB. After the 30-second cold window, only 59 thumbnails were ready. Draw p95 was 1.43 ms, presentation p95/p99 was 17.34/18.31 ms, preview latency was 1008.29 ms, sampled family RSS was 661.97 MiB, maximum draw gap was 449.93 ms, and maximum presentation gap was 449.55 ms. The cold run failed the memory and gap budgets and did not complete import.
 
 The warm run had all 223 thumbnails ready. Draw p95 was 1.60 ms, presentation p95/p99 was 17.34/17.89 ms, preview latency was 14.63 ms, sampled family RSS was 305.80 MiB, and maximum draw gap was 117.21 ms. It passed. The synthetic results above do not supersede this real cold failure. Local evidence remains under `benchmarks/local/japan25-223-20260929` and stays ignored.
