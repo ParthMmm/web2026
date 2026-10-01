@@ -9,7 +9,7 @@ pub enum PhotoState {
     Published { url: String },
 }
 
-fn caption<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+fn optional_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     String::deserialize(deserializer).map(Some)
 }
 
@@ -20,9 +20,15 @@ pub struct Photo {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        deserialize_with = "caption"
+        deserialize_with = "optional_string"
     )]
     pub caption: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "optional_string"
+    )]
+    pub film_simulation: Option<String>,
     // deserialize_with distinguishes a required null from an absent key.
     #[serde(deserialize_with = "Option::deserialize")]
     pub captured_at: Option<String>,

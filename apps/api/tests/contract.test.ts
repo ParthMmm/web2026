@@ -5,23 +5,20 @@ import { makeHandler } from "../src/handler.ts";
 
 const app = makeHandler("local-test-credential");
 
-it.each(fixtures.invalidPhotos)(
-  "rejects invalid JSON contract input %#",
-  async (photo) => {
-    const response = await app.handler(
-      new Request("http://localhost/v1/probe/photos", {
-        body: JSON.stringify(photo),
-        headers: {
-          authorization: "Bearer local-test-credential",
-          "content-type": "application/json",
-        },
-        method: "POST",
-      })
-    );
-    expect(response.status).toBe(400);
-    expect(await response.text()).toBe("");
-  }
-);
+it.each(fixtures.invalidPhotos)("rejects invalid JSON contract input %#", async (photo) => {
+  const response = await app.handler(
+    new Request("http://localhost/v1/probe/photos", {
+      body: JSON.stringify(photo),
+      headers: {
+        authorization: "Bearer local-test-credential",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    }),
+  );
+  expect(response.status).toBe(400);
+  expect(await response.text()).toBe("");
+});
 afterAll(() => app.dispose());
 
 it("round-trips a photo's optional and nullable fields through HTTP", async () => {
@@ -38,7 +35,7 @@ it("round-trips a photo's optional and nullable fields through HTTP", async () =
         "content-type": "application/json",
       },
       method: "POST",
-    })
+    }),
   );
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(photo);
@@ -49,7 +46,7 @@ it("follows a page cursor and returns a structured error for an unknown cursor",
     app.handler(
       new Request(`http://localhost/v1/probe/photos${suffix}`, {
         headers: { authorization: "Bearer local-test-credential" },
-      })
+      }),
     );
   const first = await get("");
   expect(first.status).toBe(200);
@@ -83,11 +80,11 @@ it.each([undefined, "Bearer wrong-token"])(
         }),
         headers,
         method: "POST",
-      })
+      }),
     );
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ _tag: "Unauthorized" });
-  }
+  },
 );
 
 it("round-trips a published photo and a timestamp without leaking Effect values", async () => {
@@ -108,7 +105,22 @@ it("round-trips a published photo and a timestamp without leaking Effect values"
         "content-type": "application/json",
       },
       method: "POST",
-    })
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(photo);
+});
+
+it.each(fixtures.validPhotos)("preserves complete wire records %#", async (photo) => {
+  const response = await app.handler(
+    new Request("http://localhost/v1/probe/photos", {
+      body: JSON.stringify(photo),
+      headers: {
+        authorization: "Bearer local-test-credential",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    }),
   );
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(photo);

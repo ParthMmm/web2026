@@ -19,3 +19,11 @@ it("exports stable operations, bearer security and the real OpenAPI dialect", ()
     type: "http",
   });
 });
+
+it("adds film simulation without changing the v1 required fields", () => {
+  const photo = OpenApi.fromApi(Api).components.schemas.ProbePhoto;
+  expect(photo).toMatchObject({
+    properties: { filmSimulation: { type: "string" } },
+    required: ["capturedAt", "id", "state"],
+  });
+});

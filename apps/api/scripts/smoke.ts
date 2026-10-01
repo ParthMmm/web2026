@@ -24,12 +24,13 @@ try {
       "client/Cargo.toml",
       "--",
       url,
+      ...process.argv.slice(2),
     ],
     {
       env,
       stderr: "inherit",
       stdout: "inherit",
-    }
+    },
   );
   if ((await client.exited) !== 0) {
     throw new Error("Rust HTTP smoke failed");

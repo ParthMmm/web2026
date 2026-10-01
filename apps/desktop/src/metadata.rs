@@ -1,0 +1,578 @@
+//! Allowlisted photographic metadata read from an unchanged original JPEG.
+//!
+//! Only shooting details are extracted. GPS, serial numbers, and arbitrary
+//! private tags are never read into the catalog.
+
+use exif::{Exif, In, Reader, Tag, Value};
+use std::{
+    fmt,
+    fs::File,
+    io::{BufRead, BufReader, Seek},
+    path::Path,
+};
+
+/// Exposure time as the camera recorded it, in seconds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExposureTime {
+    numerator: u32,
+    denominator: u32,
+}
+
+impl ExposureTime {
+    pub fn new(numerator: u32, denominator: u32) -> Option<Self> {
+        (numerator > 0 && denominator > 0).then_some(Self {
+            numerator,
+            denominator,
+        })
+    }
+
+    pub fn numerator(self) -> u32 {
+        self.numerator
+    }
+
+    pub fn denominator(self) -> u32 {
+        self.denominator
+    }
+
+    pub fn seconds(self) -> f64 {
+        f64::from(self.numerator) / f64::from(self.denominator)
+    }
+}
+
+/// Long exposures read as seconds; short ones as the familiar reciprocal.
+const LONG_EXPOSURE_SECONDS: f64 = 0.3;
+
+impl fmt::Display for ExposureTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let seconds = self.seconds();
+        if seconds >= LONG_EXPOSURE_SECONDS {
+            write!(f, "{} s", trim_decimal(seconds, 1))
+        } else if self.numerator == 1 {
+            write!(f, "1/{} s", self.denominator)
+        } else {
+            write!(f, "1/{} s", (1.0 / seconds).round())
+        }
+    }
+}
+
+/// Capture time in the camera's local clock. EXIF has no time zone unless the
+/// optional offset tag is present; none is invented here.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureTime {
+    local: String,
+    offset: Option<String>,
+}
+
+impl CaptureTime {
+    /// `local` is `YYYY-MM-DDTHH:MM:SS`; `offset` is `+HH:MM` or `-HH:MM`.
+    pub fn new(local: impl Into<String>, offset: Option<String>) -> Option<Self> {
+        let local = local.into();
+        let valid_local = parse_local_time(&local.replacen('T', " ", 1).replace('-', ":"))
+            .is_some_and(|parsed| parsed == local);
+        let valid_offset = offset.as_deref().is_none_or(is_valid_offset);
+        (valid_local && valid_offset).then_some(Self { local, offset })
+    }
+
+    pub fn local(&self) -> &str {
+        &self.local
+    }
+
+    pub fn offset(&self) -> Option<&str> {
+        self.offset.as_deref()
+    }
+}
+
+impl fmt::Display for CaptureTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (date, time) = self.local.split_once('T').unwrap_or((&self.local, ""));
+        write!(f, "{date} {}", &time[..time.len().min(5)])?;
+        if let Some(offset) = &self.offset {
+            write!(f, " (UTC{offset})")?;
+        }
+        Ok(())
+    }
+}
+
+/// Camera setting recorded in Fujifilm MakerNote data, independent of the
+/// Lightroom rendering profile. Only recognized camera values are constructed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FilmSimulation(&'static str);
+
+const COLOR_FILMS: &[(u16, &str)] = &[
+    (0x000, "Provia"),
+    (0x100, "F1/Studio Portrait"),
+    (0x110, "F1a/Studio Portrait Enhanced Saturation"),
+    (0x120, "Astia"),
+    (0x130, "F1c/Studio Portrait Increased Sharpness"),
+    (0x200, "Velvia"),
+    (0x300, "F3/Studio Portrait Ex"),
+    (0x400, "F4/Velvia"),
+    (0x500, "Pro Neg. Std"),
+    (0x501, "Pro Neg. Hi"),
+    (0x600, "Classic Chrome"),
+    (0x700, "Eterna"),
+    (0x800, "Classic Negative"),
+    (0x900, "Bleach Bypass"),
+    (0xa00, "Nostalgic Neg"),
+    (0xb00, "Reala ACE"),
+];
+const MONO_FILMS: &[(u16, &str)] = &[
+    (0x300, "Monochrome"),
+    (0x301, "Monochrome + Red Filter"),
+    (0x302, "Monochrome + Yellow Filter"),
+    (0x303, "Monochrome + Green Filter"),
+    (0x310, "Sepia"),
+    (0x500, "Acros"),
+    (0x501, "Acros + Red Filter"),
+    (0x502, "Acros + Yellow Filter"),
+    (0x503, "Acros + Green Filter"),
+];
+
+impl FilmSimulation {
+    pub fn as_str(self) -> &'static str {
+        self.0
+    }
+
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        COLOR_FILMS
+            .iter()
+            .chain(MONO_FILMS)
+            .find_map(|(_, label)| (*label == name).then_some(Self(label)))
+    }
+}
+
+impl fmt::Display for FilmSimulation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+/// Fuji offsets are relative to the MakerNote and always little endian,
+/// including when the surrounding TIFF is big endian. Tags and mappings follow
+/// ExifTool's FujiFilm.pm FilmMode and Saturation tables.
+fn read_fuji_film_simulation(note: &[u8]) -> Option<FilmSimulation> {
+    if note.get(..8)? != b"FUJIFILM" || note.len() > 65535 {
+        return None;
+    }
+    let short = |offset: usize| -> Option<u16> {
+        Some(u16::from_le_bytes(
+            note.get(offset..offset.checked_add(2)?)?.try_into().ok()?,
+        ))
+    };
+    let long = |offset: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(
+            note.get(offset..offset.checked_add(4)?)?.try_into().ok()?,
+        ))
+    };
+    let offset = usize::try_from(long(8)?).ok()?;
+    if offset < 12 {
+        return None;
+    }
+    let count = usize::from(short(offset)?);
+    let entries = offset.checked_add(2)?;
+    note.get(entries..entries.checked_add(count.checked_mul(12)?)?)?;
+    let mut film = None;
+    let mut saturation = None;
+    for index in 0..count {
+        let entry = entries + index * 12;
+        let tag = short(entry)?;
+        let slot = match tag {
+            0x1401 => &mut film,
+            0x1003 => &mut saturation,
+            _ => continue,
+        };
+        if slot.is_some() || short(entry + 2)? != 3 || long(entry + 4)? != 1 {
+            return None;
+        }
+        *slot = Some(short(entry + 8)?);
+    }
+    if let Some(label) = saturation.and_then(|value| {
+        MONO_FILMS
+            .iter()
+            .find_map(|(code, label)| (*code == value).then_some(*label))
+    }) {
+        return Some(FilmSimulation(label));
+    }
+    if saturation.is_some_and(|value| {
+        !matches!(
+            value,
+            0 | 0x80 | 0x100 | 0xc0 | 0xe0 | 0x180 | 0x200 | 0x400 | 0x4c0 | 0x4e0 | 0x8000
+        )
+    }) {
+        return None;
+    }
+    film.and_then(|value| {
+        COLOR_FILMS
+            .iter()
+            .find_map(|(code, label)| (*code == value).then_some(FilmSimulation(label)))
+    })
+}
+
+/// Typed shooting details. Every field is optional: Lightroom only writes what
+/// the export preset includes, and absent values stay absent.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct PhotoMetadata {
+    pub film_simulation: Option<FilmSimulation>,
+    pub iso: Option<u32>,
+    pub exposure_time: Option<ExposureTime>,
+    pub f_number: Option<f64>,
+    pub focal_length_mm: Option<f64>,
+    pub camera_make: Option<String>,
+    pub camera_model: Option<String>,
+    pub lens: Option<String>,
+    pub captured_at: Option<CaptureTime>,
+}
+
+impl PhotoMetadata {
+    /// For example `ISO 400 · 1/250 s · f/2.8 · 85 mm`, omitting absent parts.
+    pub fn exposure_summary(&self) -> Option<String> {
+        let parts: Vec<String> = [
+            self.iso.map(|iso| format!("ISO {iso}")),
+            self.exposure_time.map(|time| time.to_string()),
+            self.f_number
+                .map(|f_number| format!("f/{}", trim_decimal(f_number, 1))),
+            self.focal_length_mm.map(|focal| {
+                let places = if focal < 10.0 { 1 } else { 0 };
+                format!("{} mm", trim_decimal(focal, places))
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        (!parts.is_empty()).then(|| parts.join(" · "))
+    }
+
+    /// Camera name without repeating a make the model already contains.
+    pub fn camera(&self) -> Option<String> {
+        match (&self.camera_make, &self.camera_model) {
+            (Some(make), Some(model)) if model.to_lowercase().starts_with(&make.to_lowercase()) => {
+                Some(model.clone())
+            }
+            (Some(make), Some(model)) => Some(format!("{make} {model}")),
+            (None, Some(model)) => Some(model.clone()),
+            (Some(make), None) => Some(make.clone()),
+            (None, None) => None,
+        }
+    }
+}
+
+/// What import needs from the original's EXIF block.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SourceExif {
+    pub metadata: PhotoMetadata,
+    /// EXIF orientation, 1–8. Missing or malformed values read as 1 (upright).
+    pub orientation: u16,
+}
+
+impl SourceExif {
+    /// Whether displaying upright swaps the stored width and height.
+    pub fn swaps_dimensions(&self) -> bool {
+        (5..=8).contains(&self.orientation)
+    }
+}
+
+/// Missing or malformed EXIF yields empty metadata; it never fails an import.
+pub fn read_source_exif(path: &Path) -> SourceExif {
+    File::open(path)
+        .ok()
+        .and_then(|file| read_source_exif_reader(&mut BufReader::new(file)).ok())
+        .unwrap_or(SourceExif {
+            orientation: 1,
+            ..SourceExif::default()
+        })
+}
+
+pub(crate) fn read_source_exif_reader(
+    reader: &mut (impl BufRead + Seek),
+) -> std::io::Result<SourceExif> {
+    let exif = match Reader::new().read_from_container(reader) {
+        Ok(exif) => exif,
+        Err(exif::Error::Io(error)) => return Err(error),
+        Err(_) => {
+            return Ok(SourceExif {
+                orientation: 1,
+                ..SourceExif::default()
+            });
+        }
+    };
+    Ok(SourceExif {
+        metadata: PhotoMetadata {
+            film_simulation: exif
+                .get_field(Tag::MakerNote, In::PRIMARY)
+                .and_then(|field| match &field.value {
+                    Value::Undefined(bytes, _) => read_fuji_film_simulation(bytes),
+                    _ => None,
+                }),
+            iso: uint(&exif, Tag::PhotographicSensitivity).filter(|iso| *iso > 0),
+            exposure_time: rational(&exif, Tag::ExposureTime)
+                .and_then(|(numerator, denominator)| ExposureTime::new(numerator, denominator)),
+            f_number: positive_rational(&exif, Tag::FNumber),
+            focal_length_mm: positive_rational(&exif, Tag::FocalLength),
+            camera_make: ascii(&exif, Tag::Make),
+            camera_model: ascii(&exif, Tag::Model),
+            lens: ascii(&exif, Tag::LensModel),
+            captured_at: ascii(&exif, Tag::DateTimeOriginal)
+                .and_then(|value| parse_local_time(&value))
+                .and_then(|local| {
+                    let offset =
+                        ascii(&exif, Tag::OffsetTimeOriginal).filter(|o| is_valid_offset(o));
+                    CaptureTime::new(local, offset)
+                }),
+        },
+        orientation: uint(&exif, Tag::Orientation)
+            .and_then(|value| u16::try_from(value).ok())
+            .filter(|value| (1..=8).contains(value))
+            .unwrap_or(1),
+    })
+}
+
+fn uint(exif: &Exif, tag: Tag) -> Option<u32> {
+    exif.get_field(tag, In::PRIMARY)?.value.get_uint(0)
+}
+
+fn rational(exif: &Exif, tag: Tag) -> Option<(u32, u32)> {
+    match &exif.get_field(tag, In::PRIMARY)?.value {
+        Value::Rational(values) => values.first().map(|value| (value.num, value.denom)),
+        _ => None,
+    }
+}
+
+fn positive_rational(exif: &Exif, tag: Tag) -> Option<f64> {
+    let (numerator, denominator) = rational(exif, tag)?;
+    let value = f64::from(numerator) / f64::from(denominator);
+    (value.is_finite() && value > 0.0).then_some(value)
+}
+
+fn ascii(exif: &Exif, tag: Tag) -> Option<String> {
+    match &exif.get_field(tag, In::PRIMARY)?.value {
+        Value::Ascii(values) => {
+            let text = String::from_utf8(values.first()?.clone()).ok()?;
+            let text = text.trim_matches(|c: char| c == '\0' || c.is_whitespace());
+            (!text.is_empty()).then(|| text.to_owned())
+        }
+        _ => None,
+    }
+}
+
+/// EXIF `YYYY:MM:DD HH:MM:SS` to `YYYY-MM-DDTHH:MM:SS`; rejects impossible values.
+fn parse_local_time(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let shape_ok = bytes.len() == 19
+        && bytes.iter().enumerate().all(|(ix, byte)| match ix {
+            4 | 7 | 13 | 16 => *byte == b':',
+            10 => *byte == b' ',
+            _ => byte.is_ascii_digit(),
+        });
+    if !shape_ok {
+        return None;
+    }
+    let number = |range: std::ops::Range<usize>| value[range].parse::<u32>().ok();
+    let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
+    let (hour, minute, second) = (number(11..13)?, number(14..16)?, number(17..19)?);
+    let in_range = year >= 1
+        && (1..=12).contains(&month)
+        && (1..=31).contains(&day)
+        && hour < 24
+        && minute < 60
+        && second < 61;
+    in_range.then(|| format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}"))
+}
+
+fn is_valid_offset(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() == 6
+        && matches!(bytes[0], b'+' | b'-')
+        && bytes[3] == b':'
+        && [1, 2, 4, 5].iter().all(|ix| bytes[*ix].is_ascii_digit())
+        && value[1..3].parse::<u32>().is_ok_and(|hours| hours <= 14)
+        && value[4..6].parse::<u32>().is_ok_and(|minutes| minutes < 60)
+}
+
+fn trim_decimal(value: f64, places: usize) -> String {
+    let text = format!("{value:.places$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_owned()
+    } else {
+        text
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn note(tags: &[(u16, u16)]) -> Vec<u8> {
+        let mut bytes = b"FUJIFILM".to_vec();
+        bytes.extend_from_slice(&12_u32.to_le_bytes());
+        bytes.extend_from_slice(&(tags.len() as u16).to_le_bytes());
+        for (tag, value) in tags {
+            bytes.extend_from_slice(&tag.to_le_bytes());
+            bytes.extend_from_slice(&3_u16.to_le_bytes());
+            bytes.extend_from_slice(&1_u32.to_le_bytes());
+            bytes.extend_from_slice(&value.to_le_bytes());
+            bytes.extend_from_slice(&[0, 0]);
+        }
+        bytes.extend_from_slice(&[0; 4]);
+        bytes
+    }
+
+    #[test]
+    fn fuji_color_and_monochrome_mappings_are_complete_and_monochrome_wins() {
+        for (code, label) in COLOR_FILMS {
+            assert_eq!(
+                read_fuji_film_simulation(&note(&[(0x1401, *code)]))
+                    .unwrap()
+                    .as_str(),
+                *label
+            );
+        }
+        for (code, label) in MONO_FILMS {
+            assert_eq!(
+                read_fuji_film_simulation(&note(&[(0x1401, 0), (0x1003, *code)]))
+                    .unwrap()
+                    .as_str(),
+                *label
+            );
+        }
+        assert_eq!(read_fuji_film_simulation(&note(&[(0x1003, 0)])), None);
+        assert_eq!(read_fuji_film_simulation(&note(&[(0x1401, 0xdead)])), None);
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0), (0x1003, 0xdead)])),
+            None
+        );
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0x600), (0x1003, 0x8000)]))
+                .unwrap()
+                .as_str(),
+            "Classic Chrome"
+        );
+    }
+
+    #[test]
+    fn fuji_parser_rejects_truncation_offsets_types_counts_and_duplicate_tags() {
+        let valid = note(&[(0x1401, 0x600), (0x1003, 0x80)]);
+        for length in 0..38 {
+            assert_eq!(
+                read_fuji_film_simulation(&valid[..length]),
+                None,
+                "length {length}"
+            );
+        }
+        for offset in [0_u32, 8, 11, 65535, u32::MAX] {
+            let mut invalid = valid.clone();
+            invalid[8..12].copy_from_slice(&offset.to_le_bytes());
+            assert_eq!(read_fuji_film_simulation(&invalid), None);
+        }
+        for (offset, bytes) in [
+            (0, b"NOTAFUJI".as_slice()),
+            (12, &[255, 255]),
+            (16, &[4, 0]),
+            (18, &[2, 0, 0, 0]),
+        ] {
+            let mut invalid = valid.clone();
+            invalid[offset..offset + bytes.len()].copy_from_slice(bytes);
+            assert_eq!(read_fuji_film_simulation(&invalid), None);
+        }
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1401, 0x600), (0x1401, 0x600)])),
+            None
+        );
+        assert_eq!(
+            read_fuji_film_simulation(&note(&[(0x1003, 0x500), (0x1003, 0x500)])),
+            None
+        );
+        let mut offset_note = valid.clone();
+        offset_note[8..12].copy_from_slice(&20_u32.to_le_bytes());
+        offset_note.splice(12..12, [0; 8]);
+        assert_eq!(
+            read_fuji_film_simulation(&offset_note).unwrap().as_str(),
+            "Classic Chrome"
+        );
+    }
+
+    fn metadata() -> PhotoMetadata {
+        PhotoMetadata {
+            iso: Some(400),
+            exposure_time: ExposureTime::new(1, 250),
+            f_number: Some(2.8),
+            focal_length_mm: Some(85.0),
+            ..PhotoMetadata::default()
+        }
+    }
+
+    #[test]
+    fn summarizes_complete_exposure_settings() {
+        assert_eq!(
+            metadata().exposure_summary().as_deref(),
+            Some("ISO 400 · 1/250 s · f/2.8 · 85 mm")
+        );
+    }
+
+    #[test]
+    fn omits_absent_parts_without_placeholders() {
+        let partial = PhotoMetadata {
+            f_number: Some(8.0),
+            ..PhotoMetadata::default()
+        };
+        assert_eq!(partial.exposure_summary().as_deref(), Some("f/8"));
+        assert_eq!(PhotoMetadata::default().exposure_summary(), None);
+    }
+
+    #[test]
+    fn formats_long_and_non_unit_exposures() {
+        assert_eq!(ExposureTime::new(30, 1).unwrap().to_string(), "30 s");
+        assert_eq!(ExposureTime::new(13, 10).unwrap().to_string(), "1.3 s");
+        assert_eq!(ExposureTime::new(1, 2).unwrap().to_string(), "0.5 s");
+        assert_eq!(ExposureTime::new(10, 2500).unwrap().to_string(), "1/250 s");
+        assert_eq!(ExposureTime::new(0, 250), None);
+    }
+
+    #[test]
+    fn keeps_phone_focal_lengths_precise() {
+        let phone = PhotoMetadata {
+            focal_length_mm: Some(6.86),
+            ..PhotoMetadata::default()
+        };
+        assert_eq!(phone.exposure_summary().as_deref(), Some("6.9 mm"));
+    }
+
+    #[test]
+    fn does_not_repeat_the_make_in_the_camera_name() {
+        let mut camera = PhotoMetadata {
+            camera_make: Some("Canon".into()),
+            camera_model: Some("Canon EOS R5".into()),
+            ..PhotoMetadata::default()
+        };
+        assert_eq!(camera.camera().as_deref(), Some("Canon EOS R5"));
+        camera.camera_make = Some("FUJIFILM".into());
+        camera.camera_model = Some("X-T5".into());
+        assert_eq!(camera.camera().as_deref(), Some("FUJIFILM X-T5"));
+    }
+
+    #[test]
+    fn rejects_malformed_capture_times() {
+        assert_eq!(
+            parse_local_time("2025:09:12 18:04:31").as_deref(),
+            Some("2025-09-12T18:04:31")
+        );
+        for invalid in [
+            "0000:00:00 00:00:00",
+            "2025:13:01 00:00:00",
+            "    :  :     :  :  ",
+            "2025-09-12",
+        ] {
+            assert_eq!(parse_local_time(invalid), None, "{invalid}");
+        }
+        assert!(CaptureTime::new("2025-09-12T18:04:31", Some("+02:00".into())).is_some());
+        assert!(CaptureTime::new("2025-09-12T18:04:31", Some("02:00".into())).is_none());
+    }
+
+    #[test]
+    fn displays_capture_time_without_inventing_a_zone() {
+        let local = CaptureTime::new("2025-09-12T18:04:31", None).unwrap();
+        assert_eq!(local.to_string(), "2025-09-12 18:04");
+        let zoned = CaptureTime::new("2025-09-12T18:04:31", Some("-07:00".into())).unwrap();
+        assert_eq!(zoned.to_string(), "2025-09-12 18:04 (UTC-07:00)");
+    }
+}
