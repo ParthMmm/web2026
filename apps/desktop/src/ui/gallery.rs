@@ -648,7 +648,7 @@ impl Gallery {
     }
 
     fn finish_benchmark(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(benchmark) = &self.benchmark else {
+        let Some(benchmark) = self.benchmark.take() else {
             return;
         };
         let totals = Totals {

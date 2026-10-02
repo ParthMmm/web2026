@@ -3,6 +3,7 @@
 //! benchmark's contract.
 
 use super::cache::BoundedCache;
+use gpui_kit::gpui::{FrameEvent, FrameTimingCollector, WindowId, profiler};
 use gpui_kit::{App, Entity, Window, WindowKind, WindowOptions};
 use std::time::{Duration, Instant};
 
@@ -42,7 +43,6 @@ pub(super) fn configure_window(window_options: &mut WindowOptions) {
     window_options.kind = WindowKind::PopUp;
 }
 
-/// What the script should do on this frame.
 pub(super) struct Step {
     pub(super) scroll_row: usize,
     pub(super) preview_index: Option<usize>,
@@ -50,6 +50,7 @@ pub(super) struct Step {
 
 pub(super) struct Benchmark {
     seconds: u64,
+    present_trace: PresentTrace,
     started: Instant,
     next_preview_at: u64,
     preview_requested: Option<Instant>,
@@ -68,7 +69,130 @@ pub(super) struct Benchmark {
     last_render: Instant,
 }
 
-/// Gallery facts the report needs.
+struct PresentTrace {
+    collector: FrameTimingCollector,
+    changed_trace_setting: bool,
+}
+
+impl PresentTrace {
+    fn new() -> Self {
+        let changed_trace_setting = profiler::set_trace_enabled(true);
+        Self {
+            collector: FrameTimingCollector::new(),
+            changed_trace_setting,
+        }
+    }
+
+    fn finish(&mut self, window_id: WindowId, started: Instant, ended: Instant) -> PresentSamples {
+        present_samples(&self.collector.collect_unseen(), window_id, started, ended)
+    }
+}
+
+impl Drop for PresentTrace {
+    fn drop(&mut self) {
+        if self.changed_trace_setting {
+            profiler::set_trace_enabled(false);
+        }
+    }
+}
+
+struct PresentSamples {
+    draw_events: u64,
+    presented_frames: u64,
+    superseded_draw_events: u64,
+    pending_draw_events: u64,
+    intervals_ms: Vec<f64>,
+    durations_ms: Vec<f64>,
+    ordered: bool,
+    first_present_ms: Option<f64>,
+    last_present_age_ms: Option<f64>,
+    max_gap_ms: Option<f64>,
+}
+
+impl PresentSamples {
+    fn complete(&self, expected_draws: u64) -> bool {
+        self.ordered
+            && self.presented_frames > 0
+            && self.draw_events == expected_draws
+            && self.pending_draw_events == 0
+            && self.draw_events == self.presented_frames + self.superseded_draw_events
+            && u64::try_from(self.intervals_ms.len()).ok() == Some(self.presented_frames - 1)
+    }
+}
+
+fn present_samples(
+    events: &[FrameEvent],
+    window_id: WindowId,
+    started: Instant,
+    ended: Instant,
+) -> PresentSamples {
+    let mut samples = PresentSamples {
+        draw_events: 0,
+        presented_frames: 0,
+        superseded_draw_events: 0,
+        pending_draw_events: 0,
+        intervals_ms: Vec::new(),
+        durations_ms: Vec::new(),
+        ordered: ended >= started,
+        first_present_ms: None,
+        last_present_age_ms: None,
+        max_gap_ms: None,
+    };
+    let mut previous = None;
+    for event in events {
+        match event {
+            FrameEvent::Draw(frame) if frame.window_id == window_id => {
+                samples.draw_events += 1;
+                samples.pending_draw_events += 1;
+            }
+            FrameEvent::Present(frame) if frame.window_id == window_id => {
+                samples.presented_frames += 1;
+                if samples.pending_draw_events == 0 {
+                    samples.ordered = false;
+                } else {
+                    samples.superseded_draw_events += samples.pending_draw_events - 1;
+                    samples.pending_draw_events = 0;
+                }
+                samples.ordered &= frame.present_end >= started && frame.present_end <= ended;
+                if let Some(duration) = frame
+                    .present_end
+                    .checked_duration_since(frame.present_start)
+                {
+                    samples.durations_ms.push(millis(duration));
+                } else {
+                    samples.ordered = false;
+                }
+                if let Some(previous) = previous {
+                    if frame.present_end > previous {
+                        samples
+                            .intervals_ms
+                            .push(millis(frame.present_end.duration_since(previous)));
+                    } else {
+                        samples.ordered = false;
+                    }
+                } else {
+                    samples.first_present_ms = frame
+                        .present_end
+                        .checked_duration_since(started)
+                        .map(millis);
+                }
+                previous = Some(frame.present_end);
+            }
+            _ => {}
+        }
+    }
+    samples.last_present_age_ms = previous
+        .and_then(|last| ended.checked_duration_since(last))
+        .map(millis);
+    samples.max_gap_ms = samples
+        .first_present_ms
+        .into_iter()
+        .chain(samples.last_present_age_ms)
+        .chain(samples.intervals_ms.iter().copied())
+        .max_by(f64::total_cmp);
+    samples
+}
+
 pub(super) struct Totals {
     pub(super) photos: usize,
     pub(super) thumbnails_completed: usize,
@@ -80,6 +204,7 @@ impl Benchmark {
         let now = Instant::now();
         Self {
             seconds,
+            present_trace: PresentTrace::new(),
             started: now,
             next_preview_at: 1,
             preview_requested: None,
@@ -178,19 +303,23 @@ impl Benchmark {
     }
 
     pub(super) fn report(
-        &self,
+        mut self,
         totals: &Totals,
         thumbnails: &Entity<BoundedCache>,
         previews: &Entity<BoundedCache>,
         window: &Window,
         cx: &App,
     ) -> serde_json::Value {
+        let ended = Instant::now();
         let frames = window.frame_duration_snapshot();
+        let presents =
+            self.present_trace
+                .finish(window.window_handle().window_id(), self.started, ended);
         let thumbnails = thumbnails.read(cx);
         let previews = previews.read(cx);
         #[allow(clippy::cast_precision_loss)]
         let histogram_ms = |nanos: u64| nanos as f64 / 1e6;
-        serde_json::json!({
+        let mut report = serde_json::json!({
             "photos": totals.photos,
             "thumbnails_completed": totals.thumbnails_completed,
             "failed": totals.failed,
@@ -198,8 +327,8 @@ impl Benchmark {
             "draw_samples": frames.draw_duration_histogram.len(),
             "last_render_age_ms": millis(self.last_render.elapsed()),
             "draw_p95_ms": histogram_ms(frames.draw_duration_histogram.value_at_quantile(0.95)),
-            "present_interval_p95_ms": histogram_ms(frames.present_interval_histogram.value_at_quantile(0.95)),
-            "present_interval_p99_ms": histogram_ms(frames.present_interval_histogram.value_at_quantile(0.99)),
+            "present_interval_p95_ms": quantile(&presents.intervals_ms, 0.95),
+            "present_interval_p99_ms": quantile(&presents.intervals_ms, 0.99),
             "max_render_gap_ms": millis(self.max_render_gap.max(self.last_render.elapsed())),
             "max_render_gap_before_frame": self.max_render_gap_before_frame,
             "render_count": self.render_count,
@@ -222,7 +351,27 @@ impl Benchmark {
             "preview_cache_peak_entries": previews.peak_entries,
             "thumbnail_peak_in_flight": thumbnails.peak_loading,
             "preview_peak_in_flight": previews.peak_loading
-        })
+        });
+        report["present_interval_samples"] = serde_json::json!(presents.intervals_ms.len());
+        report["presented_frames"] = serde_json::json!(presents.presented_frames);
+        report["trace_draw_events"] = serde_json::json!(presents.draw_events);
+        report["superseded_draw_events"] = serde_json::json!(presents.superseded_draw_events);
+        report["pending_draw_events"] = serde_json::json!(presents.pending_draw_events);
+        report["frame_timing_complete"] =
+            serde_json::json!(presents.complete(frames.draw_duration_histogram.len()));
+        report["first_present_ms"] = serde_json::json!(presents.first_present_ms);
+        report["last_present_age_ms"] = serde_json::json!(presents.last_present_age_ms);
+        report["max_present_gap_ms"] = serde_json::json!(presents.max_gap_ms);
+        report["present_duration_p95_ms"] = serde_json::json!(p95(&presents.durations_ms));
+        report["max_present_duration_ms"] =
+            serde_json::json!(presents.durations_ms.iter().copied().max_by(f64::total_cmp));
+        report["dirty_to_present_p95_ms"] = serde_json::json!(histogram_ms(
+            frames.dirty_to_present_histogram.value_at_quantile(0.95)
+        ));
+        report["timing_definition"] = serde_json::json!(
+            "v1: target-window newly drawn frame submission end intervals; includes inactive frames and all gaps; quantile rank ceil((n-1)*q); excludes physical display scanout"
+        );
+        report
     }
 }
 
@@ -231,6 +380,10 @@ fn millis(duration: Duration) -> f64 {
 }
 
 fn p95(samples: &[f64]) -> Option<f64> {
+    quantile(samples, 0.95)
+}
+
+fn quantile(samples: &[f64], q: f64) -> Option<f64> {
     let mut sorted = samples.to_vec();
     sorted.sort_by(f64::total_cmp);
     #[allow(
@@ -238,13 +391,174 @@ fn p95(samples: &[f64]) -> Option<f64> {
         clippy::cast_precision_loss,
         clippy::cast_sign_loss
     )]
-    let index = (sorted.len().saturating_sub(1) as f64 * 0.95).ceil() as usize;
+    let index = (sorted.len().saturating_sub(1) as f64 * q).ceil() as usize;
     sorted.get(index).copied()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn draw(window_id: WindowId, at: Instant) -> FrameEvent {
+        FrameEvent::Draw(gpui_kit::gpui::FrameTiming {
+            window_id,
+            dirty_at: None,
+            invalidations: 1,
+            draw_start: at,
+            draw_end: at,
+        })
+    }
+
+    fn present(window_id: WindowId, at: Instant) -> FrameEvent {
+        FrameEvent::Present(gpui_kit::gpui::PresentTiming {
+            window_id,
+            present_start: at,
+            present_end: at,
+            animation_interval: None,
+        })
+    }
+
+    #[::core::prelude::v1::test]
+    fn inactive_presentations_include_long_gaps_and_boundary_ages() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let first = start + Duration::from_millis(10);
+        let last = first + Duration::from_millis(500);
+        let samples = present_samples(
+            &[
+                draw(id, first),
+                present(id, first),
+                draw(id, last),
+                present(id, last),
+            ],
+            id,
+            start,
+            last + Duration::from_millis(20),
+        );
+        assert!(samples.complete(2));
+        assert_eq!(samples.intervals_ms, vec![500.0]);
+        assert_eq!(p95(&samples.intervals_ms), Some(500.0));
+        assert_eq!(samples.first_present_ms, Some(10.0));
+        assert_eq!(samples.last_present_age_ms, Some(20.0));
+        assert_eq!(samples.max_gap_ms, Some(500.0));
+    }
+
+    #[::core::prelude::v1::test]
+    fn other_windows_do_not_interrupt_target_intervals() {
+        let id = WindowId::from(1);
+        let other = WindowId::from(2);
+        let start = Instant::now();
+        let last = start + Duration::from_millis(16);
+        let samples = present_samples(
+            &[
+                draw(id, start),
+                present(id, start),
+                draw(other, last),
+                present(other, last),
+                draw(id, last),
+                present(id, last),
+            ],
+            id,
+            start,
+            last,
+        );
+        assert!(samples.complete(2));
+        assert_eq!(samples.intervals_ms, vec![16.0]);
+    }
+
+    #[::core::prelude::v1::test]
+    fn empty_and_single_presentations_have_no_interval_quantile() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let empty = present_samples(&[], id, start, start);
+        assert!(!empty.complete(0));
+        assert_eq!(empty.max_gap_ms, None);
+        assert_eq!(p95(&empty.intervals_ms), None);
+        let single = present_samples(&[draw(id, start), present(id, start)], id, start, start);
+        assert!(single.complete(1));
+        assert_eq!(p95(&single.intervals_ms), None);
+    }
+
+    #[::core::prelude::v1::test]
+    fn equal_or_backward_present_timestamps_fail_coverage() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let later = start + Duration::from_millis(10);
+        for last in [start, later] {
+            let samples = present_samples(
+                &[
+                    draw(id, later),
+                    present(id, later),
+                    draw(id, last),
+                    present(id, last),
+                ],
+                id,
+                start,
+                later,
+            );
+            assert!(!samples.complete(2));
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn missing_prefix_draws_fail_snapshot_coverage() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let samples = present_samples(&[draw(id, start), present(id, start)], id, start, start);
+        assert!(!samples.complete(2));
+    }
+
+    #[::core::prelude::v1::test]
+    fn consecutive_draws_before_presentation_have_complete_coverage() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let later = start + Duration::from_millis(16);
+        let samples = present_samples(
+            &[
+                draw(id, start),
+                draw(id, start),
+                present(id, start),
+                draw(id, later),
+                present(id, later),
+            ],
+            id,
+            start,
+            later,
+        );
+        assert!(samples.complete(3));
+        assert_eq!(samples.superseded_draw_events, 1);
+        assert_eq!(samples.pending_draw_events, 0);
+        assert_eq!(samples.intervals_ms, vec![16.0]);
+    }
+
+    #[::core::prelude::v1::test]
+    fn presentation_without_pending_draw_fails_coverage() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let later = start + Duration::from_millis(16);
+        let samples = present_samples(
+            &[draw(id, start), present(id, start), present(id, later)],
+            id,
+            start,
+            later,
+        );
+        assert!(!samples.complete(1));
+        assert_eq!(samples.intervals_ms, vec![16.0]);
+    }
+
+    #[::core::prelude::v1::test]
+    fn final_draw_without_presentation_fails_coverage() {
+        let id = WindowId::from(1);
+        let start = Instant::now();
+        let samples = present_samples(
+            &[draw(id, start), present(id, start), draw(id, start)],
+            id,
+            start,
+            start,
+        );
+        assert!(!samples.complete(2));
+        assert_eq!(samples.pending_draw_events, 1);
+    }
 
     #[::core::prelude::v1::test]
     fn benchmark_window_is_non_activating_and_unthrottled() {
