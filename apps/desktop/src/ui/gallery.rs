@@ -317,6 +317,12 @@ impl Gallery {
                 DerivativeSize::Desktop => self.preview_failed(&id, message),
                 DerivativeSize::Mobile => {}
             },
+            Event::MetadataUpdated { photo: record } => {
+                if let Some(photo) = self.photo_mut(&record.id) {
+                    photo.record = record;
+                }
+            }
+            Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),
         }
     }

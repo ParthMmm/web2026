@@ -14,19 +14,21 @@ import {
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
   "Unauthorized",
   {},
-  { httpApiStatus: 401 }
+  { httpApiStatus: 401 },
 ) {}
 
-export class ProbeAuth extends HttpApiMiddleware.Service<ProbeAuth>()(
-  "ProbeAuth",
-  {
-    error: Unauthorized,
-    security: { bearer: HttpApiSecurity.bearer },
-  }
-) {}
+export class ProbeAuth extends HttpApiMiddleware.Service<ProbeAuth>()("ProbeAuth", {
+  error: Unauthorized,
+  security: { bearer: HttpApiSecurity.bearer },
+}) {}
 
 export const Photo = Schema.Struct({
   caption: Schema.optionalKey(Schema.String),
+  filmSimulation: Schema.optionalKey(
+    Schema.String.annotate({
+      description: "Recorded camera film simulation, independent of rendering.",
+    }),
+  ),
   capturedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   id: Schema.String,
   state: Schema.Union([
@@ -38,7 +40,7 @@ export const Photo = Schema.Struct({
 export class InvalidCursor extends Schema.TaggedError<InvalidCursor>()(
   "InvalidCursor",
   { cursor: Schema.String },
-  { httpApiStatus: 400 }
+  { httpApiStatus: 400 },
 ) {}
 
 export const Page = Schema.Struct({
@@ -59,6 +61,6 @@ export const Api = HttpApi.make("PhotoContractProbe")
         error: InvalidCursor,
         query: { cursor: Schema.optionalKey(Schema.String) },
         success: Page,
-      }).middleware(ProbeAuth)
-    )
+      }).middleware(ProbeAuth),
+    ),
   );

@@ -116,6 +116,10 @@
           "caption": {
             "type": "string"
           },
+          "filmSimulation": {
+            "type": "string",
+            "description": "Recorded camera film simulation, independent of rendering."
+          },
           "capturedAt": {
             "anyOf": [
               {

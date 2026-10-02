@@ -60,7 +60,6 @@ fn open(root: &Path) -> Library {
     Library::open(LibraryOptions::new(root)).unwrap()
 }
 
-/// Imports and collects every source outcome until the run finishes.
 fn import(library: &Library, inputs: &[PathBuf]) -> (Vec<(PathBuf, ImportOutcome)>, ImportSummary) {
     library.import(inputs.to_vec());
     let mut outcomes = Vec::new();
@@ -663,4 +662,362 @@ fn opening_a_library_rejects_a_different_libvips_version_before_processing() {
     let error = String::from_utf8_lossy(&result.stderr);
     assert!(error.contains("expected vips-8.18.3"), "{error}");
     assert!(!temp.path().join("library").exists());
+}
+
+fn fuji_note(mode: u16) -> Vec<u8> {
+    let mut note = b"FUJIFILM".to_vec();
+    note.extend_from_slice(&12_u32.to_le_bytes());
+    note.extend_from_slice(&1_u16.to_le_bytes());
+    note.extend_from_slice(&0x1401_u16.to_le_bytes());
+    note.extend_from_slice(&3_u16.to_le_bytes());
+    note.extend_from_slice(&1_u32.to_le_bytes());
+    note.extend_from_slice(&mode.to_le_bytes());
+    note.extend_from_slice(&[0; 6]);
+    note
+}
+
+fn film_jpeg(path: &Path, mode: u16) {
+    write_jpeg(
+        path,
+        &RgbImage::from_pixel(60, 40, Rgb([30, 60, 90])),
+        Some(exif_block(&[
+            field(Tag::MakerNote, Value::Undefined(fuji_note(mode), 0)),
+            field(Tag::PhotographicSensitivity, Value::Short(vec![400])),
+            field(
+                Tag::BodySerialNumber,
+                Value::Ascii(vec![b"PRIVATE-SERIAL".to_vec()]),
+            ),
+            field(
+                Tag::DateTimeOriginal,
+                Value::Ascii(vec![b"2025:09:12 18:04:31".to_vec()]),
+            ),
+        ])),
+        None,
+    );
+}
+
+fn mark_film_pending(root: &Path) {
+    let connection = rusqlite::Connection::open(root.join("catalog.sqlite")).unwrap();
+    connection
+        .execute(
+            "UPDATE photos SET film_simulation = NULL, film_metadata_checked = 0",
+            [],
+        )
+        .unwrap();
+}
+
+fn drain_film_metadata(library: &Library) {
+    while library.film_metadata_busy() {
+        library
+            .recv_timeout(TIMEOUT)
+            .expect("film metadata worker stalled");
+    }
+}
+
+#[test]
+fn film_simulation_survives_import_restart_and_an_exact_privacy_safe_export() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("private-source.jpg");
+    film_jpeg(&source, 0x600);
+    let original = std::fs::read(&source).unwrap();
+    let absent = temp.path().join("absent.jpg");
+    solid(&absent, 60, 40, [90, 60, 30]);
+    let root = temp.path().join("library");
+    let library = open(&root);
+    let (outcomes, summary) = import(&library, &[source.clone(), absent]);
+    assert_eq!(summary.added, 2);
+    let film_id = outcomes
+        .iter()
+        .find_map(|(_, outcome)| match outcome {
+            ImportOutcome::Added(photo) if photo.metadata.film_simulation.is_some() => {
+                Some(photo.id.clone())
+            }
+            _ => None,
+        })
+        .unwrap();
+    drop(library);
+    let reopened = open(&root);
+    let film = reopened
+        .current_photos()
+        .unwrap()
+        .into_iter()
+        .find(|photo| photo.id == film_id)
+        .unwrap();
+    assert_eq!(
+        film.metadata.film_simulation.unwrap().as_str(),
+        "Classic Chrome"
+    );
+    assert_eq!(film.metadata.iso, Some(400));
+    let destination = temp.path().join("public.json");
+    reopened.export_film_metadata(&destination).unwrap();
+    let exported: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&destination).unwrap()).unwrap();
+    let expected: Vec<_> = reopened.current_photos().unwrap().iter().map(|photo| {
+        let mut value = serde_json::json!({"id":photo.id.as_str(),"capturedAt":null,"state":{"_tag":"Draft"}});
+        if photo.id == film_id { value["filmSimulation"] = serde_json::json!("Classic Chrome"); }
+        value
+    }).collect();
+    assert_eq!(exported, serde_json::json!({"version":1,"photos":expected}));
+    assert_eq!(std::fs::read(source).unwrap(), original);
+    let grid = reopened.derivative_path(&film_id, DerivativeSize::Grid);
+    let bytes = std::fs::read(grid).unwrap();
+    assert!(
+        !bytes
+            .windows(4)
+            .any(|part| part == b"EXIF" || part == b"XMP ")
+    );
+}
+
+#[test]
+fn unchanged_and_owned_duplicate_imports_refresh_pending_film_metadata() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("photo.jpg");
+    film_jpeg(&source, 0x120);
+    let root = temp.path().join("library");
+    let library = open(&root);
+    import(&library, std::slice::from_ref(&source));
+    mark_film_pending(&root);
+    let (_, summary) = import(&library, std::slice::from_ref(&source));
+    assert_eq!(summary.unchanged, 1);
+    assert_eq!(
+        library.current_photos().unwrap()[0]
+            .metadata
+            .film_simulation
+            .unwrap()
+            .as_str(),
+        "Astia"
+    );
+    mark_film_pending(&root);
+    let duplicate = temp.path().join("copies/session/photo.jpg");
+    std::fs::create_dir_all(duplicate.parent().unwrap()).unwrap();
+    std::fs::copy(&source, &duplicate).unwrap();
+    library.import_copies(vec![duplicate.clone()]);
+    let summary = loop {
+        if let Event::ImportFinished { summary } = library.recv_timeout(TIMEOUT).unwrap() {
+            break summary;
+        }
+    };
+    assert_eq!(summary.duplicates, 1);
+    assert!(!duplicate.exists());
+    assert_eq!(
+        library.current_photos().unwrap()[0]
+            .metadata
+            .film_simulation
+            .unwrap()
+            .as_str(),
+        "Astia"
+    );
+    assert_eq!(library.current_photos().unwrap()[0].source_count, 1);
+}
+
+#[test]
+fn v1_catalog_migrates_and_background_backfills_without_reimporting() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("photo.jpg");
+    film_jpeg(&source, 0x600);
+    let root = temp.path().join("library");
+    let library = open(&root);
+    let (outcomes, _) = import(&library, &[source]);
+    let before = library.current_photos().unwrap()[0].clone();
+    let id = added_id(&outcomes[0].1);
+    drop(library);
+    let connection = rusqlite::Connection::open(root.join("catalog.sqlite")).unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE photos DROP COLUMN film_simulation;
+        ALTER TABLE photos DROP COLUMN film_metadata_checked; PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    drop(connection);
+    let reopened = open(&root);
+    drain_film_metadata(&reopened);
+    let after = reopened.current_photos().unwrap()[0].clone();
+    assert_eq!(after, before);
+    assert_eq!(after.id, id);
+    let connection = rusqlite::Connection::open(root.join("catalog.sqlite")).unwrap();
+    assert_eq!(
+        connection
+            .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM derivatives", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT film_metadata_checked FROM photos", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn missing_legacy_source_stays_pending_until_a_duplicate_relinks_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("photo.jpg");
+    let moved = temp.path().join("moved.jpg");
+    film_jpeg(&source, 0x600);
+    let root = temp.path().join("library");
+    let library = open(&root);
+    import(&library, std::slice::from_ref(&source));
+    drop(library);
+    mark_film_pending(&root);
+    std::fs::rename(source, &moved).unwrap();
+    let reopened = open(&root);
+    drain_film_metadata(&reopened);
+    let destination = temp.path().join("public.json");
+    assert!(reopened.export_film_metadata(&destination).is_err());
+    assert!(!destination.exists());
+    let (_, summary) = import(&reopened, &[moved]);
+    assert_eq!(summary.relinked, 1);
+    assert_eq!(
+        reopened.current_photos().unwrap()[0]
+            .metadata
+            .film_simulation
+            .unwrap()
+            .as_str(),
+        "Classic Chrome"
+    );
+    reopened.export_film_metadata(&destination).unwrap();
+}
+
+#[test]
+fn replaced_legacy_source_cannot_attach_film_metadata_to_the_old_identity() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("photo.jpg");
+    film_jpeg(&source, 0x600);
+    let root = temp.path().join("library");
+    let library = open(&root);
+    import(&library, std::slice::from_ref(&source));
+    let original_id = library.current_photos().unwrap()[0].id.clone();
+    drop(library);
+    mark_film_pending(&root);
+    film_jpeg(&source, 0x120);
+    let reopened = open(&root);
+    drain_film_metadata(&reopened);
+    let photo = &reopened.current_photos().unwrap()[0];
+    assert_eq!(photo.id, original_id);
+    assert_eq!(photo.metadata.film_simulation, None);
+    assert!(
+        reopened
+            .export_film_metadata(&temp.path().join("public.json"))
+            .is_err()
+    );
+    let (_, summary) = import(&reopened, &[source]);
+    assert_eq!(summary.added, 1);
+    assert_eq!(
+        reopened.current_photos().unwrap()[0]
+            .metadata
+            .film_simulation
+            .unwrap()
+            .as_str(),
+        "Astia"
+    );
+}
+
+#[test]
+fn fuji_maker_note_uses_its_own_byte_order_in_little_and_big_endian_jpeg_exif() {
+    let temp = tempfile::tempdir().unwrap();
+    for little_endian in [true, false] {
+        let source = temp.path().join(format!("photo-{little_endian}.jpg"));
+        let fields = [
+            field(Tag::MakerNote, Value::Undefined(fuji_note(0x600), 0)),
+            field(Tag::PhotographicSensitivity, Value::Short(vec![400])),
+        ];
+        let mut writer = Writer::new();
+        for value in &fields {
+            writer.push_field(value);
+        }
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        writer.write(&mut buffer, little_endian).unwrap();
+        write_jpeg(
+            &source,
+            &RgbImage::from_pixel(60, 40, Rgb([30, 60, 90])),
+            Some(buffer.into_inner()),
+            None,
+        );
+        let exif = photo_prototype::metadata::read_source_exif(&source);
+        assert_eq!(
+            exif.metadata.film_simulation.unwrap().as_str(),
+            "Classic Chrome"
+        );
+        assert_eq!(exif.metadata.iso, Some(400));
+    }
+}
+
+#[test]
+fn malformed_and_foreign_maker_notes_do_not_discard_standard_exif_or_infer_lightroom_profiles() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut malformed = fuji_note(0x600);
+    malformed[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+    for (index, note) in [
+        malformed,
+        b"ForeignMakerNote Classic Chrome".to_vec(),
+        fuji_note(0xffff),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let source = temp.path().join(format!("photo-{index}.jpg"));
+        write_jpeg(
+            &source,
+            &RgbImage::from_pixel(60, 40, Rgb([30, 60, 90])),
+            Some(exif_block(&[
+                field(Tag::MakerNote, Value::Undefined(note, 0)),
+                field(Tag::PhotographicSensitivity, Value::Short(vec![400])),
+                field(
+                    Tag::Software,
+                    Value::Ascii(vec![b"Adobe Lightroom Classic Chrome".to_vec()]),
+                ),
+            ])),
+            None,
+        );
+        let exif = photo_prototype::metadata::read_source_exif(&source);
+        assert_eq!(exif.metadata.film_simulation, None);
+        assert_eq!(exif.metadata.iso, Some(400));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn replacing_a_source_during_render_cannot_commit_metadata_under_the_previous_hash() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("photo.jpg");
+    let replacement = temp.path().join("replacement.jpg");
+    film_jpeg(&source, 0x600);
+    film_jpeg(&replacement, 0x120);
+    let real_vips = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|path| path.join("vips"))
+        .find(|path| path.is_file())
+        .expect("vips is installed");
+    let helper_dir = temp.path().join("helper");
+    std::fs::create_dir(&helper_dir).unwrap();
+    let helper = helper_dir.join("vips");
+    std::fs::write(&helper, "#!/bin/sh\nif [ \"$1\" != \"--version\" ]; then\n  /bin/cp \"$PHOTO_TEST_REPLACEMENT\" \"$PHOTO_TEST_SOURCE\"\nfi\nexec \"$PHOTO_TEST_VIPS\" \"$@\"\n").unwrap();
+    std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut paths = vec![helper_dir];
+    paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
+    let root = temp.path().join("library");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_benchmark-pipeline"))
+        .arg(&root)
+        .arg(&source)
+        .env("PATH", std::env::join_paths(paths).unwrap())
+        .env("PHOTO_TEST_REPLACEMENT", &replacement)
+        .env("PHOTO_TEST_SOURCE", &source)
+        .env("PHOTO_TEST_VIPS", real_vips)
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(error.contains("Original changed during import"), "{error}");
+    let catalog = photo_prototype::catalog::Catalog::open(&root.join("catalog.sqlite")).unwrap();
+    assert!(catalog.photos().unwrap().is_empty());
 }

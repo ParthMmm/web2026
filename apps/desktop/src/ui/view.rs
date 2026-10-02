@@ -509,6 +509,9 @@ impl Gallery {
         if let Some(lens) = &metadata.lens {
             details = details.item("Lens", lens.clone(), 1);
         }
+        if let Some(film) = metadata.film_simulation {
+            details = details.item("Camera film simulation", film.to_string(), 1);
+        }
         if let Some(captured_at) = &metadata.captured_at {
             details = details.item("Taken", captured_at.to_string(), 1);
         }

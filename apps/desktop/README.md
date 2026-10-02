@@ -79,6 +79,7 @@ Library tests (`tests/library.rs`) cover:
 ```sh
 cargo fmt --manifest-path apps/desktop/Cargo.toml --all -- --check
 cargo test --locked --manifest-path apps/desktop/Cargo.toml --features desktop
+cargo test --locked --manifest-path apps/desktop/Cargo.toml --features visual-check --lib failures_sheet
 cargo check --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo build --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bins
 python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --output apps/desktop/benchmarks/local/pipeline-run
@@ -97,6 +98,7 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 - **Window behavior:** GUI benchmarks use a non-activating popup-level window. They set `focus = false`, do not call `cx.activate`, and do not repeatedly force the window to the front. This keeps GPUI 0.3.4's macOS frame source running when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
 - Benchmark mode uses four columns regardless of width, disables manual selection and web-size preparation, scrolls automatically, requests a preview every three seconds, and sustains frame demand. An independent deadline ends the run even when rendering stops. Failed runs remain failed.
 - File readiness ends when the generated derivative reaches the GUI. Decoded readiness ends when GPUI's image cache resolves it. **Neither proves pixels reached the display.** Draw and present-interval histograms are not GPU execution timings. The maximum gap measures time between Gallery render calls; initial render invocation is reported separately.
+- Frame intervals come from every newly drawn target-window frame submission, including inactive frames. They measure time between `present_end` events, not physical display scanout. Ordered trace accounting includes draws superseded before presentation; a pass requires zero trailing unpresented draws and exact draw coverage. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
 - RSS samples sum the app and encoder children every 100 ms. Short-lived peaks can be missed; shared pages can be counted more than once. An unsampled run reports null, not zero memory.
 
 ### Budgets
@@ -108,16 +110,30 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 | Large-preview file readiness p95, cold / warm | 1500 / 200 ms |
 | Sampled process-family RSS | 512 MiB |
 | Last-render age / maximum inter-render gap | 250 / 250 ms |
+| First presentation / last-presentation age / maximum presentation gap | 250 / 250 / 250 ms |
 | Thumbnail / viewer cache entries | 64 / 2 |
 | Thumbnail / viewer in-flight decodes | 4 / 1 |
 
-A pass also requires more than 100 draws, at least three previews, matching attempted/file-ready/decoded counts, no import/preview/decode failures, and all warm requests hitting large derivatives. Decoded latency is reported separately, without a separate pass budget. These are prototype targets for this Mac, not universal guarantees.
+A pass also requires more than 100 measured presentation intervals, complete ordered frame coverage, at least three previews, matching attempted/file-ready/decoded counts, no import/preview/decode failures, and all warm requests hitting large derivatives. Decoded latency is reported separately, without a separate pass budget. These are prototype targets for this Mac, not universal guarantees.
 
 ## Measured evidence
 
-The measurements below are from issue #3, taken before the persistent library replaced the JPEG cache and the UI moved to GPUI Kit components. After those changes, a 24-photo smoke run of the same harness passed every budget. Cold: draw p95 0.93 ms, present p95/p99 17.7/19.9 ms, preview-ready p95 784 ms. Warm: draw p95 1.13 ms, present p95/p99 17.7/33.0 ms, preview-ready p95 13 ms, all four preview requests cache hits. Pipeline mode re-imported the unchanged 24 photos in 0.07 s. Rerun the full matrix below before relying on it for larger libraries.
+On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
 
-**Gate status: PASS for the current 30-second GUI workload.** The earlier `gui-20-reviewed` warm failure is retained as regression evidence, not replaced by a favorable result. The render-gap cause is now understood: pinned GPUI 0.3.4 stops its macOS `CVDisplayLink` source when a normal window is fully occluded, even when the window is dirty and inactive-window throttling is disabled.
+| Photos | Cache | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 24 | Cold | 0.95 | 16.98 / 19.81 | 150.52 | 208.98 | 166.44 |
+| 24 | Warm | 0.95 | 17.46 / 23.86 | 66.73 | 17.24 | 153.25 |
+| 200 | Cold | 1.33 | 17.25 / 20.03 | 150.00 | 277.53 | 268.67 |
+| 200 | Warm | 1.46 | 17.28 / 23.88 | 52.57 | 16.60 | 254.64 |
+
+Each run completed ten previews without failures, accounted for one superseded draw, and had zero pending draws. Every warm preview hit its large derivative. Both 200-photo runs reached the 64/2 cache and 4/1 decode limits without exceeding them. Reports remain in `benchmarks/local/fix-20260929/final-24/` and `final-200/`. These synthetic fixtures do not replace the real-photo matrix or establish the cause of earlier frame variation.
+
+The older figures below use GPUI’s activity-filtered presentation histogram and are not directly comparable to the current full-trace intervals. The measurements below are from issue #3, taken before the persistent library replaced the JPEG cache and the UI moved to GPUI Kit components. After those changes, a 24-photo smoke run of the same harness passed every budget. Cold: draw p95 0.93 ms, present p95/p99 17.7/19.9 ms, preview-ready p95 784 ms. Warm: draw p95 1.13 ms, present p95/p99 17.7/33.0 ms, preview-ready p95 13 ms, all four preview requests cache hits. Pipeline mode re-imported the unchanged 24 photos in 0.07 s. Rerun the full matrix below before relying on it for larger libraries.
+
+Earlier checks were not consistently green after the persistent-library changes. On September 29, 2026, two fresh 12-second runs with 24 generated JPEGs each failed frame-interval budgets. The first cold run recorded p95 23.81 ms against 20 ms while a separate pipeline check ran. An isolated rerun passed cold, but warm recorded p95 21.00 ms and p99 33.341 ms against 20 ms and 33.34 ms. All four runs completed every preview without import or decode failures, and draw p95 stayed below 1.4 ms. The cause of the frame-interval variation remains unresolved. Both reports remain locally under `benchmarks/local/pickup-20260929/`. These generated fixtures do not replace the full real-photo matrix.
+
+The earlier 30-second GUI workload passed before the persistent-library changes. The earlier `gui-20-reviewed` warm failure is retained as regression evidence, not replaced by a favorable result. Its render-gap cause is understood: pinned GPUI 0.3.4 stops its macOS `CVDisplayLink` source when a normal window is fully occluded, even when the window is dirty and inactive-window throttling is disabled.
 
 Measured on **Apple M1 Pro, 32 GiB, macOS 26.6.2**, Rust **1.97.1**, libvips **8.18.3**, using owner-authorized JPEGs under Pictures. The full tree contains **944 JPEGs / 17.35 GB**, median **20.92 MB**. Twenty- and 200-photo samples contain 368 MB and 3.74 GB respectively. Lightroom provenance was supplied by the owner, not independently established.
 
@@ -139,6 +155,8 @@ Every post-fix run completed ten of ten preview requests with no import, preview
 Earlier failures informed fixes and were not discarded: thumbnail-only warming produced false warm requests; a serial encoder delayed previews beyond 1.5 seconds; key-window-only activation left long no-render gaps (up to 8.53 seconds); and the pre-fix `gui-20-reviewed` warm run reached 1030.81 ms. The benchmark still rejects locked/asleep displays, reports inactive frames honestly, and does not claim that pixels reached the display. No display restriction was bypassed.
 
 ### Native UI check
+
+The September 29, 2026 check found a panic when opening **Not imported…**: the sheet builder read Gallery while Gallery was already being updated during rendering. The builder now captures the failure list before opening the sheet; Retry and Clear still update the live Gallery. A headless GPUI regression test renders the actual Gallery and sheet, verifies Retry/Clear callbacks and focus restoration, and confirms the empty sheet’s controls do nothing. All 32 unit and 15 library tests pass with `visual-check`. The test reproduces the original borrow panic when the old builder is restored. The repaired binary starts and exits cleanly, but the native input driver could not reliably focus its window, so repaired-sheet interaction through macOS input remains unverified.
 
 Inspected actual app-owned **2400×1640 Metal scene captures** with real images. Native pointer events selected a photo and toggled the FPS HUD off. Captures confirmed aligned columns and fitted portrait/landscape images; the sizing check caught and fixed intrinsic-image overflow. Native Cmd-Q through System Events exited successfully. These are scene/interaction checks, not OS screenshots or frame-presentation proofs. Screen-recording capture was denied and was not required.
 
@@ -208,7 +226,32 @@ Remaining product work:
 - Bundle the supported libvips library or helper, and audit licenses, before distribution.
 - Tune the WebP quality with real photos and settle on a final value.
 - Add derivative quota and cleanup of orphaned files.
-- Make grid tiles expose accessible names. Toolbar, viewer, and sheet controls are GPUI Kit components with accessible labels.
+- Verify the new grid tile names, selection state, and activation actions with VoiceOver. Native accessibility-tree inspection did not expose the GPUI descendants, so screen-reader behavior is unverified.
 - Add upload and publishing.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
+
+## Camera film simulation export
+
+Imports preserve recognized Fujifilm film simulations from JPEG MakerNote EXIF. The inspector shows the recorded camera setting, such as Classic Chrome or Astia. It does not infer a simulation from a Lightroom profile or claim that the exported pixels use that setting. Missing, unsupported, and malformed camera tags stay absent. The in-process parser follows ExifTool's FujiFilm.pm mappings and handles Fuji's little-endian MakerNote offsets independently of TIFF byte order. It does not require ExifTool at runtime.
+
+Schema v2 adds the film value and a separate checked marker. Existing catalogs backfill one photo per background job after previews, imports, and grid repairs. Each job verifies the source's BLAKE3 identity and checks file identity and modification stamps around EXIF extraction. Missing or changed sources remain pending until a later open or import. Reading uses one opened file and a streaming hash, without buffering the entire JPEG. Originals and metadata-free derivatives stay unchanged.
+
+Explicitly export public records from a catalog:
+
+```sh
+cargo run --locked --manifest-path apps/desktop/Cargo.toml --bin export-film-metadata -- \
+  /path/to/library /path/to/film-metadata.json
+```
+
+The command drains pending film jobs and writes `{ "version": 1, "photos": [...] }` through an atomic file replacement. Each record contains only `id`, `capturedAt: null`, `state: { "_tag": "Draft" }`, and optional `filmSimulation`. It omits paths, local capture times, GPS, serial numbers, camera/lens details, and arbitrary EXIF/XMP. If any legacy photo remains unchecked because its originals are missing or changed, export fails without writing an incomplete file. Reconnect or reimport those originals, then retry.
+
+This is a handoff to the API contract probe. Upload, cloud persistence, and a public gallery remain future work.
+
+On September 30, 2026, all 94 authorized `japan-v2` JPEGs imported without failures. Extraction matched ExifTool's 22 Classic Chrome and four Astia values; the remaining 68 records omitted film simulation. All 94 exported records survived the local HTTP probe and Rust client round-trip. Original SHA-256 hashes stayed unchanged, and all 94 derivatives contained no EXIF, XMP, or ICC chunks. A copied v1 catalog of 223 `japan25` photos migrated and completed its absent-metadata backfill in 4.60 seconds; a repeated export took 0.17 seconds. These timings measure the CLI backfill and export. Local evidence remains under `benchmarks/local/film-simulation-20260930`.
+
+### Real JPEG performance evidence
+
+The retained September 29, 2026 japan25 run used 223 JPEGs totaling 5.5 GB. After the 30-second cold window, only 59 thumbnails were ready. Draw p95 was 1.43 ms, presentation p95/p99 was 17.34/18.31 ms, preview latency was 1008.29 ms, sampled family RSS was 661.97 MiB, maximum draw gap was 449.93 ms, and maximum presentation gap was 449.55 ms. The cold run failed the memory and gap budgets and did not complete import.
+
+The warm run had all 223 thumbnails ready. Draw p95 was 1.60 ms, presentation p95/p99 was 17.34/17.89 ms, preview latency was 14.63 ms, sampled family RSS was 305.80 MiB, and maximum draw gap was 117.21 ms. It passed. The synthetic results above do not supersede this real cold failure. Local evidence remains under `benchmarks/local/japan25-223-20260929` and stays ignored.

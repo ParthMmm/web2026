@@ -239,11 +239,6 @@ impl Plate {
             .border_color(self.rim)
             .shadow(self.shadows)
     }
-
-    /// The rim alone, for a caller that paints its own fill.
-    fn rim(&self) -> Hsla {
-        self.rim
-    }
 }
 
 /// Neutral plate: a track, a chip, an unselected control, the frame around a
@@ -465,7 +460,7 @@ mod tests {
     #[test]
     fn a_faded_plate_has_no_visible_edges() {
         let plate = light_plate(design(Appearance::Dark, SurfaceTreatment::Frosted), 0.0);
-        assert!(plate.rim().a.abs() < 1e-6);
+        assert!(plate.rim.a.abs() < 1e-6);
         assert!(
             plate
                 .shadows

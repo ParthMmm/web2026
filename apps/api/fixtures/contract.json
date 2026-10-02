@@ -1,18 +1,129 @@
 {
   "validPhotos": [
-    { "id": "photo-1", "capturedAt": null, "state": { "_tag": "Draft" } },
-    { "id": "photo-2", "caption": "Evening", "capturedAt": "2025-03-23T18:30:00.000Z", "state": { "_tag": "Published", "url": "https://images.example.test/photo-2.webp" } }
+    {
+      "id": "photo-1",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      }
+    },
+    {
+      "id": "photo-2",
+      "caption": "Evening",
+      "capturedAt": "2025-03-23T18:30:00.000Z",
+      "state": {
+        "_tag": "Published",
+        "url": "https://images.example.test/photo-2.webp"
+      }
+    },
+    {
+      "id": "photo-film",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      },
+      "filmSimulation": "Classic Chrome"
+    },
+    {
+      "id": "photo-mono",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      },
+      "filmSimulation": "Acros + Red Filter"
+    }
   ],
   "invalidPhotos": [
-    { "id": "photo-1", "state": { "_tag": "Draft" } },
-    { "id": "photo-1", "caption": null, "capturedAt": null, "state": { "_tag": "Draft" } },
-    { "id": "photo-1", "capturedAt": "not-a-date", "state": { "_tag": "Draft" } },
-    { "id": "photo-1", "capturedAt": null, "state": { "_tag": "Unknown" } },
-    { "id": "photo-1", "capturedAt": null, "state": { "_tag": "Published" } },
-    { "id": 123, "capturedAt": null, "state": { "_tag": "Draft" } }
+    {
+      "id": "photo-1",
+      "state": {
+        "_tag": "Draft"
+      }
+    },
+    {
+      "id": "photo-1",
+      "caption": null,
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      }
+    },
+    {
+      "id": "photo-1",
+      "capturedAt": "not-a-date",
+      "state": {
+        "_tag": "Draft"
+      }
+    },
+    {
+      "id": "photo-1",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Unknown"
+      }
+    },
+    {
+      "id": "photo-1",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Published"
+      }
+    },
+    {
+      "id": 123,
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      }
+    },
+    {
+      "id": "photo-film",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      },
+      "filmSimulation": null
+    },
+    {
+      "id": "photo-film",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      },
+      "filmSimulation": 123
+    },
+    {
+      "id": "photo-film",
+      "capturedAt": null,
+      "state": {
+        "_tag": "Draft"
+      },
+      "filmSimulation": {
+        "name": "Classic Chrome"
+      }
+    }
   ],
-  "firstPage": { "items": [{ "id": "fixture-1", "capturedAt": null, "state": { "_tag": "Draft" } }], "nextCursor": "page-2" },
-  "lastPage": { "items": [], "nextCursor": null },
-  "unauthorized": { "_tag": "Unauthorized" },
-  "invalidCursor": { "_tag": "InvalidCursor", "cursor": "missing" }
+  "firstPage": {
+    "items": [
+      {
+        "id": "fixture-1",
+        "capturedAt": null,
+        "state": {
+          "_tag": "Draft"
+        }
+      }
+    ],
+    "nextCursor": "page-2"
+  },
+  "lastPage": {
+    "items": [],
+    "nextCursor": null
+  },
+  "unauthorized": {
+    "_tag": "Unauthorized"
+  },
+  "invalidCursor": {
+    "_tag": "InvalidCursor",
+    "cursor": "missing"
+  }
 }
