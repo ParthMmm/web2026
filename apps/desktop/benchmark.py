@@ -57,7 +57,7 @@ metadata = {
     "presentation_visibility": "not measured; minimization or display restrictions can still stop delivery",
     "vips": subprocess.check_output(["vips", "--version"], text=True).strip(),
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),
-    "cache_definition": "cold = empty derivative cache; warm = all thumbnails + exact requested large previews cached, fresh process; OS file cache not flushed",
+    "cache_definition": "cold = empty library; warm = library already holds every photo, its grid derivative and the exact requested large previews, fresh process; OS file cache not flushed",
     "scope": "fixed-duration browsing window; cold import may still be running" if args.mode == "gui" else "complete thumbnail import",
 }
 
@@ -115,22 +115,23 @@ def run(name, command, env):
     return result
 
 results = {"environment": metadata, "runs": {}}
-for pipeline in (["gui"] if args.mode == "gui" else ["rust", "vips"]):
-    cache = args.output / (pipeline + "-cache")
+pipeline_binary = str(root / "target/release/benchmark-pipeline")
+for pipeline in (["gui"] if args.mode == "gui" else ["pipeline"]):
+    library = (args.output / (pipeline + "-library")).resolve()
     for state in ["cold", "warm"]:
         if pipeline == "gui" and state == "warm":
-            # Match Gallery::benchmark's deterministic request times and rows.
+            # Match the GUI benchmark script's deterministic request times and rows.
             rows = (count + 3) // 4
             indices = sorted({((second * 4) % rows) * 4 for second in range(1, args.seconds - 1, 3)})
             warming_env = dict(os.environ, PHOTO_PREWARM_INDICES=",".join(map(str, indices)))
             warming = subprocess.run(
-                [str(root / "target/release/benchmark-pipeline"), "vips", str(cache)] + [str(p.resolve()) for p in selected],
+                [pipeline_binary, str(library)] + [str(p.resolve()) for p in selected],
                 env=warming_env, check=True, capture_output=True, text=True, timeout=max(120, count * 10),
             )
             results["warm_preparation"] = json.loads(warming.stdout.splitlines()[-1])
             (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")
-        env = dict(os.environ, PHOTO_CACHE_DIR=str(cache.resolve()), PHOTO_BENCH_SECONDS=str(args.seconds))
-        command = [str(root / "target/release/photo-desktop")] if pipeline == "gui" else [str(root / "target/release/benchmark-pipeline"), pipeline, str(cache)]
+        env = dict(os.environ, PHOTO_LIBRARY_DIR=str(library), PHOTO_BENCH_SECONDS=str(args.seconds))
+        command = [str(root / "target/release/photo-desktop")] if pipeline == "gui" else [pipeline_binary, str(library)]
         name = state if pipeline == "gui" else pipeline + "-" + state
         results["runs"][name] = run(name, command + [str(p.resolve()) for p in selected], env)
         (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")
