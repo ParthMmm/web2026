@@ -23,7 +23,7 @@ export const ogCards = {
     tone: "green",
   },
   projects: {
-    description: "Beacon, Versos, Orbis, Mana Margherita, and Auriom.",
+    description: "Möte, Versos, Orbis, Beacon, and Auriom.",
     title: "Projects",
     tone: "green",
   },
@@ -31,7 +31,7 @@ export const ogCards = {
     description: describe(projects, "/projects/beacon"),
     kicker: "Projects",
     title: "Beacon",
-    tone: "green",
+    tone: "orange",
   },
   "projects/versos": {
     description: describe(projects, "/projects/versos"),
@@ -45,11 +45,11 @@ export const ogCards = {
     title: "Orbis",
     tone: "green",
   },
-  "projects/mana-margherita": {
-    description: describe(projects, "/projects/mana-margherita"),
+  "projects/mote": {
+    description: describe(projects, "/projects/mote"),
     kicker: "Projects",
-    title: "Mana Margherita",
-    tone: "orange",
+    title: "Möte",
+    tone: "green",
   },
   "projects/auriom": {
     description: describe(projects, "/projects/auriom"),

@@ -330,7 +330,7 @@ a[href] {
   }
 }
 
-/* Tones. A feature picks one for its marker, so Beacon is green and Versos
+/* Tones. A feature picks one for its marker, so Möte is green and Versos
    is tangerine. Figures stay neutral. */
 .tone-green {
   --tone-fill: var(--color-green-600);

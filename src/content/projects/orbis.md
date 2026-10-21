@@ -1,50 +1,56 @@
 ---
 title: "Orbis"
-description: "A private library for DJ sets and mixes, with native apps for iPhone, iPad, and Mac and a server I own."
+description: "A shared library for DJ sets and mixes, with native apps for iPhone, iPad, Mac, and Apple TV, a web app, and an audio server I own."
 pubDate: 2026-09-09
+updatedDate: 2026-10-21
 applicationCategory: "MultimediaApplication"
-operatingSystem: "iOS, iPadOS, macOS"
+operatingSystem: "iOS, iPadOS, macOS, tvOS, Web"
 ---
 
 ## what and why
 
-I listen to a lot of long music: DJ sets and mixes from YouTube and SoundCloud. those sites are built for browsing, not for keeping things. orbis is a private library for them. paste a link, file it with a title and tags, download the audio to a server I own, and play it from a native app on iPhone, iPad, or Mac.
+I listen to a lot of long music: DJ sets and mixes from YouTube and SoundCloud. those sites are built for browsing, not for keeping things. orbis is a library for them. paste a link, file it with a title and tags, download the audio to a server I own, and play it from a native app or the web.
 
-it's built for one listener and one home server, and it makes firm choices to stay that way: no accounts, no public endpoint, no cloud.
+it started as a library for one listener on one home server. now it's for a small private group. each person has their own library, queue, and playback positions, and everyone shares the audio files.
 
 ## how it works
 
 1. **save**
-   - paste a link in the app, send it from the share sheet, or grab the current tab with Raycast
-   - saving files a set in the library
+   - paste a link in the app or on the web, send it from the share sheet, grab the current tab with Raycast, or import a whole YouTube playlist
 2. **download**
-   - a separate step fetches the audio through a self-hosted Cobalt instance and keeps it next to the database
+   - an audio node on my server fetches the audio with yt-dlp or a self-hosted Cobalt
+   - downloads are scheduled fairly across people, and everyone who saved the same set shares one audio file
 3. **listen**
-   - the native apps stream it with the system media frameworks and seek by byte range
-   - Now Playing and CarPlay work like any other audio app
+   - the native apps stream it with the system media frameworks. Now Playing, the Lock Screen, and CarPlay work like any other audio app
+   - sets with a tracklist from [Versos](/projects/versos) show each track as a cue, and tapping one seeks to it
 4. **resume**
-   - the listening queue and every playback position live on the server, so a second device picks up exactly where the first one stopped
+   - the queue and every playback position live in the API, so a second device picks up exactly where the first one stopped
 
-## private by default
+## the group
 
-the server only listens on loopback. the one way in is Tailscale Serve on my tailnet, and every request from off the machine needs an enrolled device token. the server only stores a digest of each token.
+- **people.** sign in by invite, a device link, a group passcode, or a sign-in code
+- **friends' libraries.** see what other people in the group saved
+- **collaborative playlists.** playlists that more than one person can edit
+- **presence.** see who's around, from a live change feed
 
 ## how it's built
 
-- **domain language first** — the terms (set, retained audio, playback position, listen) are defined once in `CONTEXT.md`, and the code uses them
-- **decision records** — six ADRs cover the client platform, download jobs, the audio fetch path, service identity, metadata providers, and artwork sizes
-- **one source for design tokens** — a single tokens file generates both the Swift colors and the CSS, and CI fails if they drift
-- **native test lanes** — one command starts a throwaway server with its own database, pairs a device, and runs the unit tests and UI journeys against it
+- **one Durable Object per group.** a Cloudflare Worker sends each request to a SQLite-backed Durable Object that holds the library, people, keys, the queue, and the download schedule
+- **audio on my server.** my server opens a WebSocket out to the group, so it has no database and no API keys. it serves audio through signed stream grants
+- **domain language first.** a glossary defines the terms (set, retained audio, playback position, listen) once, and the code uses them
+- **decision records.** twenty ADRs. they cover the client platform, sign-in, collaborative playlists, tracklists, and the move to a Durable Object
+- **one source for design tokens.** a single tokens file generates both the Swift colors and the CSS, and CI fails if they drift
+- **observability.** a wide event for every audio request, plus playback diagnostics from the Apple apps
 
 ## tech stack
 
-- Apple: one SwiftUI app for iOS and macOS, Swift 6 strict concurrency, a share extension, CarPlay
-- Server: Bun, Effect v4, Bun SQLite, a persisted download worker
-- Audio: self-hosted Cobalt
-- Network: Tailscale Serve with per-device tokens
-- Other clients: a Raycast extension, and an Electron desktop app that came first
-- Tooling: Turborepo, Bun, xcodegen, swift-format, oxlint, oxfmt
+- Apple: one SwiftUI app for iOS, macOS, and tvOS, Swift 6 strict concurrency, a share extension, CarPlay, a Top Shelf image
+- Web: TanStack Start, React 19, Tailwind v4, shadcn
+- API: Cloudflare Workers and Durable Objects, Effect v4 HttpApi, Drizzle on SQLite, shared typed contracts
+- Audio: a Bun audio node, yt-dlp, self-hosted Cobalt
+- Deploy: Alchemy
+- Tooling: Turborepo, Bun, xcodegen, swift-format, oxlint, oxfmt, Miniflare
 
 ## status
 
-working today: saving and organizing sets, tags, and playlists, search and filters, downloads, streaming with a shared queue and resume, and Raycast capture. not built yet: shared libraries, collaborative playlists, and App Store release. for now I build and run it from Xcode.
+working today are libraries, tags, playlists and collaborative playlists, search, downloads, streaming with a shared queue and resume, tracklists, the web app, and the Apple TV app. the group gets builds through TestFlight. there's no App Store release.

@@ -16,7 +16,6 @@ export type Link = {
 export const profile = {
 	name: "Parth Mangrola",
 	role: "Full-stack engineer",
-	status: "Open to new roles",
 	site: "https://www.parthm.dev",
 };
 
@@ -49,31 +48,31 @@ export const work: Record[] = [
 
 export const projects: Record[] = [
 	{
-		title: "Beacon",
+		title: "Möte",
 		description:
-			"Real-time shared workspace for planning trips together. Built on Expo and Convex, with markdown import and export.",
-		url: "/projects/beacon",
+			"Runs Magic: The Gathering nights for a playgroup, formerly Mana Margherita. Swiss and Commander tournaments, ratings, and a live timer on the web, the TV, and iPhone.",
+		url: "/projects/mote",
+		site: "https://motehall.com/",
 	},
 	{
 		title: "Versos",
 		description:
-			"Playlist builder for DJ sets, formerly Tracklister. Gemini parses the tracklist, then a fuzzy matching engine finds each track on Apple Music.",
+			"Playlist builder for DJ sets, formerly Tracklister. Paste a tracklist or a link, and a durable import on Cloudflare parses it, matches each track, and builds an Apple Music playlist.",
 		url: "/projects/versos",
 		site: "https://versos.studio/",
 	},
 	{
 		title: "Orbis",
 		description:
-			"Self-hosted library for DJ sets and mixes. A SwiftUI app for iPhone, iPad, and Mac, backed by a Bun and Effect server over Tailscale.",
+			"Shared library for DJ sets and mixes. Native apps for iPhone, iPad, Mac, and Apple TV, and a web app, on a Cloudflare API with an audio server I own.",
 		url: "/projects/orbis",
 		site: "https://github.com/ParthMmm/orbis",
 	},
 	{
-		title: "Mana Margherita",
+		title: "Beacon",
 		description:
-			"Swiss tournament app for Magic: The Gathering nights with friends. Pairings, Commander pods, a synced timer, and ELO, on Convex.",
-		url: "/projects/mana-margherita",
-		site: "https://mana-margherita.p11a.xyz/",
+			"Travel app for planning trips together. Shared trips, places, and itineraries on Expo and Cloudflare, and Claude or ChatGPT can help plan over MCP.",
+		url: "/projects/beacon",
 	},
 	{
 		title: "Auriom",

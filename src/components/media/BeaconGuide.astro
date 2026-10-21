@@ -1,0 +1,628 @@
+---
+/* Guide import: Beacon reads a guide and resolves what it names into Places
+   for the Trip. The places are real, and the
+   pins sit roughly where they are in Florence, with the Arno running from the
+   upper left to the lower right. */
+const places = [
+	{ note: "Centro Storico · Museum", place: "Uffizi Gallery", x: 92, y: 63 },
+	{ favourite: true, note: "Santa Croce · Gelato", place: "Gelateria dei Neri", x: 150, y: 73 },
+	{ note: "Santo Spirito · Pizza", place: "Gustapizza", x: 33, y: 96 },
+];
+
+/* A tooltip near either edge of the map hangs toward the middle instead. */
+const align = (x: number): string => {
+	if (x < 50) {
+		return "start";
+	}
+	return x > 150 ? "end" : "center";
+};
+---
+
+<figure class="panel" data-beacon>
+  <div class="cols">
+    <div class="col">
+      <div class="head">
+        <p class="cap">Add from a guide</p>
+        <button type="button" class="read" data-read>Read guide</button>
+      </div>
+      <p class="sr-only" role="status" data-announce></p>
+      <p class="status" aria-hidden="true">
+        <span data-at="0">Opening the guide…</span>
+        <span data-at="1">Reading the guide…</span>
+        <span data-at="2">Resolving Places…</span>
+        <span data-at="4">Florence · {places.length} places saved</span>
+      </p>
+      <ul class="places">
+        {
+          places.map((p, i) => (
+            <li style={`--i: ${i}`}>
+              <button type="button" data-place={i}>
+                <span class="state" aria-hidden="true" />
+                <span class="text">
+                  <span class="place">
+                    {p.place}
+                    {p.favourite && (
+                      <>
+                        <span class="fav" aria-hidden="true">♥</span>
+                        <span class="sr-only">, your favourite</span>
+                      </>
+                    )}
+                  </span>
+                  <span class="note">{p.note}</span>
+                </span>
+              </button>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <div class="col map-wrap">
+      <svg class="map" viewBox="0 0 200 140" role="img" aria-label="Map of central Florence with the saved places">
+        <rect class="land" width="200" height="140"></rect>
+
+        <!-- Boboli gardens and Piazza Pitti, south of the river. -->
+        <path class="park" d="M44 122 C 58 114, 84 115, 98 124 L104 140 L40 140 Z"></path>
+        <rect class="piazza" x="47" y="108" width="15" height="7" rx="1.5"></rect>
+
+        <!-- Side streets: the old grid, faint. -->
+        <g class="minor">
+          <path d="M0 12 L200 20"></path>
+          <path d="M52 40 C 90 42, 140 44, 200 48"></path>
+          <path d="M72 52 L 112 56"></path>
+          <path d="M20 0 L 22 34"></path>
+          <path d="M62 0 L 64 56"></path>
+          <path d="M102 0 L 104 66"></path>
+          <path d="M138 0 L 140 76"></path>
+          <path d="M172 0 L 170 82"></path>
+          <path d="M0 86 C 20 92, 40 100, 60 104"></path>
+          <path d="M14 140 L 30 62"></path>
+          <path d="M66 140 C 66 128, 62 120, 60 116"></path>
+          <path d="M100 112 C 130 116, 170 118, 200 122"></path>
+          <path d="M150 106 L 158 140"></path>
+          <path d="M184 110 L 190 140"></path>
+        </g>
+
+        <!-- Main streets. Via dei Neri runs east from the Uffizi. -->
+        <g class="major">
+          <path d="M0 26 C 60 28, 120 26, 200 36"></path>
+          <path d="M44 0 C 45 18, 45 32, 44 47"></path>
+          <path d="M84 0 C 85 20, 87 40, 90 60"></path>
+          <path d="M120 0 C 120 25, 121 50, 122 76"></path>
+          <path d="M96 66 C 120 69, 145 73, 172 81"></path>
+          <path d="M40 70 C 38 85, 34 100, 26 140"></path>
+          <path d="M72 86 C 69 96, 64 104, 58 108"></path>
+        </g>
+
+        <!-- The riverside roads on both banks, then the river and bridges. -->
+        <g class="lungarno">
+          <path d="M0 29 L17.4 37 L33.5 45.7 L48.2 54.1 L61.4 60.9 L73 65 L86.2 68.2 L99.2 72 L110.7 75.6 L121.6 78.9 L132.6 81.7 L145.3 84.1 L159.4 86.2 L172.5 87.9 L184.9 89 L200 90"></path>
+          <path d="M0 49 L17.4 57.8 L33.5 66.9 L48.2 75.1 L61.4 81.4 L73 85 L86.2 88.2 L99.2 92 L110.7 95.6 L121.6 98.9 L132.6 101.7 L145.3 104.1 L159.4 106.2 L172.5 107.9 L184.9 109 L200 110"></path>
+        </g>
+        <path
+          class="river"
+          d="M0 32 C 30 44, 55 64, 73 68 C 100 74, 115 81, 134 85 C 160 90, 180 92, 200 93 L200 107 C 180 106, 160 104, 134 99 C 115 95, 100 88, 73 82 C 55 79, 30 60, 0 46 Z"
+        ></path>
+        <g class="bridge">
+          <path d="M39 49 L 41 70"></path>
+          <path class="vecchio" d="M71 65 L 73 85"></path>
+          <path d="M134 82 L 136 102"></path>
+        </g>
+
+        <text class="river-label" x="104" y="86" transform="rotate(15 104 86)">Arno</text>
+        <text class="area" x="128" y="16">CENTRO</text>
+        <text class="area" x="112" y="132">OLTRARNO</text>
+        {
+          places.map((p, i) => (
+            <g class="pin" data-pin={i} style={`--i: ${i}`} transform={`translate(${p.x} ${p.y})`}>
+              <g class="drop">
+                <g class="mark">
+                  <circle class="halo" r="9" />
+                  <circle class="dot" r="4.5" />
+                </g>
+                <circle class="hit" r="12" />
+              </g>
+            </g>
+          ))
+        }
+      </svg>
+      {
+        places.map((p, i) => (
+          <div
+            class="tip"
+            data-tip={i}
+            data-align={align(p.x)}
+            style={`--x: ${(p.x / 200) * 100}%; --y: ${(p.y / 140) * 100}%`}
+            aria-hidden="true"
+          >
+            <span class="tip-place">
+              {p.place}
+              {p.favourite && <span class="fav">♥</span>}
+            </span>
+            <span class="tip-note">{p.note}</span>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { playOnce, sequence } from "../../lib/figure";
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-beacon]")) {
+    const read = root.querySelector<HTMLButtonElement>("[data-read]");
+    const announce = root.querySelector<HTMLElement>("[data-announce]");
+    const lines = new Map(
+      [...root.querySelectorAll<HTMLElement>(".status [data-at]")].map((line) => [
+        line.dataset.at,
+        line.textContent ?? "",
+      ]),
+    );
+    /* The visible status crossfades; screen readers hear each line once. */
+    const mark = (step: number) => {
+      root.dataset.step = String(step);
+      const line = lines.get(String(step));
+      if (announce && line) {
+        announce.textContent = line;
+      }
+    };
+    const run = sequence();
+
+    const play = async () => {
+      const { wait } = run.start();
+      mark(0);
+      for (const [step, delay] of [
+        [1, 500],
+        [2, 900],
+        [3, 1000],
+        [4, 700],
+      ] as const) {
+        if (!(await wait(delay))) {
+          return;
+        }
+        mark(step);
+      }
+    };
+
+    read?.addEventListener("click", () => void play());
+    playOnce("beacon", root, () => void play());
+
+    /* A place and its pin light up together, from either side. */
+    const show = (index: string | undefined) => {
+      if (index !== undefined) {
+        root.dataset.active = index;
+      }
+    };
+    const hide = () => {
+      delete root.dataset.active;
+    };
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-place]")) {
+      button.addEventListener("pointerenter", () => show(button.dataset.place));
+      button.addEventListener("focus", () => show(button.dataset.place));
+      button.addEventListener("click", () => show(button.dataset.place));
+      button.addEventListener("pointerleave", hide);
+      button.addEventListener("blur", hide);
+    }
+    for (const pin of root.querySelectorAll<SVGGElement>("[data-pin]")) {
+      pin.addEventListener("pointerenter", () => show(pin.dataset.pin));
+      pin.addEventListener("pointerdown", () => show(pin.dataset.pin));
+      pin.addEventListener("pointerleave", hide);
+    }
+  }
+</script>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @container (min-width: 30rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-3);
+  }
+
+  button {
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  button:active {
+    transform: scale(0.97);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .head .cap {
+    margin: 0;
+  }
+
+  .read {
+    flex: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-1);
+    background-color: var(--color-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .read:hover,
+    .places button:hover {
+      background-color: var(--color-hover);
+    }
+  }
+
+  /* One status line at a time; the server render shows the last. */
+  .status {
+    display: grid;
+    margin: 0.75rem 0 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-ink-1);
+  }
+
+  .status span {
+    grid-area: 1 / 1;
+    opacity: 0;
+  }
+
+  .panel:not([data-step]) .status [data-at="4"],
+  .panel[data-step="0"] .status [data-at="0"],
+  .panel[data-step="1"] .status [data-at="1"],
+  .panel[data-step="2"] .status [data-at="2"],
+  .panel[data-step="3"] .status [data-at="2"],
+  .panel[data-step="4"] .status [data-at="4"] {
+    opacity: 1;
+  }
+
+  .panel[data-step] .status span {
+    transition: opacity 200ms ease;
+  }
+
+  .places {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .places button:focus-visible {
+    border-radius: 8px;
+    outline-offset: -2px;
+  }
+
+  .read:focus-visible {
+    border-radius: 6px;
+  }
+
+  .places button {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    width: calc(100% + 1rem);
+    margin-inline: -0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 8px;
+    text-align: start;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .place {
+    color: var(--color-ink-1);
+  }
+
+  .fav {
+    margin-inline-start: 0.375rem;
+    color: oklch(0.65 0.2 15);
+  }
+
+  .note {
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+  }
+
+  /* Resolving is a ring that turns; resolved is a filled tone dot. */
+  .state {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: var(--tone-fill);
+    translate: 0 -0.0625rem;
+  }
+
+  .panel[data-step="2"] .state {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-3);
+    mask: conic-gradient(#000 0 75%, transparent 0);
+    animation: spin 700ms linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  .panel[data-active="0"] [data-place="0"],
+  .panel[data-active="1"] [data-place="1"],
+  .panel[data-active="2"] [data-place="2"] {
+    background-color: var(--color-hover);
+  }
+
+  .map {
+    display: block;
+    width: 100%;
+    height: auto;
+    clip-path: inset(0 round 8px);
+  }
+
+  .land {
+    fill: var(--color-hover);
+  }
+
+  .minor path,
+  .major path,
+  .lungarno path,
+  .bridge path {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .minor path {
+    stroke: var(--color-line);
+    stroke-width: 0.6;
+  }
+
+  .major path {
+    stroke: var(--color-line-strong);
+    stroke-width: 1.4;
+  }
+
+  .lungarno path {
+    stroke: var(--color-line-strong);
+    stroke-width: 1.1;
+  }
+
+  .river {
+    fill: oklch(0.7 0.08 235 / 0.32);
+    stroke: oklch(0.75 0.08 235 / 0.45);
+    stroke-width: 0.5;
+  }
+
+  .bridge path {
+    stroke: color-mix(in oklch, var(--foreground) 32%, transparent);
+    stroke-width: 2.2;
+    stroke-linecap: butt;
+  }
+
+  .bridge .vecchio {
+    stroke-width: 3.2;
+  }
+
+  .park {
+    fill: oklch(0.7 0.1 150 / 0.2);
+  }
+
+  .piazza {
+    fill: var(--color-line);
+  }
+
+  .river-label {
+    font-size: 6.5px;
+    font-style: italic;
+    letter-spacing: 0.04em;
+    fill: oklch(0.5 0.09 235 / 0.85);
+  }
+
+  :global(.dark) .river-label {
+    fill: oklch(0.82 0.06 235 / 0.9);
+  }
+
+  .area {
+    font-size: 5px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    fill: var(--color-ink-4);
+  }
+
+  .dot {
+    fill: var(--tone-fill);
+    stroke: var(--color-background);
+    stroke-width: 1.5;
+  }
+
+  .halo {
+    fill: var(--tone-fill);
+    fill-opacity: 0.25;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .map-wrap {
+    position: relative;
+  }
+
+  .pin {
+    cursor: pointer;
+  }
+
+  .hit {
+    fill: transparent;
+  }
+
+  /* The active pin swells with a small overshoot and its halo opens. */
+  .mark {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: scale 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    scale: 0.6;
+    transition:
+      opacity 180ms ease,
+      scale 260ms cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  .panel[data-active="0"] [data-pin="0"] .mark,
+  .panel[data-active="1"] [data-pin="1"] .mark,
+  .panel[data-active="2"] [data-pin="2"] .mark {
+    scale: 1.3;
+  }
+
+  .panel[data-active="0"] [data-pin="0"] .halo,
+  .panel[data-active="1"] [data-pin="1"] .halo,
+  .panel[data-active="2"] [data-pin="2"] .halo {
+    opacity: 1;
+    scale: 1;
+  }
+
+  /* The tooltip rises out of its pin: it grows from the bottom edge nearest
+     the pin, and leaves faster than it arrives. */
+  .tip {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+    padding: 0.375rem 0.625rem;
+    border-radius: 8px;
+    background-color: var(--color-background);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      0 6px 16px -6px oklch(0 0 0 / 0.35);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    translate: -50% calc(-100% - 0.625rem);
+    scale: 0.96;
+    transform-origin: bottom center;
+    transition:
+      opacity 120ms ease,
+      scale 120ms ease;
+  }
+
+  .tip[data-align="start"] {
+    translate: -1rem calc(-100% - 0.625rem);
+    transform-origin: bottom left;
+  }
+
+  .tip[data-align="end"] {
+    translate: calc(-100% + 1rem) calc(-100% - 0.625rem);
+    transform-origin: bottom right;
+  }
+
+  .panel[data-active="0"] [data-tip="0"],
+  .panel[data-active="1"] [data-tip="1"],
+  .panel[data-active="2"] [data-tip="2"] {
+    opacity: 1;
+    scale: 1;
+    transition:
+      opacity 180ms cubic-bezier(0.19, 1, 0.22, 1),
+      scale 220ms cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  .tip-place {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-1);
+  }
+
+  .tip-note {
+    font-size: 0.6875rem;
+    color: var(--color-ink-3);
+  }
+
+  /* Playback. Places arrive as they resolve; pins drop once they are saved,
+     with the same small overshoot as the project markers. */
+  .places li,
+  .drop {
+    transition:
+      opacity 320ms cubic-bezier(0.19, 1, 0.22, 1),
+      translate 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-delay: calc(var(--i, 0) * 140ms);
+  }
+
+  .drop {
+    transform-box: fill-box;
+  }
+
+  .panel[data-step="0"] .places li,
+  .panel[data-step="1"] .places li {
+    opacity: 0;
+    translate: 0 4px;
+    transition-delay: 0ms;
+  }
+
+  .panel[data-step="0"] .drop,
+  .panel[data-step="1"] .drop,
+  .panel[data-step="2"] .drop,
+  .panel[data-step="3"] .drop {
+    opacity: 0;
+    translate: 0 -10px;
+    transition-delay: 0ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .places li,
+    .drop {
+      translate: none !important;
+      transition-delay: 0ms;
+    }
+
+    .panel[data-step="2"] .state {
+      animation: none;
+    }
+
+    .mark,
+    .halo,
+    .tip {
+      scale: 1 !important;
+    }
+  }
+</style>
