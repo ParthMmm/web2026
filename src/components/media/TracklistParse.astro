@@ -1,41 +1,139 @@
 ---
-/* Not a mockup of an interface — the actual transformation Versos
-   performs, using the exact input/output pairs documented in the project's
-   own write-up. Nothing here is invented. */
-const rows = [
-	{ raw: "[47:58] Juelz & JAWNS - Enter The World", artist: "Juelz", title: "Enter The World" },
-	{ raw: "40:56 Special Request - Pull Up (Tim Reaper Remix)", artist: "Special Request", title: "Pull Up (Tim Reaper Remix)" },
-	{
-		raw: "[31:29] Joy Orbison & Vice Selex vs. Sage The Gemini & IAMSU! - Flight FM vs. Gas Pedal (RL Grime Edit)",
-		artist: "Joy Orbison & Vice Selex vs. Sage The Gemini & IAMSU!",
-		title: "Flight FM vs. Gas Pedal (RL Grime Edit)",
-	},
-];
+import { clock } from "../../lib/clock";
+import set from "./skin-on-skin.json";
+
+/* A real import: Versos reading the tracklist for Skin On Skin at Intercell x
+   Glitch Festival 2026, the same set as the Orbis figure. Every line, parse,
+   candidate, verdict, and confidence comes from its decision record in
+   production. That import made Orbis cues rather than a playlist. */
+const steps = ["Press", "Parse", "Match", "Orbis"];
+const source = set.source.replace(/^https:\/\/www\./u, "");
+const matched = set.tracks.filter((t) => t.matched).length;
+
+const percent = (value: number): string => `${Math.round(value * 1000) / 10}%`;
+
+/* The raw line without its timestamp, which the row shows in its own column. */
+const line = (raw: string): string => raw.replace(/^\d{1,2}:\d{2}(?::\d{2})?\s+/u, "");
+
+const result = (track: (typeof set.tracks)[number]): string => {
+	const chosen = track.candidates.find((c) => c.chosen);
+	if (chosen) {
+		return percent(chosen.confidence);
+	}
+	return track.candidates.length > 0 ? "No match" : "Not found";
+};
 ---
 
-<figure class="panel">
-  <div class="cols">
-    <div class="col">
-      <p class="cap">Pasted</p>
-      <ul>
-        {rows.map((r) => <li class="raw">{r.raw}</li>)}
-      </ul>
-    </div>
-    <div class="col">
-      <p class="cap">Matched</p>
-      <ul>
-        {
-          rows.map((r) => (
-            <li class="out">
-              <span class="artist">{r.artist}</span>
-              <span class="title">{r.title}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </div>
+<figure class="panel" data-versos>
+  <div class="top">
+    <ol class="steps" aria-label="Import steps">
+      {
+        steps.map((step, i) => (
+          <li data-at={i} aria-current={i === steps.length - 1 ? "step" : undefined}>
+            {step}
+          </li>
+        ))
+      }
+    </ol>
+    <button type="button" class="replay" data-replay hidden>Replay</button>
   </div>
+
+  <p class="source">{source} · parsed by {set.parsePath === "clef" ? "Clef" : set.parsePath}</p>
+
+  <ul class="tracks">
+    {
+      set.tracks.map((track, i) => (
+        <li style={`--i: ${i}`}>
+          <details>
+            <summary>
+              <span class="at">{clock(track.at)}</span>
+              <span class="text">
+                <span class="raw">{line(track.raw)}</span>
+                <span class="out" data-at="1">
+                  <span class="artist">{track.artist}</span>
+                  <span class="title">{track.title}</span>
+                </span>
+              </span>
+              <span class:list={["result", { miss: !track.matched }]} data-at="2">
+                {result(track)}
+              </span>
+            </summary>
+            <div class="record">
+              {track.candidates.length === 0 ? (
+                <p class="none">Apple Music returned no candidates.</p>
+              ) : (
+                <ul>
+                  {track.candidates.map((c) => (
+                    <li class:list={{ chosen: c.chosen }}>
+                      <span>
+                        {c.title} <span class="by">· {c.artist}</span>
+                      </span>
+                      <span class="verdict">
+                        {c.verdict} · {percent(c.confidence)}
+                        {c.chosen && " · chosen"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p class="summary" data-at="3">
+    {matched} of {set.tracks.length} tracks matched · sent to Orbis as cues
+  </p>
 </figure>
+
+<script>
+  import { playOnce, sequence } from "../../lib/figure";
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-versos]")) {
+    const replay = root.querySelector<HTMLButtonElement>("[data-replay]");
+    const list = root.querySelector<HTMLElement>(".tracks");
+    const run = sequence();
+
+    const play = async () => {
+      const { wait } = run.start();
+      for (const details of root.querySelectorAll("details")) {
+        details.open = false;
+      }
+      list?.scrollTo({ top: 0 });
+      const mark = (step: number) => {
+        root.dataset.step = String(step);
+        for (const [i, item] of [...root.querySelectorAll(".steps li")].entries()) {
+          if (i === step) {
+            item.setAttribute("aria-current", "step");
+          } else {
+            item.removeAttribute("aria-current");
+          }
+        }
+      };
+      mark(0);
+      for (const [step, delay] of [
+        [1, 700],
+        [2, 1300],
+        [3, 1300],
+      ] as const) {
+        if (!(await wait(delay))) {
+          return;
+        }
+        mark(step);
+      }
+      if (replay) {
+        replay.hidden = false;
+      }
+    };
+
+    replay?.addEventListener("click", () => void play());
+    if (!playOnce("versos", root, () => void play()) && replay) {
+      replay.hidden = false;
+    }
+  }
+</script>
 
 <style>
   .panel {
@@ -46,50 +144,170 @@ const rows = [
     overflow: hidden;
   }
 
-  .cols {
-    display: grid;
-    gap: 1.5rem;
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-block-end: 1rem;
   }
 
-  @container (min-width: 30rem) {
-    .cols {
-      grid-template-columns: 1fr 1fr;
-      gap: clamp(1.5rem, 4vw, 3rem);
-    }
-  }
-
-  .cap {
-    margin: 0 0 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--color-ink-3);
-  }
-
-  ul {
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .steps li {
+    padding: 0.1875rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-2);
+    box-shadow: inset 0 0 0 1px var(--color-line);
+    transition:
+      color 200ms ease,
+      background-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+
+  /* The current step takes the tone; earlier steps stay plain. */
+  .panel:not([data-step]) .steps li:last-child,
+  .panel[data-step="0"] .steps [data-at="0"],
+  .panel[data-step="1"] .steps [data-at="1"],
+  .panel[data-step="2"] .steps [data-at="2"],
+  .panel[data-step="3"] .steps [data-at="3"] {
+    color: var(--color-ink-1);
+    background-color: color-mix(in oklch, var(--tone-fill) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone-fill) 55%, transparent);
+  }
+
+  .replay {
+    flex: none;
+    padding: 0.1875rem 0.5rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+    cursor: pointer;
+    transition:
+      color 150ms ease,
+      background-color 150ms ease,
+      transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .replay:hover {
+      color: var(--color-ink-1);
+      background-color: var(--color-hover);
+    }
+  }
+
+  .replay:active {
+    transform: scale(0.97);
+  }
+
+  .source {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  /* The whole tracklist, in a window that scrolls on its own. The fades at
+     the edges say there is more. */
+  .tracks {
     display: flex;
     flex-direction: column;
-    gap: 0.875rem;
+    max-height: 24rem;
+    margin: 0 -0.5rem;
+    padding: 0.5rem 0 2rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+    mask-image: linear-gradient(to bottom, transparent, #000 0.75rem, #000 calc(100% - 3rem), transparent);
   }
 
-  li {
+  details {
+    border-radius: 8px;
+    transition: background-color 150ms ease;
+  }
+
+  details[open] {
+    background-color: var(--color-hover);
+  }
+
+  summary {
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    gap: 0 0.75rem;
+    align-items: baseline;
+    padding: 0.4375rem 0.5rem;
+    border-radius: 8px;
+    list-style: none;
     font-size: 0.8125rem;
-    line-height: 1.5;
-    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    cursor: pointer;
   }
 
-  /* Messy in, clean out — the quieter rung is the point of the figure. */
+  summary:focus-visible {
+    border-radius: 8px;
+    outline-offset: -2px;
+  }
+
+  .replay:focus-visible {
+    border-radius: 6px;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    summary:hover {
+      background-color: var(--color-hover);
+    }
+  }
+
+  .at {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-3);
+  }
+
+  /* The raw line and its parse share one cell, so parsing turns one into
+     the other in place. */
+  .text {
+    display: grid;
+    min-width: 0;
+  }
+
+  .raw,
+  .out {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+
   .raw {
     color: var(--color-ink-2);
     overflow-wrap: anywhere;
+    transition: opacity 240ms ease;
+  }
+
+  .panel:not([data-step="0"]) .raw {
+    opacity: 0;
   }
 
   .out {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
     overflow-wrap: anywhere;
   }
 
@@ -99,5 +317,105 @@ const rows = [
 
   .title {
     color: var(--color-ink-1);
+  }
+
+  .result {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-2);
+    white-space: nowrap;
+  }
+
+  .result::before {
+    content: "✓ ";
+    color: var(--color-primary-strong);
+  }
+
+  .result.miss {
+    color: var(--color-ink-3);
+  }
+
+  .result.miss::before {
+    content: "– ";
+    color: var(--color-ink-4);
+  }
+
+  .record {
+    padding: 0 0.5rem 0.75rem 4.75rem;
+  }
+
+  .record ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .record li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 1rem;
+    font-size: 0.75rem;
+    color: var(--color-ink-2);
+  }
+
+  .record .chosen {
+    color: var(--color-ink-1);
+  }
+
+  .by,
+  .verdict,
+  .none {
+    color: var(--color-ink-3);
+  }
+
+  .none {
+    margin: 0;
+    font-size: 0.75rem;
+  }
+
+  .chosen .verdict {
+    color: var(--color-primary-strong);
+  }
+
+  .summary {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-2);
+  }
+
+  /* Playback. Each stage waits for its step, then arrives with a short lift
+     and a blur that resolves, staggered down the list. */
+  [data-at] {
+    transition:
+      opacity 360ms cubic-bezier(0.19, 1, 0.22, 1),
+      translate 360ms cubic-bezier(0.19, 1, 0.22, 1),
+      filter 360ms cubic-bezier(0.19, 1, 0.22, 1);
+    transition-delay: calc(var(--i, 0) * 40ms);
+  }
+
+  .panel[data-step="0"] :is(.out, .result, .summary),
+  .panel[data-step="1"] :is(.result, .summary),
+  .panel[data-step="2"] .summary {
+    opacity: 0;
+    translate: 0 4px;
+    filter: blur(2px);
+    transition-delay: 0ms;
+  }
+
+  .steps [data-at] {
+    transition-delay: 0ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-at] {
+      translate: none !important;
+      filter: none !important;
+      transition-delay: 0ms;
+    }
   }
 </style>

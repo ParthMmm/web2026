@@ -69,12 +69,7 @@ const toneRow = () =>
   );
 
 const header = () =>
-  h(
-    { alignItems: "center", fontSize: 26, gap: 14 },
-    h({ color: COLOR.ink1, fontWeight: 500 }, profile.name),
-    h({ color: COLOR.ink4 }, "·"),
-    h({ color: COLOR.ink3 }, profile.role)
-  );
+  h({ color: COLOR.ink1, fontSize: 26, fontWeight: 500 }, profile.name);
 
 const headline = (card: OgCard) => {
   if (card.quiet) {

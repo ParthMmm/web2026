@@ -34,6 +34,7 @@ export default defineConfig({
   }), sitemap(), react()],
   output: "static",
   redirects: {
+    "/projects/mana-margherita": "/projects/mote",
     "/projects/tracklister": "/projects/versos",
   },
 });

@@ -1,0 +1,354 @@
+{
+ "source": "https://www.youtube.com/watch?v=x8r5otKq75w",
+ "parsePath": "clef",
+ "tracks": [
+  {
+   "raw": "7:15 Masters At Work - Work (Flip & Fill Remix)",
+   "at": 435,
+   "artist": "Masters At Work",
+   "title": "Work (Flip & Fill Remix)",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Work",
+     "artist": "Masters At Work",
+     "verdict": "Related version",
+     "confidence": 0.48,
+     "chosen": true
+    },
+    {
+     "title": "Work (MAW Mix) [feat. Denise \"Saucey Wow\" Belfon] [Mixed]",
+     "artist": "Puppah Nas-T, Denise \"Saucy Wow\" Belfon & Masters At Work",
+     "verdict": "Different song",
+     "confidence": 0.205,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "11:15 EUROCLUB - PUMP THE STEREO",
+   "at": 675,
+   "artist": "EUROCLUB",
+   "title": "PUMP THE STEREO",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "PUMP THE STEREO",
+     "artist": "EUROCLUB",
+     "verdict": "Same recording",
+     "confidence": 0.985,
+     "chosen": true
+    },
+    {
+     "title": "PUMP THE STEREO",
+     "artist": "EUROCLUB",
+     "verdict": "Same recording",
+     "confidence": 0.975,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "16:21 camoufly - Odyssey",
+   "at": 981,
+   "artist": "camoufly",
+   "title": "Odyssey",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Odyssey",
+     "artist": "camoufly",
+     "verdict": "Same recording",
+     "confidence": 0.975,
+     "chosen": true
+    }
+   ]
+  },
+  {
+   "raw": "25:27 Skin On Skin - Ooo",
+   "at": 1527,
+   "artist": "Skin On Skin",
+   "title": "Ooo",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Ooo",
+     "artist": "Skin On Skin",
+     "verdict": "Same recording",
+     "confidence": 0.97,
+     "chosen": true
+    },
+    {
+     "title": "Ooo",
+     "artist": "Skin On Skin",
+     "verdict": "Same recording",
+     "confidence": 0.97,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "27:45 Skin On Skin & X CLUB. - Don't F**k Around",
+   "at": 1665,
+   "artist": "Skin On Skin",
+   "title": "Don't F**k Around",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Don't F**k Around (Mixed)",
+     "artist": "Skin On Skin & X CLUB.",
+     "verdict": "Related version",
+     "confidence": 0.65,
+     "chosen": true
+    },
+    {
+     "title": "Don't F**k Around (Mixed)",
+     "artist": "Skin On Skin & X CLUB.",
+     "verdict": "Related version",
+     "confidence": 0.61,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "29:51 Skin On Skin - Slow It Down",
+   "at": 1791,
+   "artist": "Skin On Skin",
+   "title": "Slow It Down",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Slow It Down",
+     "artist": "Skin On Skin",
+     "verdict": "Same recording",
+     "confidence": 0.995,
+     "chosen": true
+    },
+    {
+     "title": "Slow It Down (Mixed)",
+     "artist": "Skin On Skin",
+     "verdict": "Related version",
+     "confidence": 0.5,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "38:35 Unreleased Tommy holohan - baile funk",
+   "at": 2315,
+   "artist": "Unreleased Tommy holohan",
+   "title": "baile funk",
+   "matched": false,
+   "candidates": []
+  },
+  {
+   "raw": "38:35 Tommy holohan - Unreleased",
+   "at": 2315,
+   "artist": "Tommy holohan",
+   "title": "Unreleased",
+   "matched": false,
+   "candidates": []
+  },
+  {
+   "raw": "40:00 laydeez - djawesomechillguy25",
+   "at": 2400,
+   "artist": "laydeez",
+   "title": "djawesomechillguy25",
+   "matched": false,
+   "candidates": []
+  },
+  {
+   "raw": "43:45 Rowan Weel - SOLO TU (Sped Up)",
+   "at": 2625,
+   "artist": "Rowan Weel",
+   "title": "SOLO TU (Sped Up)",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "SOLO TU (Sped Up)",
+     "artist": "Rowan Weel",
+     "verdict": "Same recording",
+     "confidence": 0.995,
+     "chosen": true
+    },
+    {
+     "title": "SONIC BOOM - Sped up",
+     "artist": "Rowan Weel",
+     "verdict": "Different song",
+     "confidence": 0.005,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "55:43 Baxter - Mysa",
+   "at": 3343,
+   "artist": "Baxter",
+   "title": "Mysa",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Mysa",
+     "artist": "Baxter",
+     "verdict": "Same recording",
+     "confidence": 0.96,
+     "chosen": true
+    },
+    {
+     "title": "Mysa",
+     "artist": "Baxter",
+     "verdict": "Same recording",
+     "confidence": 0.7,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:00:07 K.ONE & Headhigh - Go (Fear No One)",
+   "at": 3607,
+   "artist": "K.ONE",
+   "title": "Go (Fear No One)",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Go (Fear No One)",
+     "artist": "K.ONE & Headhigh",
+     "verdict": "Same recording",
+     "confidence": 0.985,
+     "chosen": true
+    },
+    {
+     "title": "FEAR.",
+     "artist": "Kendrick Lamar",
+     "verdict": "Different song",
+     "confidence": 0.07,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:19:50 BEAM - Order To Dance",
+   "at": 4790,
+   "artist": "BEAM",
+   "title": "Order To Dance",
+   "matched": false,
+   "candidates": [
+    {
+     "title": "Beam Effect",
+     "artist": "YoungBoy Never Broke Again",
+     "verdict": "Different song",
+     "confidence": 0.075,
+     "chosen": false
+    },
+    {
+     "title": "golden hour",
+     "artist": "JVKE",
+     "verdict": "Different song",
+     "confidence": 0.045,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:22:15 Social Machine - Connection",
+   "at": 4935,
+   "artist": "Social Machine",
+   "title": "Connection",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Connection",
+     "artist": "Social Machine",
+     "verdict": "Same recording",
+     "confidence": 0.995,
+     "chosen": true
+    },
+    {
+     "title": "Ghosts in the Machine",
+     "artist": "SmileBackSocialServices",
+     "verdict": "Different song",
+     "confidence": 0,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:32:45 King Doudou - Mario Funk",
+   "at": 5565,
+   "artist": "King Doudou",
+   "title": "Mario Funk",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Mario Funk",
+     "artist": "King Doudou",
+     "verdict": "Same recording",
+     "confidence": 0.895,
+     "chosen": true
+    }
+   ]
+  },
+  {
+   "raw": "1:40:15 TEO HERUM - Just Wanna",
+   "at": 6015,
+   "artist": "TEO HERUM",
+   "title": "Just Wanna",
+   "matched": false,
+   "candidates": [
+    {
+     "title": "Just wanna have fun",
+     "artist": "Yung FSK18 & Rattenjunge",
+     "verdict": "Different song",
+     "confidence": 0.01,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:43:05 KETTAMA - Rok da House",
+   "at": 6185,
+   "artist": "KETTAMA",
+   "title": "Rok da House",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Rok da House",
+     "artist": "KETTAMA",
+     "verdict": "Same recording",
+     "confidence": 0.99,
+     "chosen": true
+    },
+    {
+     "title": "Rok da House (Mixed)",
+     "artist": "KETTAMA",
+     "verdict": "Related version",
+     "confidence": 0.525,
+     "chosen": false
+    }
+   ]
+  },
+  {
+   "raw": "1:50:35 Skin On Skin - Burn Dem Bridges (Nia Archives Edit)",
+   "at": 6635,
+   "artist": "Skin On Skin",
+   "title": "Burn Dem Bridges (Nia Archives Edit)",
+   "matched": true,
+   "candidates": [
+    {
+     "title": "Burn Dem Bridges (Nia Archives Edit)",
+     "artist": "Skin On Skin",
+     "verdict": "Same recording",
+     "confidence": 0.99,
+     "chosen": true
+    },
+    {
+     "title": "Burn Dem Bridges (Nia Archives Edit) [Mixed]",
+     "artist": "Skin On Skin",
+     "verdict": "Related version",
+     "confidence": 0.65,
+     "chosen": false
+    }
+   ]
+  }
+ ]
+}

@@ -2,8 +2,8 @@
 import Chapter from "../components/Chapter.astro";
 import Feature from "../components/Feature.astro";
 import IndexRow from "../components/IndexRow.astro";
-import BeaconMarkdown from "../components/media/BeaconMarkdown.astro";
-import ManaPairings from "../components/media/ManaPairings.astro";
+import BeaconGuide from "../components/media/BeaconGuide.astro";
+import MotePairings from "../components/media/MotePairings.astro";
 import OrbisResume from "../components/media/OrbisResume.astro";
 import TracklistParse from "../components/media/TracklistParse.astro";
 import { profile, projects, work } from "../data/site";
@@ -11,10 +11,10 @@ import Layout from "../layouts/Layout.astro";
 
 const title = "Parth Mangrola";
 const description =
-	"Parth Mangrola is a full-stack engineer. He runs Pallas, building products for clients, and makes apps for the things he's into: trip planning, DJ sets, and Magic: The Gathering nights.";
+	"Parth Mangrola is a full-stack engineer. He runs Pallas, building products for clients, and makes apps for the things he's into: Magic: The Gathering nights, DJ sets, and trip planning.";
 
 /* The flagships carry the page; everything else is the supporting index. */
-const FLAGSHIPS = new Set(["Beacon", "Versos", "Orbis", "Mana Margherita"]);
+const FLAGSHIPS = new Set(["Möte", "Versos", "Orbis", "Beacon"]);
 const otherProjects = projects.filter((p) => !FLAGSHIPS.has(p.title));
 
 const absolute = (url: string): string => new URL(url, profile.site).toString();
@@ -84,21 +84,22 @@ const jsonLd = {
   <Chapter label="Projects">
     <div class="features">
       <Feature
-        title="Beacon"
-        description="A real-time shared workspace for planning trips together. Your plans aren't locked in — import and export the whole itinerary as markdown."
-        url="/projects/beacon"
-        stack="Expo · Convex · Better Auth · Turborepo"
+        title="Möte"
+        description="Runs Magic: The Gathering nights for a playgroup, formerly Mana Margherita. Swiss and Commander tournaments with proper tiebreakers, ratings, player cards, and a round timer synced to every screen, including the TV."
+        url="/projects/mote"
+        site="https://motehall.com/"
+        stack="Convex · Effect · TanStack Start · SwiftUI"
         tone="green"
       >
-        <BeaconMarkdown />
+        <MotePairings />
       </Feature>
 
       <Feature
         title="Versos"
-        description="Paste a tracklist from a DJ set and get a playlist. An LLM cleans the messy text, then a matching engine finds each track in the catalogue. Now on its fifth version, formerly Tracklister."
+        description="Paste a tracklist from a DJ set and get a playlist. A model reads the messy text, then a matching engine finds each track in the catalogue. Now on its sixth version, running on Cloudflare Workers, D1, and Workflows."
         url="/projects/versos"
         site="https://versos.studio/"
-        stack="TanStack Start · Hono · Effect · BullMQ"
+        stack="TanStack Start · Effect · Workers · D1"
         tone="orange"
       >
         <TracklistParse />
@@ -106,24 +107,23 @@ const jsonLd = {
 
       <Feature
         title="Orbis"
-        description="A private library for DJ sets and mixes. Paste a YouTube or SoundCloud link, the audio downloads to a server I own, and a native app plays it on iPhone, iPad, or Mac, picking up wherever I left off."
+        description="A shared library for DJ sets and mixes. Paste a YouTube or SoundCloud link, the audio downloads to a server I own, and native apps play it on iPhone, iPad, Mac, and Apple TV, picking up wherever you left off."
         url="/projects/orbis"
         site="https://github.com/ParthMmm/orbis"
-        stack="SwiftUI · Bun · Effect · SQLite · Tailscale"
+        stack="SwiftUI · Effect · Durable Objects · yt-dlp"
         tone="green"
       >
         <OrbisResume />
       </Feature>
 
       <Feature
-        title="Mana Margherita"
-        description="Swiss tournaments for Magic: The Gathering nights with friends. Proper pairings and tiebreakers, Commander pods, hidden ELO, and a round timer synced to every screen, including the TV."
-        url="/projects/mana-margherita"
-        site="https://mana-margherita.p11a.xyz/"
-        stack="Convex · TanStack Start · Expo · SwiftUI"
+        title="Beacon"
+        description="A travel app for planning trips together. Share trips, places, and itineraries, pull places from a travel guide, and let Claude or ChatGPT help plan over MCP."
+        url="/projects/beacon"
+        stack="Expo · Effect · Workers · D1"
         tone="orange"
       >
-        <ManaPairings />
+        <BeaconGuide />
       </Feature>
     </div>
 

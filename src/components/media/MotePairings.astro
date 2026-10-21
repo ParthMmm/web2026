@@ -1,0 +1,347 @@
+---
+import { pairings, percent, sprite, standings } from "./mote-event";
+
+const round = { number: 3, remaining: "38:12" };
+const table = standings([]);
+
+/* Each player's familiar takes its own hue, like a realm colour. */
+const hue = (name: string): number =>
+	[...name].reduce((sum, char) => sum + char.charCodeAt(0) * 37, 0) % 360;
+---
+
+<figure class="panel" data-mote>
+  <div class="cols">
+    <div class="col">
+      <p class="cap">
+        Round {round.number} · <span class="clock" data-clock>{round.remaining}</span> on every screen
+      </p>
+      <ul class="pairings">
+        {
+          pairings.map(([a, b], index) => (
+            <li>
+              <span class="table">{index + 1}</span>
+              <span class="match">
+                <button
+                  type="button"
+                  data-table={index}
+                  data-player={a}
+                  aria-label={`${a} wins table ${index + 1}`}
+                  aria-pressed="false"
+                >
+                  {a}
+                </button>
+                <span class="vs">vs</span>
+                <button
+                  type="button"
+                  data-table={index}
+                  data-player={b}
+                  aria-label={`${b} wins table ${index + 1}`}
+                  aria-pressed="false"
+                >
+                  {b}
+                </button>
+              </span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="hint">Tap a player to report their win.</p>
+      <p class="sr-only" role="status" data-announce></p>
+    </div>
+    <div class="col">
+      <p class="cap">Standings</p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Player</th>
+            <th scope="col">Pts</th>
+            <th scope="col">OMW</th>
+          </tr>
+        </thead>
+        <tbody data-standings>
+          {
+            table.map((s) => (
+              <tr data-name={s.name}>
+                <td class="player">
+                  <svg
+                    class="familiar"
+                    viewBox="0 0 5 5"
+                    aria-hidden="true"
+                    style={`--hue: ${hue(s.name)}`}
+                  >
+                    {sprite(s.name).map(
+                      (on, i) => on && <rect x={i % 5} y={Math.floor(i / 5)} width="1" height="1" />,
+                    )}
+                  </svg>
+                  {s.name}
+                </td>
+                <td class="num" data-points>
+                  {s.points}
+                </td>
+                <td class="num quiet" data-omw>
+                  {percent(s.omw)}
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { flip, onVisibility } from "../../lib/figure";
+  import { type Player, pairings, percent, standings } from "./mote-event";
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-mote]")) {
+    const body = root.querySelector<HTMLElement>("[data-standings]");
+    const announce = root.querySelector<HTMLElement>("[data-announce]");
+    const clock = root.querySelector<HTMLElement>("[data-clock]");
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("button[data-player]")];
+    if (!body || !clock) {
+      continue;
+    }
+
+    const winners: (Player | undefined)[] = pairings.map(() => undefined);
+
+    const render = () => {
+      for (const button of buttons) {
+        const winner = winners[Number(button.dataset.table)];
+        button.setAttribute("aria-pressed", String(winner === button.dataset.player));
+        button.toggleAttribute("data-lost", winner !== undefined && winner !== button.dataset.player);
+      }
+
+      const table = standings(winners);
+      const [leader] = table;
+      if (announce && leader) {
+        announce.textContent = `Standings updated. ${leader.name} leads with ${leader.points} points.`;
+      }
+
+      const rows = [...body.querySelectorAll<HTMLElement>("tr")];
+      flip(rows, () => {
+        for (const standing of table) {
+          const row = rows.find((r) => r.dataset.name === standing.name);
+          if (!row) {
+            continue;
+          }
+          const points = row.querySelector<HTMLElement>("[data-points]");
+          const omw = row.querySelector<HTMLElement>("[data-omw]");
+          for (const [cell, text] of [
+            [points, String(standing.points)],
+            [omw, percent(standing.omw)],
+          ] as const) {
+            if (cell && cell.textContent?.trim() !== text) {
+              cell.textContent = text;
+              cell.classList.remove("changed");
+              void cell.offsetWidth;
+              cell.classList.add("changed");
+            }
+          }
+          body.append(row);
+        }
+      });
+    };
+
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        const table = Number(button.dataset.table);
+        const player = button.dataset.player as Player;
+        winners[table] = winners[table] === player ? undefined : player;
+        render();
+      });
+    }
+
+    /* The round clock counts down in real time while the figure is on screen. */
+    const [minutes = 0, seconds = 0] = (clock.textContent ?? "").split(":").map(Number);
+    let remaining = minutes * 60 + seconds;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    onVisibility(root, (visible) => {
+      clearInterval(timer);
+      if (visible) {
+        timer = setInterval(() => {
+          remaining = Math.max(remaining - 1, 0);
+          const m = Math.floor(remaining / 60);
+          const s = String(remaining % 60).padStart(2, "0");
+          clock.textContent = `${m}:${s}`;
+        }, 1000);
+      }
+    });
+  }
+</script>
+
+<style>
+  .panel {
+    margin: 0;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border-radius: 12px;
+    background-color: var(--color-hover);
+    overflow: hidden;
+  }
+
+  .cols {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @container (min-width: 30rem) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1.5rem, 4vw, 3rem);
+    }
+  }
+
+  .cap {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-3);
+  }
+
+  .clock {
+    color: var(--color-primary-strong);
+  }
+
+  .pairings {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .pairings li {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    gap: 0 0.75rem;
+    align-items: baseline;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .table {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-primary-strong);
+  }
+
+  .match {
+    display: flex;
+    align-items: baseline;
+    gap: 0.125rem;
+    color: var(--color-ink-1);
+  }
+
+  /* Names are the controls. The padding gives them a hit area without
+     moving the text off the column it shared with the static figure. */
+  button {
+    margin-inline: -0.375rem;
+    padding: 0.1875rem 0.375rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      opacity 150ms ease,
+      transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  button + .vs {
+    margin-inline: 0.5rem;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    button:hover {
+      background-color: var(--color-hover);
+    }
+  }
+
+  button:active {
+    transform: scale(0.97);
+  }
+
+  button:focus-visible {
+    border-radius: 6px;
+  }
+
+  /* Colour alone marks the winner, and the loser dims, so reporting a
+     result moves nothing. */
+  button[aria-pressed="true"] {
+    color: var(--color-primary-strong);
+  }
+
+  button[data-lost] {
+    opacity: 0.45;
+  }
+
+  .vs {
+    color: var(--color-ink-3);
+  }
+
+  .hint {
+    margin: 0.875rem 0 0;
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  th {
+    padding: 0 0 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: start;
+    color: var(--color-ink-3);
+  }
+
+  td {
+    padding: 0.25rem 0;
+    color: var(--color-ink-1);
+  }
+
+  .player {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .familiar {
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: oklch(0.72 0.15 var(--hue));
+    shape-rendering: crispEdges;
+  }
+
+  th:not(:first-child),
+  .num {
+    width: 3.5rem;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quiet {
+    color: var(--color-ink-3);
+  }
+
+  /* A changed number flashes in the accent, then settles back. */
+  .changed {
+    animation: changed 900ms ease;
+  }
+
+  @keyframes changed {
+    from {
+      color: var(--color-primary-strong);
+    }
+  }
+</style>

@@ -1,24 +1,48 @@
 ---
 import type { GetStaticPaths } from "astro";
-import { getCollection, render } from "astro:content";
+import { type CollectionEntry, getCollection, render } from "astro:content";
 import Article from "../../components/Article.astro";
 import ContentWrapper from "../../components/ContentWrapper.astro";
+import Versions from "../../components/Versions.astro";
 import { profile, projects, siteLabel } from "../../data/site";
 import Layout from "../../layouts/Layout.astro";
 
-/* Single-file write-ups. Projects rebuilt more than once keep a folder of
-   versions and their own page, like versos.astro. */
+/* A project is one write-up, `<slug>.md`, or a folder of versions,
+   `<slug>/v1.md`, `<slug>/v2.md`, … for a project rebuilt more than once. */
 export const getStaticPaths = (async () => {
-	const entries = await getCollection("projects", ({ id }) => !id.includes("/"));
-	return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+	const groups = new Map<string, CollectionEntry<"projects">[]>();
+	for (const entry of await getCollection("projects")) {
+		const [slug = entry.id] = entry.id.split("/");
+		groups.set(slug, [...(groups.get(slug) ?? []), entry]);
+	}
+	return [...groups].map(([slug, entries]) => ({
+		params: { slug },
+		props: { entries: entries.toSorted((a, b) => a.data.pubDate.valueOf() - b.data.pubDate.valueOf()) },
+	}));
 }) satisfies GetStaticPaths;
 
-const { entry } = Astro.props;
-const { Content } = await render(entry);
+const { slug } = Astro.params;
+const { entries } = Astro.props;
+const isVersioned = entries.some((entry) => entry.id.includes("/"));
+const latest = entries.at(-1) ?? entries[0];
 
-const record = projects.find((project) => project.url === `/projects/${entry.id}`);
-const { title } = entry.data;
-const description = record?.description ?? entry.data.description;
+const versions = await Promise.all(
+	entries.map(async (entry) => {
+		const { Content } = await render(entry);
+		return {
+			version: entry.data.version ?? entry.id,
+			title: entry.data.title,
+			description: entry.data.description,
+			period: entry.data.period,
+			Content,
+		};
+	}),
+);
+const { Content } = versions.at(-1) ?? versions[0];
+
+const record = projects.find((project) => project.url === `/projects/${slug}`);
+const title = record?.title ?? latest.data.title;
+const description = record?.description ?? latest.data.description;
 const site = record?.site;
 const isRepo = site?.startsWith("https://github.com/") ?? false;
 
@@ -27,10 +51,10 @@ const jsonLd = {
 	"@type": "SoftwareApplication",
 	name: title,
 	description,
-	url: site ?? new URL(`/projects/${entry.id}`, profile.site).toString(),
-	applicationCategory: entry.data.applicationCategory,
-	operatingSystem: entry.data.operatingSystem,
-	datePublished: entry.data.pubDate.toISOString().slice(0, 10),
+	url: site ?? new URL(`/projects/${slug}`, profile.site).toString(),
+	applicationCategory: latest.data.applicationCategory,
+	operatingSystem: latest.data.operatingSystem,
+	datePublished: entries[0].data.pubDate.toISOString().slice(0, 10),
 	author: { "@type": "Person", name: profile.name, url: profile.site },
 	codeRepository: isRepo ? site : undefined,
 };
@@ -46,8 +70,14 @@ const jsonLd = {
     url={site}
     urlLabel={site && (isRepo ? "View on GitHub" : `Visit ${siteLabel(site)}`)}
   >
-    <ContentWrapper>
-      <Content />
-    </ContentWrapper>
+    {
+      isVersioned ? (
+        <Versions {versions} />
+      ) : (
+        <ContentWrapper>
+          <Content />
+        </ContentWrapper>
+      )
+    }
   </Article>
 </Layout>

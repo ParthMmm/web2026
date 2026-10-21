@@ -1,45 +1,173 @@
 ---
-/* A pasted link filed as a Set, and one Playback Position shared across
-   devices. The set is illustrative sample data. */
+import { Image } from "astro:assets";
+import icon from "../../assets/orbis-icon.png";
+import { clock } from "../../lib/clock";
+import tracklist from "./skin-on-skin.json";
+
+/* A real Set: Skin On Skin at Intercell x Glitch Festival 2026, paused at
+   1:25:00. The cues are the ones Versos returned for this set in production;
+   the Versos figure shows how it matched them. */
 const set = {
-	link: "youtube.com/watch?v=…",
-	title: "Special Request at The Lot Radio",
-	tags: ["jungle", "breaks"],
-	length: "1:58:30",
+	length: 7173,
+	link: "https://www.youtube.com/watch?v=x8r5otKq75w&t=5100s",
+	position: 5100,
+	source: "Intercell",
+	title: "Skin On Skin at Intercell x Glitch Festival 2026",
 };
 
-const devices = [
-	{ name: "iPhone", state: "Paused at 47:12" },
-	{ name: "Mac", state: "Resumes at 47:12" },
-];
+const cues = tracklist.tracks.map((t) => ({ artist: t.artist, at: t.at, title: t.title }));
 
-const PROGRESS = 47.2 / 118.5;
+const current = cues.findLast((cue) => cue.at <= set.position);
 ---
 
-<figure class="panel">
-  <div class="cols">
-    <div class="col">
-      <p class="cap">Pasted</p>
-      <p class="link">{set.link}</p>
-      <p class="title">{set.title}</p>
-      <p class="meta">{set.tags.join(" · ")} · {set.length} · Downloaded</p>
-    </div>
-    <div class="col">
-      <p class="cap">Picked up anywhere</p>
-      <ul>
-        {
-          devices.map((d) => (
-            <li>
-              <span class="device">{d.name}</span>
-              <span class="bar" style={`--progress: ${PROGRESS}`} />
-              <span class="state">{d.state}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </div>
+<figure
+  class="panel"
+  data-orbis
+  data-length={set.length}
+  data-position={set.position}
+  style={`--progress: ${set.position / set.length}`}
+>
+  <div class="now">
+    <Image class="art" src={icon} alt="" width={88} height={88} />
+    <span class="meta">
+      <a class="title" href={set.link} target="_blank" rel="noopener noreferrer">
+        {set.title}
+        <span class="sr-only"> (opens YouTube in a new tab)</span>
+      </a>
+      <span class="tags">YouTube · {set.source} · Downloaded</span>
+    </span>
   </div>
+
+  <div class="bar" aria-hidden="true">
+    {cues.map((cue) => <span class="tick" style={`--at: ${cue.at / set.length}`} />)}
+  </div>
+  <div class="row">
+    <button type="button" class="play" data-play aria-label="Play">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path class="icon-play" d="M4.5 2.75v10.5L13 8z"></path>
+        <path class="icon-pause" d="M4 2.75h2.75v10.5H4zM9.25 2.75H12v10.5H9.25z"></path>
+      </svg>
+    </button>
+    <p class="times">
+      <span data-elapsed>{clock(set.position)}</span>
+      <span class="quiet">{` / ${clock(set.length)}`}</span>
+    </p>
+    <p class="status" data-status aria-live="polite">Resumes here on any device</p>
+  </div>
+
+  <p class="cap">Tracklist from Versos · {cues.length} cues</p>
+  <ul class="cues" data-cues>
+    {
+      cues.map((cue) => (
+        <li>
+          <button type="button" data-cue={cue.at} aria-current={cue === current ? "true" : undefined}>
+            <span class="at">{clock(cue.at)}</span>
+            <span class="cue">
+              <span class="cue-title">{cue.title}</span>
+              <span class="cue-artist">{cue.artist}</span>
+            </span>
+            <span class="eq" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+        </li>
+      ))
+    }
+  </ul>
 </figure>
+
+<script>
+  import { clock } from "../../lib/clock";
+  import { onVisibility } from "../../lib/figure";
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-orbis]")) {
+    const length = Number(root.dataset.length);
+    let position = Number(root.dataset.position);
+    let playing = false;
+    let visible = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let shown: HTMLElement | undefined;
+
+    const play = root.querySelector<HTMLButtonElement>("[data-play]");
+    const elapsed = root.querySelector<HTMLElement>("[data-elapsed]");
+    const status = root.querySelector<HTMLElement>("[data-status]");
+    const list = root.querySelector<HTMLElement>("[data-cues]");
+    const cues = [...root.querySelectorAll<HTMLButtonElement>("[data-cue]")];
+
+    /* Keeps the playing cue in the list's view without scrolling the page. */
+    const reveal = (cue: HTMLElement, smooth: boolean) => {
+      if (!list || cue === shown) {
+        return;
+      }
+      shown = cue;
+      const offset = cue.getBoundingClientRect().top - list.getBoundingClientRect().top;
+      const top = list.scrollTop + offset - list.clientHeight / 3;
+      list.scrollTo({ behavior: smooth ? "smooth" : "instant", top });
+    };
+
+    const render = (smooth = true) => {
+      root.style.setProperty("--progress", String(position / length));
+      root.toggleAttribute("data-playing", playing);
+      if (elapsed) {
+        elapsed.textContent = clock(position);
+      }
+      play?.setAttribute("aria-label", playing ? "Pause" : "Play");
+      const current = cues.findLast((cue) => Number(cue.dataset.cue) <= position);
+      for (const cue of cues) {
+        if (cue === current) {
+          cue.setAttribute("aria-current", "true");
+        } else {
+          cue.removeAttribute("aria-current");
+        }
+      }
+      if (current) {
+        reveal(current, smooth);
+      }
+    };
+
+    const say = (text: string) => {
+      if (status) {
+        status.textContent = text;
+      }
+    };
+
+    /* Playback advances in real time, and only while the figure is on screen. */
+    const tick = () => {
+      clearInterval(timer);
+      if (playing && visible) {
+        timer = setInterval(() => {
+          position = Math.min(position + 1, length);
+          render();
+        }, 1000);
+      }
+    };
+
+    play?.addEventListener("click", () => {
+      playing = !playing;
+      say(playing ? "Playing" : `Saved at ${clock(position)} for every device`);
+      render();
+      tick();
+    });
+
+    for (const cue of cues) {
+      cue.addEventListener("click", () => {
+        position = Number(cue.dataset.cue);
+        playing = true;
+        say(`Playing from ${clock(position)}`);
+        render();
+        tick();
+      });
+    }
+
+    render(false);
+    onVisibility(root, (isVisible) => {
+      visible = isVisible;
+      tick();
+    });
+  }
+</script>
 
 <style>
   .panel {
@@ -50,68 +178,74 @@ const PROGRESS = 47.2 / 118.5;
     overflow: hidden;
   }
 
-  .cols {
-    display: grid;
-    gap: 1.5rem;
-  }
-
-  @container (min-width: 30rem) {
-    .cols {
-      grid-template-columns: 1fr 1fr;
-      gap: clamp(1.5rem, 4vw, 3rem);
-    }
+  /* The cue list takes whatever height the card has left, so a taller
+     neighbour shows more of the tracklist instead of empty space. */
+  .panel {
+    display: flex;
+    flex-direction: column;
   }
 
   .cap {
-    margin: 0 0 0.75rem;
+    margin: 1.5rem 0 0.5rem;
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--color-ink-3);
   }
 
-  .link {
-    margin: 0 0 0.625rem;
-    font-size: 0.8125rem;
-    color: var(--color-ink-3);
+  button {
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  .title {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 500;
-    line-height: 1.4;
-    color: var(--color-ink-1);
+  button:active {
+    transform: scale(0.97);
+  }
+
+  .now {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    margin-block-end: 1.125rem;
+  }
+
+  /* The Orbis app icon, at its own corner radius. */
+  .art {
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 22.5%;
+    box-shadow: 0 0 0 1px var(--color-line);
   }
 
   .meta {
-    margin: 0.25rem 0 0;
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--color-ink-3);
-  }
-
-  ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 0.875rem;
+    gap: 0.125rem;
+    min-width: 0;
   }
 
-  li {
-    display: grid;
-    grid-template-columns: 3.25rem minmax(0, 1fr);
-    gap: 0.25rem 0.75rem;
-    align-items: center;
-    font-size: 0.8125rem;
-  }
-
-  .device {
+  .title {
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.35;
     color: var(--color-ink-1);
   }
 
+  .tags {
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+  }
+
   .bar {
+    position: relative;
     height: 4px;
     border-radius: 2px;
     background: linear-gradient(
@@ -121,10 +255,177 @@ const PROGRESS = 47.2 / 118.5;
     );
   }
 
-  .state {
-    grid-column: 2;
+  /* Each cue from the Tracklist marks its place on the bar. */
+  .tick {
+    position: absolute;
+    top: -2px;
+    left: calc(var(--at) * 100%);
+    width: 1px;
+    height: 8px;
+    background-color: var(--color-ink-3);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.875rem;
+    margin-block-start: 0.875rem;
+  }
+
+  .play {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background-color: var(--color-ink-1);
+    color: var(--color-background);
+  }
+
+  .play svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: currentColor;
+  }
+
+  .icon-pause,
+  .panel[data-playing] .icon-play {
+    display: none;
+  }
+
+  .panel[data-playing] .icon-pause {
+    display: inline;
+  }
+
+  .times {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-1);
+  }
+
+  .quiet {
+    color: var(--color-ink-3);
+  }
+
+  .status {
+    margin: 0 0 0 auto;
     font-size: 0.75rem;
+    color: var(--color-ink-3);
+  }
+
+  /* All of the cues, in a window that scrolls on its own. The fades at the
+     edges say there is more. */
+  .cues {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 14rem;
+    margin: 0 -0.5rem;
+    padding: 0.5rem 0 2rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+    mask-image: linear-gradient(to bottom, transparent, #000 0.75rem, #000 calc(100% - 3rem), transparent);
+  }
+
+  .cues button {
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    gap: 0 0.75rem;
+    align-items: baseline;
+    width: 100%;
+    padding: 0.4375rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    text-align: start;
+  }
+
+  .cues button:focus-visible {
+    border-radius: 8px;
+    outline-offset: -2px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .cues button:hover {
+      background-color: var(--color-hover);
+    }
+  }
+
+  .at {
     font-variant-numeric: tabular-nums;
     color: var(--color-ink-3);
+  }
+
+  .cue {
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+    min-width: 0;
+  }
+
+  .cue-title {
+    color: var(--color-ink-1);
+  }
+
+  .cue-artist {
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+  }
+
+  [aria-current="true"] .at,
+  [aria-current="true"] .cue-title {
+    color: var(--color-primary-strong);
+  }
+
+  /* Level bars on the cue that is playing now. */
+  .eq {
+    display: none;
+    align-self: center;
+    gap: 2px;
+    height: 0.75rem;
+  }
+
+  [aria-current="true"] .eq {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .eq span {
+    width: 2px;
+    height: 100%;
+    border-radius: 1px;
+    background-color: var(--color-primary-strong);
+    transform-origin: bottom;
+    scale: 1 0.35;
+  }
+
+  .panel[data-playing] .eq span {
+    animation: level 900ms ease-in-out infinite alternate;
+  }
+
+  .panel[data-playing] .eq span:nth-child(2) {
+    animation-delay: -300ms;
+  }
+
+  .panel[data-playing] .eq span:nth-child(3) {
+    animation-delay: -600ms;
+  }
+
+  @keyframes level {
+    to {
+      scale: 1 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel[data-playing] .eq span {
+      animation: none;
+    }
   }
 </style>
