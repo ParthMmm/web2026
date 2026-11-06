@@ -15,7 +15,8 @@
     "format:check": "oxfmt --check .",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
@@ -50,6 +51,7 @@
     "@tailwindcss/vite": "4.3.3",
     "alchemy": "2.0.0-beta.85",
     "effect": "4.1.2",
+    "lefthook": "2.2.2",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "tailwindcss": "4.3.3",
