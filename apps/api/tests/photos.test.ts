@@ -358,9 +358,42 @@ it.effect(
 
       expect(yield* missingOf(photoId)).toEqual([]);
       expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
+      expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
     }).pipe(Effect.provide(layer));
   },
 );
+
+it.effect("store answers StorageUnavailable when storage fails before the body is read", () => {
+  const { faults, layer } = harness();
+  return Effect.gen(function* () {
+    const photos = yield* Photos;
+    const { bodies, manifest, photoId } = yield* fixture();
+    yield* photos.begin(manifest);
+    faults.failNext("put");
+    const failure = yield* Effect.flip(
+      photos.store({
+        body: Stream.make(bodies.w480),
+        contentLength: bodies.w480.length,
+        kind: "w480",
+        photoId,
+      }),
+    );
+    expect(failure).toMatchObject({ _tag: "StorageUnavailable", operation: "put" });
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect("a finalize that loses a race to a finished finalize returns the draft", () => {
+  const { faults, layer, objects } = harness();
+  return Effect.gen(function* () {
+    const photos = yield* Photos;
+    const { bodies, manifest, photoId } = yield* fixture();
+    yield* photos.begin(manifest);
+    yield* uploadAll(photoId, bodies);
+    faults.beforeNext("copy", photos.finalize(photoId).pipe(Effect.asVoid, Effect.orDie));
+    expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
+    expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
+  }).pipe(Effect.provide(layer));
+});
 
 it.effect(
   "a final object promoted for an older manifest does not satisfy a re-declared one",

@@ -87,11 +87,7 @@ const webpProblems = (
   return problems;
 };
 
-/**
- * Each method is idempotent and acknowledges only after its durable write:
- * `begin` after the D1 row, `store` after R2 holds the hash-checked object,
- * `finalize` after the D1 mark, which follows every promotion to a final key.
- */
+/** Every method is idempotent, so the desktop can repeat any call after a lost response. */
 export class Photos extends Context.Service<
   Photos,
   {
@@ -221,12 +217,12 @@ export class Photos extends Context.Service<
         return yield* view(stored);
       });
 
-      const get = Effect.fn("Photos.get")(function* (photoId: PhotoId) {
+      const get = Effect.fn("Photos.get")(function* getPhoto(photoId: PhotoId) {
         return yield* view(yield* requirePhoto(photoId));
       });
 
       const store = ({ body, contentLength, kind, photoId }: StoreInput) =>
-        Effect.gen(function* () {
+        Effect.gen(function* storeVariant() {
           const stored = yield* requirePhoto(photoId);
           if (stored._tag === "Draft") {
             return yield* new PhotoAlreadyDraft({ photoId });
@@ -240,17 +236,24 @@ export class Photos extends Context.Service<
             });
           }
           let received = 0;
+          let ended = false;
           const metered = body.pipe(
             Stream.tap((chunk) =>
               Effect.sync(() => {
                 received += chunk.length;
               }),
             ),
+            Stream.onEnd(
+              Effect.sync(() => {
+                ended = true;
+              }),
+            ),
           );
+          // Only a body that overran, or ended short, is the client's fault; a store failure before the body ends is ours.
           const rejected = (otherwise: Effect.Effect<never, HashMismatch | StorageUnavailable>) =>
-            received === facts.bytes
-              ? otherwise
-              : Effect.fail(new LengthMismatch({ expected: facts.bytes, kind, received }));
+            received > facts.bytes || (ended && received !== facts.bytes)
+              ? Effect.fail(new LengthMismatch({ expected: facts.bytes, kind, received }))
+              : otherwise;
           yield* blobs.put(stagingKey(photoId, kind, facts.sha256), metered, facts).pipe(
             Effect.catchTags({
               BlobRejected: () => rejected(Effect.fail(new HashMismatch({ kind }))),
@@ -259,7 +262,7 @@ export class Photos extends Context.Service<
           );
         }).pipe(Effect.withSpan("Photos.store"), Effect.annotateLogs({ kind, photoId }));
 
-      const finalize = Effect.fn("Photos.finalize")(function* (photoId: PhotoId) {
+      const finalize = Effect.fn("Photos.finalize")(function* finalizePhoto(photoId: PhotoId) {
         const stored = yield* requirePhoto(photoId);
         if (stored._tag === "Draft") {
           return draftView(stored);
@@ -271,12 +274,18 @@ export class Photos extends Context.Service<
             storage,
           ),
         );
-        yield* rejectIfAny(
-          photoId,
-          yield* Effect.forEach(locations, (at) => promote(stored, at), { concurrency: 2 }).pipe(
-            storage,
-          ),
-        );
+        const promotionProblems = yield* Effect.forEach(
+          locations,
+          (at) => promote(stored, at),
+          { concurrency: 2 },
+        ).pipe(storage);
+        if (promotionProblems.flat().length > 0) {
+          const current = yield* requirePhoto(photoId);
+          if (current._tag === "Draft") {
+            return draftView(current);
+          }
+        }
+        yield* rejectIfAny(photoId, promotionProblems);
         const now = yield* Clock.currentTimeMillis;
         const draft = yield* ledger.markFinal(photoId, stored.manifest, now).pipe(
           Effect.catchTag("LedgerManifestConflict", () =>
