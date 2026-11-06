@@ -1,12 +1,12 @@
 ---
-type Props = {
+interface Props {
 	label: string;
 	/** The section's accessible name. Falls back to the visible rail label. */
 	title?: string;
-};
+}
 
 const { label, title } = Astro.props;
-const id = `chapter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+const id = `chapter-${label.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-")}`;
 ---
 
 <section aria-labelledby={id} class="chapter">

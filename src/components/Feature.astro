@@ -1,7 +1,7 @@
 ---
 import { siteLabel } from "../data/site";
 
-type Props = {
+interface Props {
 	title: string;
 	description: string;
 	url: string;
@@ -10,7 +10,7 @@ type Props = {
 	tone: "green" | "orange";
 	/** The thing itself, linked beside the stack when it lives elsewhere. */
 	site?: string;
-};
+}
 
 const { title, description, url, stack, tone, site } = Astro.props;
 ---

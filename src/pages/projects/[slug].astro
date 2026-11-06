@@ -1,6 +1,7 @@
 ---
 import type { GetStaticPaths } from "astro";
-import { type CollectionEntry, getCollection, render } from "astro:content";
+import { getCollection, render } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
 import Article from "../../components/Article.astro";
 import ContentWrapper from "../../components/ContentWrapper.astro";
 import Versions from "../../components/Versions.astro";
@@ -30,11 +31,11 @@ const versions = await Promise.all(
 	entries.map(async (entry) => {
 		const { Content } = await render(entry);
 		return {
-			version: entry.data.version ?? entry.id,
-			title: entry.data.title,
+			Content,
 			description: entry.data.description,
 			period: entry.data.period,
-			Content,
+			title: entry.data.title,
+			version: entry.data.version ?? entry.id,
 		};
 	}),
 );
@@ -49,14 +50,14 @@ const isRepo = site?.startsWith("https://github.com/") ?? false;
 const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "SoftwareApplication",
-	name: title,
-	description,
-	url: site ?? new URL(`/projects/${slug}`, profile.site).toString(),
 	applicationCategory: latest.data.applicationCategory,
-	operatingSystem: latest.data.operatingSystem,
-	datePublished: entries[0].data.pubDate.toISOString().slice(0, 10),
 	author: { "@type": "Person", name: profile.name, url: profile.site },
 	codeRepository: isRepo ? site : undefined,
+	datePublished: entries[0].data.pubDate.toISOString().slice(0, 10),
+	description,
+	name: title,
+	operatingSystem: latest.data.operatingSystem,
+	url: site ?? new URL(`/projects/${slug}`, profile.site).toString(),
 };
 ---
 

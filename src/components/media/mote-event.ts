@@ -35,7 +35,11 @@ export const pairings: readonly (readonly [Player, Player])[] = [
   ["Stilgar", "Bix"],
 ];
 
-export type Standing = { name: Player; points: number; omw: number };
+export interface Standing {
+  name: Player;
+  points: number;
+  omw: number;
+}
 
 const MATCH_WIN_FLOOR = 1 / 3;
 
@@ -81,16 +85,19 @@ export const standings = (
 
 export const percent = (value: number): string => `${Math.round(value * 100)}%`;
 
+/** Wraps the hash to an unsigned 32-bit value, like `>>> 0` on a non-negative number. */
+const UINT32_RANGE = 2 ** 32;
+
 /** A familiar-style 5×5 pixel sprite, mirrored, seeded from the name. */
 export const sprite = (name: string): boolean[] => {
   let seed = [...name].reduce(
-    (hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0,
+    (hash, char) => (hash * 31 + (char.codePointAt(0) ?? 0)) % UINT32_RANGE,
     7
   );
   const half: boolean[] = [];
   for (let i = 0; i < 15; i += 1) {
-    seed = (seed * 1_103_515_245 + 12_345) >>> 0;
-    half.push((seed >>> 16) % 3 !== 0);
+    seed = (seed * 1_103_515_245 + 12_345) % UINT32_RANGE;
+    half.push(Math.floor(seed / 2 ** 16) % 3 !== 0);
   }
   return Array.from({ length: 25 }, (_, i) => {
     const row = Math.floor(i / 5);

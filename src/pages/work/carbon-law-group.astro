@@ -9,7 +9,10 @@ const description =
 	"Sole engineer on a full-stack SaaS for state filing compliance. Shipped a Chrome extension that automates 30+ form fields.";
 
 const entry = await getEntry("work", "carbon-law-group");
-const { Content } = await render(entry!);
+if (!entry) {
+	throw new Error("Missing work entry: carbon-law-group");
+}
+const { Content } = await render(entry);
 ---
 
 <Layout title={`${title} — Parth Mangrola`} {description}>

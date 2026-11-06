@@ -74,6 +74,7 @@ export const sequence = () => {
       return {
         /** Resolves `true` after `ms`, or `false` once a newer run started. */
         wait: (ms: number) =>
+          // oxlint-disable-next-line promise/avoid-new -- the browser has no promise form of setTimeout
           new Promise<boolean>((resolve) => {
             setTimeout(() => resolve(id === run), reducedMotion() ? 0 : ms);
           }),

@@ -1,13 +1,13 @@
 ---
-type Props = {
+interface Props {
 	title: string;
 	description: string;
 	url?: string;
-};
+}
 
 const { title, description, url } = Astro.props;
 const isExternal = Boolean(url?.startsWith("http"));
-const linkAttrs = isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {};
+const linkAttrs = isExternal ? { rel: "noopener noreferrer", target: "_blank" } : {};
 ---
 
 <article class="record">
