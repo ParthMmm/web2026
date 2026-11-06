@@ -1,17 +1,22 @@
-use super::design::ActiveDesign as _;
 use super::design::hover;
+use super::design::{ActiveDesign as _, Design};
 use super::layout::{Layout, LayoutInput};
 use super::{
-    GRID_CONTEXT, Import, ImportFromPhotos, OpenViewer, SelectDown, SelectFirst, SelectLast,
-    SelectLeft, SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowImportFailures,
-    TogglePerformance, benchmark, gallery::Gallery,
+    CloseWindow, GRID_CONTEXT, Import, ImportFromPhotos, Minimize, OpenViewer, RevealInFinder,
+    SelectDown, SelectFirst, SelectLast, SelectLeft, SelectPageDown, SelectPageUp, SelectRight,
+    SelectUp, ShowImportFailures, ToggleFullScreen, ToggleInspector, TogglePerformance,
+    ToggleSidebar, Zoom, ZoomIn, ZoomOut, benchmark, gallery::Gallery,
 };
 use crate::grid::Movement;
 use gpui::{
-    Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _, Window,
-    div, prelude::FluentBuilder as _,
+    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Styled as _, Window, div, prelude::FluentBuilder as _,
 };
-use gpui_component::{Root, h_flex, v_flex};
+use gpui_component::{
+    Root, h_flex,
+    menu::{ContextMenuExt as _, PopupMenu},
+    v_flex,
+};
 
 impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -19,8 +24,10 @@ impl Render for Gallery {
         let layout = Layout::compute(LayoutInput {
             viewport_width: window.viewport_size().width.as_f32(),
             benchmarking: self.benchmark.is_some(),
-            sidebar_collapsed: self.sidebar_collapsed,
+            sidebar_hidden: self.sidebar_hidden,
+            inspector_hidden: self.inspector_hidden,
             has_photos: !self.photos.is_empty(),
+            min_tile_width: self.min_tile_width,
         });
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let page_rows =
@@ -48,6 +55,15 @@ impl Render for Gallery {
             .on_action(
                 cx.listener(|view, _: &TogglePerformance, _, cx| view.toggle_performance(cx)),
             )
+            .on_action(cx.listener(|view, _: &ToggleSidebar, _, cx| view.toggle_sidebar(cx)))
+            .on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+            .on_action(cx.listener(|view, _: &ZoomIn, window, cx| view.zoom(1.0, window, cx)))
+            .on_action(cx.listener(|view, _: &ZoomOut, window, cx| view.zoom(-1.0, window, cx)))
+            .on_action(cx.listener(|view, _: &RevealInFinder, _, cx| view.reveal_selected(cx)))
+            .on_action(|_: &Minimize, window, _| window.minimize_window())
+            .on_action(|_: &Zoom, window, _| window.zoom_window())
+            .on_action(|_: &ToggleFullScreen, window, _| window.toggle_fullscreen())
+            .on_action(|_: &CloseWindow, window, _| window.remove_window())
             .child(self.title_bar(design, &layout, cx))
             .child(
                 h_flex()
@@ -78,7 +94,7 @@ impl Render for Gallery {
                             // The one opaque plane: the gaps between tiles must
                             // not show the desktop.
                             .bg(design.panel())
-                            .child(self.grid(design, &layout, cx)),
+                            .child(self.grid_with_menu(design, &layout, cx)),
                     )
                     .when(layout.show_inspector, |this| {
                         this.child(self.inspector(design, cx))
@@ -105,4 +121,46 @@ fn movement<A: gpui::Action>(
     cx: &mut Context<Gallery>,
 ) -> impl Fn(&A, &mut Window, &mut gpui::App) + 'static {
     cx.listener(move |view, _: &A, _, cx| view.move_selection(movement, cx))
+}
+
+impl Gallery {
+    /// The grid, with the photo menu on right click once there are photos.
+    fn grid_with_menu(
+        &self,
+        design: Design,
+        layout: &Layout,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let grid = self.grid(design, layout, cx);
+        if self.photos.is_empty() {
+            return grid.into_any_element();
+        }
+        div()
+            .size_full()
+            .child(grid)
+            .context_menu(photo_menu(self.grid_focus.clone(), self.inspector_hidden))
+            .into_any_element()
+    }
+}
+
+/// The menu a right click on a photo opens. The tile has already selected
+/// itself, so each item acts on the selection.
+fn photo_menu(
+    focus: gpui::FocusHandle,
+    inspector_hidden: bool,
+) -> impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static {
+    move |menu, _, _| {
+        menu.action_context(focus.clone())
+            .menu("Open", Box::new(OpenViewer))
+            .menu(
+                if inspector_hidden {
+                    "Show Info"
+                } else {
+                    "Hide Info"
+                },
+                Box::new(ToggleInspector),
+            )
+            .separator()
+            .menu("Show in Finder", Box::new(RevealInFinder))
+    }
 }

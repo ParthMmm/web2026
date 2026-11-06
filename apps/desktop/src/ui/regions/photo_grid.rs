@@ -5,8 +5,8 @@ use crate::ui::design::{glass, hover};
 use crate::ui::gallery::{Gallery, GalleryPhoto, LibraryState, Thumbnail};
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ObjectFit, ParentElement as _, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    Window, div, img, prelude::FluentBuilder as _, px, uniform_list,
+    MouseButton, ObjectFit, ParentElement as _, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px, uniform_list,
 };
 use gpui_component::{
     ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, alert::Alert, button::Button,
@@ -146,6 +146,18 @@ impl Gallery {
                     cx.notify();
                 }
             }))
+            // A right click selects first, so the context menu acts on the
+            // photo under the pointer, as in Finder and Photos.
+            .on_mouse_down(MouseButton::Right, {
+                let id = id.clone();
+                cx.listener(move |view, _, window, cx| {
+                    if view.benchmark.is_some() {
+                        return;
+                    }
+                    window.focus(&view.grid_focus, cx);
+                    view.select_id(&id, cx);
+                })
+            })
             .on_click(cx.listener(move |view, event: &ClickEvent, window, cx| {
                 if view.benchmark.is_some() {
                     return;

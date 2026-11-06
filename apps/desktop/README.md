@@ -32,6 +32,7 @@ cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features 
 Arguments are JPEG files or folders to import on launch. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the toolbar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
 - **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
+- **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, and Show in Finder (also Cmd-Alt-R).
 - **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
 - **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
 - **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) toggles the gpui-fps display: frames per second, a rolling frame-time chart, and the app's CPU and memory use. Its numbers come from the time GPUI spends drawing each frame.

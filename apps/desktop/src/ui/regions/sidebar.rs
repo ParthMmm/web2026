@@ -10,11 +10,8 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use gpui_component::{
-    ActiveTheme as _, Collapsible as _, Icon, IconName, Sizable as _, h_flex,
-    sidebar::{
-        Sidebar, SidebarCollapsible, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem,
-        SidebarToggleButton,
-    },
+    ActiveTheme as _, Icon, IconName, Sizable as _, h_flex,
+    sidebar::{Sidebar, SidebarFooter, SidebarGroup, SidebarMenu, SidebarMenuItem},
     v_flex,
 };
 
@@ -33,47 +30,35 @@ impl Gallery {
         let muted = design.text_muted;
         let faint = design.text_faint;
         let warning = cx.theme().warning;
-        let footer = SidebarFooter::new()
-            .collapsed(self.sidebar_collapsed)
-            .child(
-                h_flex()
-                    .min_w_0()
-                    .gap_2()
-                    .child(Icon::new(IconName::HardDrive).small().text_color(faint))
-                    .child(
-                        v_flex()
-                            .min_w_0()
-                            .text_xs()
-                            .child(
-                                div()
-                                    .text_color(muted)
-                                    .truncate()
-                                    .child(format::library_size(total_bytes)),
-                            )
-                            .child(
-                                div()
-                                    .text_color(faint)
-                                    .truncate()
-                                    .child("Left where they are, not copied"),
-                            ),
-                    ),
-            );
+        let footer = SidebarFooter::new().child(
+            h_flex()
+                .min_w_0()
+                .gap_2()
+                .child(Icon::new(IconName::HardDrive).small().text_color(faint))
+                .child(
+                    v_flex()
+                        .min_w_0()
+                        .text_xs()
+                        .child(
+                            div()
+                                .text_color(muted)
+                                .truncate()
+                                .child(format::library_size(total_bytes)),
+                        )
+                        .child(
+                            div()
+                                .text_color(faint)
+                                .truncate()
+                                .child("Left where they are, not copied"),
+                        ),
+                ),
+        );
         Sidebar::new("sidebar")
             .w(px(SIDEBAR_WIDTH))
             // Replaces the component's opaque `sidebar` token so this panel sits
             // on the window's blurred backdrop, like the inspector.
             .bg(design.chrome())
             .text_color(design.text)
-            .collapsible(SidebarCollapsible::Icon)
-            .collapsed(self.sidebar_collapsed)
-            .header(
-                SidebarToggleButton::new()
-                    .collapsed(self.sidebar_collapsed)
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        view.sidebar_collapsed = !view.sidebar_collapsed;
-                        cx.notify();
-                    })),
-            )
             .child(
                 SidebarGroup::new("Library").child(
                     SidebarMenu::new().children([SidebarMenuItem::new("All photos")

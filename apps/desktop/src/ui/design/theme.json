@@ -53,6 +53,8 @@
         "list.hover.background": "#FFFFFF12",
 
         "progress.bar.background": "#E5483A",
+        "slider.background": "#D4D4D4",
+        "slider.thumb.background": "#F2F2F2",
         "skeleton.background": "#141414",
         "scrollbar.background": "#00000000",
         "scrollbar.thumb.background": "#FFFFFF2E",
@@ -123,6 +125,8 @@
         "list.hover.background": "#0000000A",
 
         "progress.bar.background": "#C8372A",
+        "slider.background": "#3A3A3A",
+        "slider.thumb.background": "#FFFFFF",
         "skeleton.background": "#EFEFEE",
         "scrollbar.background": "#00000000",
         "scrollbar.thumb.background": "#00000033",

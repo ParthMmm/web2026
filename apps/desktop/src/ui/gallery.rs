@@ -2,6 +2,7 @@ use super::{
     benchmark::{self, Benchmark, Totals},
     cache::BoundedCache,
     format,
+    layout::{DEFAULT_TILE_WIDTH, TILE_WIDTH_RANGE, TILE_WIDTH_STEP},
 };
 use crate::{
     DerivativeSize, Event, ImportFailure, ImportOutcome, Library, LibraryOptions, PhotoId,
@@ -10,10 +11,13 @@ use crate::{
     photos,
 };
 use gpui::{
-    Context, Entity, FocusHandle, PathPromptOptions, ScrollStrategy, SharedString, Subscription,
-    UniformListScrollHandle, Window,
+    AppContext as _, Context, Entity, FocusHandle, PathPromptOptions, ScrollStrategy, SharedString,
+    Subscription, UniformListScrollHandle, Window,
 };
-use gpui_component::Theme;
+use gpui_component::{
+    Theme,
+    slider::{SliderEvent, SliderState},
+};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -90,9 +94,11 @@ pub struct Gallery {
     pub(super) selected: Option<PhotoId>,
     pub(super) preview: Option<Preview>,
     pub(super) viewer_open: bool,
-    /// Whether the sidebar is collapsed to icon width. The library's own
-    /// sidebar component owns the 200ms transition; this is only the state.
-    pub(super) sidebar_collapsed: bool,
+    pub(super) sidebar_hidden: bool,
+    pub(super) inspector_hidden: bool,
+    /// The grid's zoom: the smallest width a tile may take.
+    pub(super) min_tile_width: f32,
+    pub(super) zoom_slider: Entity<SliderState>,
     pub(super) progress: Option<(usize, usize)>,
     pub(super) status: SharedString,
     pub(super) picking: bool,
@@ -126,6 +132,19 @@ impl Gallery {
             // permanently opaque the first time macOS flips light and dark.
             super::reapply_window_background(window, cx);
         });
+        let zoom_slider = cx.new(|_| {
+            // `max` first: `min` clamps against the default maximum of 100.
+            SliderState::new()
+                .max(*TILE_WIDTH_RANGE.end())
+                .min(*TILE_WIDTH_RANGE.start())
+                .step(1.0)
+                .default_value(DEFAULT_TILE_WIDTH)
+        });
+        let zoom = cx.subscribe(&zoom_slider, |view, _, event: &SliderEvent, cx| {
+            let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+            view.min_tile_width = value.start();
+            cx.notify();
+        });
         let mut gallery = Self {
             library_root: options.library_root,
             library: LibraryState::Opening,
@@ -134,7 +153,10 @@ impl Gallery {
             selected: None,
             preview: None,
             viewer_open: false,
-            sidebar_collapsed: false,
+            sidebar_hidden: false,
+            inspector_hidden: false,
+            min_tile_width: DEFAULT_TILE_WIDTH,
+            zoom_slider,
             progress: None,
             status: "Opening library…".into(),
             picking: false,
@@ -151,7 +173,7 @@ impl Gallery {
             benchmark,
             pending_imports: Vec::new(),
             session_failures: 0,
-            _subscriptions: vec![appearance],
+            _subscriptions: vec![appearance, zoom],
         };
         if !options.inputs.is_empty() {
             gallery.import(options.inputs, false, cx);
@@ -614,6 +636,47 @@ impl Gallery {
         }
         self.failures.clear();
         cx.notify();
+    }
+
+    pub(super) fn benchmarking(&self) -> bool {
+        self.benchmark.is_some()
+    }
+
+    pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_hidden = !self.sidebar_hidden;
+        self.refresh_menus(cx);
+        cx.notify();
+    }
+
+    pub(super) fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
+        self.inspector_hidden = !self.inspector_hidden;
+        self.refresh_menus(cx);
+        cx.notify();
+    }
+
+    fn refresh_menus(&self, cx: &mut Context<Self>) {
+        cx.set_menus(super::menus(super::MenuState {
+            sidebar_visible: !self.sidebar_hidden,
+            inspector_visible: !self.inspector_hidden,
+        }));
+    }
+
+    /// One Zoom In (`direction` 1) or Zoom Out (-1) step, kept in step with
+    /// the toolbar slider.
+    pub(super) fn zoom(&mut self, direction: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let width = (self.min_tile_width + direction * TILE_WIDTH_STEP)
+            .clamp(*TILE_WIDTH_RANGE.start(), *TILE_WIDTH_RANGE.end());
+        self.min_tile_width = width;
+        self.zoom_slider
+            .update(cx, |slider, cx| slider.set_value(width, window, cx));
+        cx.notify();
+    }
+
+    /// Show the selected photo's original in Finder.
+    pub(super) fn reveal_selected(&self, cx: &mut Context<Self>) {
+        if let Some(photo) = self.selected_photo() {
+            cx.reveal_path(&photo.record.source);
+        }
     }
 
     pub(super) fn toggle_performance(&mut self, cx: &mut Context<Self>) {

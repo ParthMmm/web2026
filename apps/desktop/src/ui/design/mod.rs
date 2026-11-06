@@ -128,7 +128,6 @@ pub const SCROLL_FADE_BAND: f32 = 24.0;
 /// Held here rather than left to the component's private default, so the grid's
 /// column count can subtract the width the sidebar takes.
 pub const SIDEBAR_WIDTH: f32 = 232.0;
-pub const SIDEBAR_COLLAPSED_WIDTH: f32 = 48.0;
 
 /// The resolved planes for one appearance. Everything is `Copy`, so a render
 /// function can take it by value.
