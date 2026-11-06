@@ -66,7 +66,7 @@ bun run alchemy destroy --stage photos-proof --yes
 
 Also check these by hand before destroy. The wrong-hash upload leaves no object in the bucket. The `staging/` and `photos/` keys are not reachable from a public URL. Empty the bucket before destroy, because only the `prod` stage retains it.
 
-Not yet proven in the cloud: R2's checksum refusal, the streaming copy and the staging expiry rule on production R2, and the single-statement ledger on production D1. Local workerd proves the same code paths.
+Last run on 2026-11-06 against real R2 and D1: the full Rust client flow passed, including wrong-hash and short uploads. The final objects matched their SHA-256, staging was empty after finalize, the private bucket had no r2.dev URL or custom domain, and the `staging/` rule was live. Repeat it before each Effect or Alchemy upgrade.
 
 ## Cost
 
