@@ -4,7 +4,7 @@
 
 ## Boundaries and versions
 
-- Effect **4.0.0-rc.112**, Alchemy **2.0.0-beta.76**, and their supporting packages are pinned exactly in `package.json` and `bun.lock`. Newer releases were blocked by the machine's three-day minimum-release-age policy; that policy was not overridden. This RC uses `Schema.TaggedError`, not the newer docs' `TaggedErrorClass`.
+- Effect **4.1.2**, Alchemy **2.0.0-beta.85**, and their supporting packages are pinned exactly in `package.json` and `bun.lock`. Newer releases were blocked by the machine's three-day minimum-release-age policy; that policy was not overridden. This release uses `Schema.TaggedError`, not the newer docs' `TaggedErrorClass`.
 - Bun **1.4.1** owns this directory's TypeScript dependencies. Local validation used 1.4.1-canary.1, Node 24.15.0, Rust 1.97.1, and macOS 26.6.2. CI pins the stable Bun 1.4.1 release.
 - Cargo owns the independent `client/` build. Root TypeScript excludes `apps/api`; this package uses its own compiler and Bun types. Existing Astro dependencies, the pnpm lockfile, and unrelated Effect v3 work are untouched; no second lockfile was introduced for that package. Migrate the site deliberately in its hosting ticket.
 - `src/contract.ts` is the source for HTTP validation, response encoding, and OpenAPI **3.1.0**. `HttpApiBuilder` implements it. The Worker creates/disposes an Effect scope per request; no request I/O promise is shared across isolates or requests.
