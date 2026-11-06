@@ -18,10 +18,11 @@ const offenders = (allowed: (file: string) => boolean, pattern: string) =>
     (file) => !allowed(file) && readFileSync(join(ROOT, file), "utf8").includes(pattern),
   );
 
-it("keeps photos/internal reachable only from inside src/photos", () => {
-  expect(offenders((file) => file.startsWith(join("src", "photos") + sep), "/internal/")).toEqual(
-    [],
-  );
+it("keeps photos/internal reachable only from inside src/photos and the parser's own test", () => {
+  const parserTest = join("tests", "webp.test.ts");
+  const allowed = (file: string) =>
+    file.startsWith(join("src", "photos") + sep) || file === parserTest;
+  expect(offenders(allowed, "/internal/")).toEqual([]);
 });
 
 it("builds blob keys only in the key scheme and the port's contract suite", () => {

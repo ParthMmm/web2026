@@ -33,18 +33,29 @@ const still = (width: number, height: number): WebpHeader => ({
   width,
 });
 
-const parseVp8 = (prefix: Uint8Array): WebpHeader => {
+const SIMPLE_CHUNK_START = 20;
+const VP8L_VERSION_SHIFT = 29;
+
+// A simple-format file is one chunk, so its own size must fill the object exactly.
+const fillsObject = (prefix: Uint8Array, totalBytes: number) => {
+  const chunkBytes = u32(prefix, 16);
+  return SIMPLE_CHUNK_START + chunkBytes + (chunkBytes & 1) === totalBytes;
+};
+
+const parseVp8 = (prefix: Uint8Array, totalBytes: number): WebpHeader => {
   const keyFrame = (byte(prefix, 20) & 1) === 0;
   const startCode =
     byte(prefix, 23) === 0x9d && byte(prefix, 24) === 0x01 && byte(prefix, 25) === 0x2a;
-  return keyFrame && startCode
+  return keyFrame && startCode && fillsObject(prefix, totalBytes)
     ? still(u16(prefix, 26) & FOURTEEN_BITS, u16(prefix, 28) & FOURTEEN_BITS)
     : NOT_WEBP;
 };
 
-const parseVp8l = (prefix: Uint8Array): WebpHeader => {
+const parseVp8l = (prefix: Uint8Array, totalBytes: number): WebpHeader => {
   const bits = u32(prefix, 21);
-  return byte(prefix, 20) === VP8L_SIGNATURE
+  return byte(prefix, 20) === VP8L_SIGNATURE &&
+    bits >>> VP8L_VERSION_SHIFT === 0 &&
+    fillsObject(prefix, totalBytes)
     ? still((bits & FOURTEEN_BITS) + 1, ((bits >>> 14) & FOURTEEN_BITS) + 1)
     : NOT_WEBP;
 };
@@ -60,7 +71,9 @@ const parseVp8x = (prefix: Uint8Array): WebpHeader => {
   };
 };
 
-const parsers: Readonly<Partial<Record<string, (prefix: Uint8Array) => WebpHeader>>> = {
+const parsers: Readonly<
+  Partial<Record<string, (prefix: Uint8Array, totalBytes: number) => WebpHeader>>
+> = {
   "VP8 ": parseVp8,
   VP8L: parseVp8l,
   VP8X: parseVp8x,
@@ -74,5 +87,5 @@ export const parseWebpHeader = (prefix: Uint8Array, totalBytes: number): WebpHea
     fourcc(prefix, 8) === "WEBP" &&
     u32(prefix, 4) === totalBytes - 8;
   const parse = framed ? parsers[fourcc(prefix, 12)] : undefined;
-  return parse === undefined ? NOT_WEBP : parse(prefix);
+  return parse === undefined ? NOT_WEBP : parse(prefix, totalBytes);
 };
