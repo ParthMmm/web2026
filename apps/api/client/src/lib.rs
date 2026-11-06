@@ -172,6 +172,8 @@ impl Client {
             http: blocking::Client::builder()
                 .default_headers(headers)
                 .redirect(Policy::none())
+                // The Worker can refuse an upload before reading its body and close the connection; never reuse one.
+                .pool_max_idle_per_host(0)
                 .timeout(Duration::from_secs(120))
                 .build()?,
             base,

@@ -20,7 +20,7 @@ export default Cloudflare.Worker(
   {
     compatibility: { date: "2026-08-01" },
     main: import.meta.url,
-    observability: { enabled: true },
+    observability: { enabled: true, logs: { enabled: true, invocationLogs: false } },
     workersDev: { enabled: true, previewsEnabled: false },
   },
   Effect.gen(function* () {
