@@ -1,53 +1,143 @@
 use reqwest::{blocking, header, redirect::Policy};
-use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::time::Duration;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "_tag")]
-pub enum PhotoState {
-    Draft,
-    Published { url: String },
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Original,
+    W480,
+    W1200,
+    W2400,
 }
 
-fn optional_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
-    String::deserialize(deserializer).map(Some)
+impl Kind {
+    pub const ALL: [Kind; 4] = [Kind::Original, Kind::W480, Kind::W1200, Kind::W2400];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Kind::Original => "original",
+            Kind::W480 => "w480",
+            Kind::W1200 => "w1200",
+            Kind::W2400 => "w2400",
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Original {
+    pub bytes: u64,
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Derivative {
+    pub bytes: u64,
+    pub height: u32,
+    pub sha256: String,
+    pub width: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Manifest {
+    pub original: Original,
+    pub w480: Derivative,
+    pub w1200: Derivative,
+    pub w2400: Derivative,
+}
+
+impl Manifest {
+    pub fn facts(&self, kind: Kind) -> (u64, &str) {
+        match kind {
+            Kind::Original => (self.original.bytes, &self.original.sha256),
+            Kind::W480 => (self.w480.bytes, &self.w480.sha256),
+            Kind::W1200 => (self.w1200.bytes, &self.w1200.sha256),
+            Kind::W2400 => (self.w2400.bytes, &self.w2400.sha256),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Photo {
-    pub id: String,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "optional_string"
-    )]
-    pub caption: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "optional_string"
-    )]
-    pub film_simulation: Option<String>,
-    // deserialize_with distinguishes a required null from an absent key.
-    #[serde(deserialize_with = "Option::deserialize")]
-    pub captured_at: Option<String>,
-    pub state: PhotoState,
+pub struct BeginRequest {
+    pub manifest: Manifest,
+    pub photo_id: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PhotoPage {
-    pub items: Vec<Photo>,
-    #[serde(deserialize_with = "Option::deserialize")]
-    pub next_cursor: Option<String>,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "_tag", rename_all_fields = "camelCase")]
+pub enum PhotoView {
+    Uploading {
+        manifest: Manifest,
+        missing: Vec<Kind>,
+        photo_id: String,
+    },
+    Draft {
+        finalized_at: String,
+        manifest: Manifest,
+        photo_id: String,
+    },
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dimensions {
+    pub height: u32,
+    pub width: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "_tag")]
+pub enum Problem {
+    Missing {
+        kind: Kind,
+    },
+    Corrupt {
+        kind: Kind,
+    },
+    NotWebp {
+        kind: Kind,
+    },
+    HasMetadata {
+        kind: Kind,
+    },
+    Animated {
+        kind: Kind,
+    },
+    DimensionsMismatch {
+        expected: Dimensions,
+        found: Dimensions,
+        kind: Kind,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "_tag", rename_all_fields = "camelCase")]
 pub enum ApiError {
     Unauthorized,
-    InvalidCursor { cursor: String },
+    PhotoNotFound {
+        photo_id: String,
+    },
+    PhotoManifestConflict {
+        photo_id: String,
+    },
+    PhotoAlreadyDraft {
+        photo_id: String,
+    },
+    LengthMismatch {
+        expected: u64,
+        kind: Kind,
+        received: u64,
+    },
+    HashMismatch {
+        kind: Kind,
+    },
+    FinalizeRejected {
+        photo_id: String,
+        problems: Vec<Problem>,
+    },
+    StorageUnavailable {
+        operation: String,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -63,7 +153,7 @@ pub enum ClientError {
 
 pub struct Client {
     http: blocking::Client,
-    endpoint: String,
+    base: reqwest::Url,
 }
 
 impl Client {
@@ -82,27 +172,66 @@ impl Client {
             http: blocking::Client::builder()
                 .default_headers(headers)
                 .redirect(Policy::none())
-                .timeout(Duration::from_secs(20))
+                .timeout(Duration::from_secs(120))
                 .build()?,
-            endpoint: base.join("/v1/probe/photos")?.to_string(),
+            base,
         })
     }
 
-    pub fn echo_photo(&self, photo: &Photo) -> Result<Photo, ClientError> {
-        self.echo_json(photo)
+    fn url(&self, path: &str) -> String {
+        format!("{}{path}", self.base.as_str().trim_end_matches('/'))
     }
 
-    /// Sends raw JSON for contract validation probes, including intentionally invalid fixtures.
-    pub fn echo_json(&self, photo: &impl Serialize) -> Result<Photo, ClientError> {
-        decode(self.http.post(&self.endpoint).json(photo).send()?)
+    pub fn begin(&self, manifest: &Manifest) -> Result<PhotoView, ClientError> {
+        let request = BeginRequest {
+            manifest: manifest.clone(),
+            photo_id: manifest.original.sha256.clone(),
+        };
+        decode(
+            self.http
+                .post(self.url("/v1/photos"))
+                .json(&request)
+                .send()?,
+        )
     }
 
-    pub fn list_photos(&self, cursor: Option<&str>) -> Result<PhotoPage, ClientError> {
-        let mut request = self.http.get(&self.endpoint);
-        if let Some(cursor) = cursor {
-            request = request.query(&[("cursor", cursor)]);
+    pub fn get(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        decode(
+            self.http
+                .get(self.url(&format!("/v1/photos/{photo_id}")))
+                .send()?,
+        )
+    }
+
+    /// Sends one whole object. The body is a slice, so reqwest sets Content-Length, which the
+    /// Worker requires before it streams the body to storage.
+    pub fn put(&self, photo_id: &str, kind: Kind, body: &[u8]) -> Result<(), ClientError> {
+        let response = self
+            .http
+            .put(self.url(&format!("/v1/photos/{photo_id}/{}", kind.as_str())))
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .body(body.to_vec())
+            .send()?;
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(failure(response))
         }
-        decode(request.send()?)
+    }
+
+    pub fn finalize(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        decode(
+            self.http
+                .post(self.url(&format!("/v1/photos/{photo_id}/finalize")))
+                .send()?,
+        )
+    }
+}
+
+fn failure(response: blocking::Response) -> ClientError {
+    ClientError::Http {
+        status: response.status().as_u16(),
+        error: response.json().ok(),
     }
 }
 
@@ -110,9 +239,6 @@ fn decode<T: DeserializeOwned>(response: blocking::Response) -> Result<T, Client
     if response.status().is_success() {
         Ok(response.json()?)
     } else {
-        Err(ClientError::Http {
-            status: response.status().as_u16(),
-            error: response.json().ok(),
-        })
+        Err(failure(response))
     }
 }

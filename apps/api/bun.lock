@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@web2026/api-prototype",
+      "name": "@web2026/api",
       "dependencies": {
         "effect": "4.1.2",
       },

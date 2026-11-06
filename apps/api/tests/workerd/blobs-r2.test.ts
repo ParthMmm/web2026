@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it } from "@effect/vitest";
 import type { Miniflare } from "miniflare";
 
 import { blobsContract } from "../support/blobs-contract.ts";
-import { bundle, startWorkerd } from "./runtime.ts";
+import { bundle, startWorkerd } from "../../scripts/workerd.ts";
 import { photosScenarios } from "./scenarios.ts";
 
 let miniflare: Miniflare;

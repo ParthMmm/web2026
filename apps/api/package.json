@@ -1,5 +1,5 @@
 {
-  "name": "@web2026/api-prototype",
+  "name": "@web2026/api",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.1",
