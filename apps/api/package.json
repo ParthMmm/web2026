@@ -2,7 +2,6 @@
   "name": "@web2026/api",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.1",
   "scripts": {
     "test": "vitest run",
     "test:workerd": "vitest run --config vitest.workerd.config.ts",
@@ -33,5 +32,6 @@
     "rolldown": "1.2.13",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
-  }
+  },
+  "packageManager": "bun@1.4.1"
 }

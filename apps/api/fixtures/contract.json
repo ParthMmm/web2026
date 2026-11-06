@@ -53,12 +53,7 @@
           "width": 2400
         }
       },
-      "missing": [
-        "original",
-        "w480",
-        "w1200",
-        "w2400"
-      ],
+      "missing": ["original", "w480", "w1200", "w2400"],
       "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {

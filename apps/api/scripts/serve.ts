@@ -7,7 +7,7 @@ if (!token) {
 const workerd = await startWorkerd(
   await bundleWorker(),
   { OWNER_TOKEN: token },
-  Number(process.env.PORT ?? 8787),
+  Number(process.env.PORT ?? 8787)
 );
 console.log(`Local photos Worker in workerd: ${await workerd.ready}`);
 process.once("SIGTERM", async () => {

@@ -25,13 +25,20 @@ const serve = () => {
   });
   const photos = Photos.layer.pipe(
     Layer.provide([makeMemoryBlobs().layer, migratedSqlite()]),
-    Layer.provide(Digest.layerWebCrypto),
+    Layer.provide(Digest.layerWebCrypto)
   );
   const { dispose, handler } = HttpRouter.toWebHandler(
-    Layer.merge(photosApp(photos, Redacted.make(TOKEN)), Logger.layer([capture])),
+    Layer.merge(
+      photosApp(photos, Redacted.make(TOKEN)),
+      Logger.layer([capture])
+    )
   );
   disposers.push(dispose);
-  const call = (path: string, init: RequestInit = {}, token: string | null = TOKEN) => {
+  const call = (
+    path: string,
+    init: RequestInit = {},
+    token: string | null = TOKEN
+  ) => {
     const headers = new Headers(init.headers);
     if (token !== null) {
       headers.set("authorization", `Bearer ${token}`);
@@ -49,11 +56,15 @@ const json = (body: unknown): RequestInit => ({
 
 const put = (body: Uint8Array): RequestInit => ({
   body: Uint8Array.from(body),
-  headers: { "content-length": String(body.length), "content-type": "application/octet-stream" },
+  headers: {
+    "content-length": String(body.length),
+    "content-type": "application/octet-stream",
+  },
   method: "PUT",
 });
 
-const photo = () => Effect.runPromise(fixture().pipe(Effect.provide(Digest.layerWebCrypto)));
+const photo = () =>
+  Effect.runPromise(fixture().pipe(Effect.provide(Digest.layerWebCrypto)));
 
 it("rejects a missing or wrong bearer token with 401 Unauthorized", async () => {
   const { call } = serve();
@@ -68,7 +79,10 @@ it("rejects a missing or wrong bearer token with 401 Unauthorized", async () => 
 it("rejects a photoId that is not the original's sha256 with 400", async () => {
   const { call } = serve();
   const { manifest } = await photo();
-  const response = await call("/v1/photos", json({ manifest, photoId: "b".repeat(64) }));
+  const response = await call(
+    "/v1/photos",
+    json({ manifest, photoId: "b".repeat(64) })
+  );
   expect(response.status).toBe(400);
   const malformed = await call("/v1/photos/not-a-hash");
   expect(malformed.status).toBe(400);
@@ -80,19 +94,29 @@ it("uploads every object over HTTP and finalizes the photo into a draft", async 
 
   const begun = await call("/v1/photos", json({ manifest, photoId }));
   expect(begun.status).toBe(200);
-  expect(await begun.json()).toMatchObject({ _tag: "Uploading", missing: variantKinds });
+  expect(await begun.json()).toMatchObject({
+    _tag: "Uploading",
+    missing: variantKinds,
+  });
 
   for (const kind of variantKinds) {
-    const stored = await call(`/v1/photos/${photoId}/${kind}`, put(bodies[kind]));
+    const stored = await call(
+      `/v1/photos/${photoId}/${kind}`,
+      put(bodies[kind])
+    );
     expect(stored.status).toBe(204);
   }
 
-  const finalized = await call(`/v1/photos/${photoId}/finalize`, { method: "POST" });
+  const finalized = await call(`/v1/photos/${photoId}/finalize`, {
+    method: "POST",
+  });
   expect(finalized.status).toBe(200);
   const draft = await finalized.json();
   expect(draft).toMatchObject({ _tag: "Draft", manifest, photoId });
 
-  const again = await call(`/v1/photos/${photoId}/finalize`, { method: "POST" });
+  const again = await call(`/v1/photos/${photoId}/finalize`, {
+    method: "POST",
+  });
   expect(await again.json()).toEqual(draft);
 });
 

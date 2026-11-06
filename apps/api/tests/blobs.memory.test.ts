@@ -9,6 +9,10 @@ for (const contract of blobsContract) {
   it.effect(`memory: ${contract.name}`, () =>
     contract
       .run(contractKey("memory"))
-      .pipe(Effect.provide(makeMemoryBlobs().layer.pipe(Layer.provide(Digest.layerWebCrypto)))),
+      .pipe(
+        Effect.provide(
+          makeMemoryBlobs().layer.pipe(Layer.provide(Digest.layerWebCrypto))
+        )
+      )
   );
 }

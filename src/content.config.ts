@@ -1,6 +1,6 @@
-import { defineCollection } from 'astro:content';
-import { glob } from 'astro/loaders';
-import { z } from 'astro/zod';
+import { glob } from "astro/loaders";
+import { z } from "astro/zod";
+import { defineCollection } from "astro:content";
 
 const projects = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
@@ -16,7 +16,7 @@ const projects = defineCollection({
     /** schema.org SoftwareApplication fields for the write-up's structured data. */
     applicationCategory: z.string().optional(),
     operatingSystem: z.string().optional(),
-  })
+  }),
 });
 
 const work = defineCollection({
@@ -27,7 +27,7 @@ const work = defineCollection({
     description: z.string(),
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
-  })
+  }),
 });
 
 export const collections = { projects, work };

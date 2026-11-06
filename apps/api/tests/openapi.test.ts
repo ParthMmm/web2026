@@ -24,12 +24,17 @@ it("exports four stable operations behind bearer security in the real OpenAPI di
     expect(operation?.security).toEqual([{ bearer: [] }]);
     expect(operation?.responses).toHaveProperty("401");
   }
-  expect(spec.components.securitySchemes.bearer).toEqual({ scheme: "Bearer", type: "http" });
+  expect(spec.components.securitySchemes.bearer).toEqual({
+    scheme: "Bearer",
+    type: "http",
+  });
 });
 
 it("takes each object as a raw octet-stream body", () => {
   const put = spec.paths["/v1/photos/{photoId}/{kind}"]?.put;
-  expect(Object.keys(put?.requestBody?.content ?? {})).toEqual(["application/octet-stream"]);
+  expect(Object.keys(put?.requestBody?.content ?? {})).toEqual([
+    "application/octet-stream",
+  ]);
   expect(put?.responses).toHaveProperty("204");
   expect(put?.responses).toHaveProperty("422");
 });

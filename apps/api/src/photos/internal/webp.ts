@@ -19,9 +19,12 @@ const VP8L_SIGNATURE = 0x2f;
 const FOURTEEN_BITS = 0x3f_ff;
 
 const byte = (bytes: Uint8Array, at: number) => bytes[at] ?? 0;
-const u16 = (bytes: Uint8Array, at: number) => byte(bytes, at) | (byte(bytes, at + 1) << 8);
-const u24 = (bytes: Uint8Array, at: number) => u16(bytes, at) | (byte(bytes, at + 2) << 16);
-const u32 = (bytes: Uint8Array, at: number) => (u24(bytes, at) | (byte(bytes, at + 3) << 24)) >>> 0;
+const u16 = (bytes: Uint8Array, at: number) =>
+  byte(bytes, at) | (byte(bytes, at + 1) << 8);
+const u24 = (bytes: Uint8Array, at: number) =>
+  u16(bytes, at) | (byte(bytes, at + 2) << 16);
+const u32 = (bytes: Uint8Array, at: number) =>
+  (u24(bytes, at) | (byte(bytes, at + 3) << 24)) >>> 0;
 const fourcc = (bytes: Uint8Array, at: number) =>
   String.fromCodePoint(...bytes.subarray(at, at + 4));
 
@@ -45,7 +48,9 @@ const fillsObject = (prefix: Uint8Array, totalBytes: number) => {
 const parseVp8 = (prefix: Uint8Array, totalBytes: number): WebpHeader => {
   const keyFrame = (byte(prefix, 20) & 1) === 0;
   const startCode =
-    byte(prefix, 23) === 0x9d && byte(prefix, 24) === 0x01 && byte(prefix, 25) === 0x2a;
+    byte(prefix, 23) === 0x9d &&
+    byte(prefix, 24) === 0x01 &&
+    byte(prefix, 25) === 0x2a;
   return keyFrame && startCode && fillsObject(prefix, totalBytes)
     ? still(u16(prefix, 26) & FOURTEEN_BITS, u16(prefix, 28) & FOURTEEN_BITS)
     : NOT_WEBP;
@@ -72,7 +77,9 @@ const parseVp8x = (prefix: Uint8Array): WebpHeader => {
 };
 
 const parsers: Readonly<
-  Partial<Record<string, (prefix: Uint8Array, totalBytes: number) => WebpHeader>>
+  Partial<
+    Record<string, (prefix: Uint8Array, totalBytes: number) => WebpHeader>
+  >
 > = {
   "VP8 ": parseVp8,
   VP8L: parseVp8l,
@@ -80,7 +87,10 @@ const parsers: Readonly<
 };
 
 // The RIFF size must match the verified object size, so a truncated file fails even with a valid header.
-export const parseWebpHeader = (prefix: Uint8Array, totalBytes: number): WebpHeader => {
+export const parseWebpHeader = (
+  prefix: Uint8Array,
+  totalBytes: number
+): WebpHeader => {
   const framed =
     prefix.length >= WEBP_PREFIX_BYTES &&
     fourcc(prefix, 0) === "RIFF" &&

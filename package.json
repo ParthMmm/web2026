@@ -1,4 +1,22 @@
 {
+  "name": "web2024",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "deploy": "alchemy deploy --stage prod",
+    "destroy": "alchemy destroy --stage prod",
+    "lint": "ultracite check",
+    "lint:fix": "ultracite fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/sitemap": "^3.7.4",
@@ -38,27 +56,9 @@
     "typescript": "^7.0.2",
     "ultracite": "7.12.0"
   },
-  "name": "web2024",
   "packageManager": "bun@1.4.1",
-  "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "deploy": "alchemy deploy --stage prod",
-    "destroy": "alchemy destroy --stage prod",
-    "lint": "ultracite check",
-    "lint:fix": "ultracite fix",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "typecheck": "tsc --noEmit",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
-  },
   "trustedDependencies": [
     "esbuild",
     "sharp"
-  ],
-  "type": "module",
-  "version": "0.0.1"
+  ]
 }

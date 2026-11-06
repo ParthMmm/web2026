@@ -8,12 +8,12 @@ import { Manifest, PhotoId } from "../domain.ts";
 
 export class LedgerUnavailable extends Schema.TaggedError<LedgerUnavailable>()(
   "LedgerUnavailable",
-  { cause: Schema.Defect(), operation: Schema.String },
+  { cause: Schema.Defect(), operation: Schema.String }
 ) {}
 
 export class LedgerManifestConflict extends Schema.TaggedError<LedgerManifestConflict>()(
   "LedgerManifestConflict",
-  { photoId: PhotoId },
+  { photoId: PhotoId }
 ) {}
 
 export interface Uploading {
@@ -43,7 +43,11 @@ const Write = Schema.Struct({
   photoId: PhotoId,
 });
 
-const toStored = ({ finalizedAt, manifest, photoId }: typeof PhotoRow.Type): Stored =>
+const toStored = ({
+  finalizedAt,
+  manifest,
+  photoId,
+}: typeof PhotoRow.Type): Stored =>
   finalizedAt === null
     ? { _tag: "Uploading", manifest, photoId }
     : { _tag: "Draft", finalizedAt, manifest, photoId };
@@ -51,26 +55,31 @@ const toStored = ({ finalizedAt, manifest, photoId }: typeof PhotoRow.Type): Sto
 const sameManifest = Schema.toEquivalence(Manifest);
 
 export interface Ledger {
-  readonly find: (photoId: PhotoId) => Effect.Effect<Option.Option<Stored>, LedgerUnavailable>;
+  readonly find: (
+    photoId: PhotoId
+  ) => Effect.Effect<Option.Option<Stored>, LedgerUnavailable>;
   readonly declare: (
     photoId: PhotoId,
     manifest: Manifest,
-    nowMillis: number,
+    nowMillis: number
   ) => Effect.Effect<Stored, LedgerManifestConflict | LedgerUnavailable>;
   readonly markFinal: (
     photoId: PhotoId,
     verified: Manifest,
-    nowMillis: number,
+    nowMillis: number
   ) => Effect.Effect<Draft, LedgerManifestConflict | LedgerUnavailable>;
 }
 
-export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> = Effect.gen(
-  function* () {
+export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
+  Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const columns = sql.unsafe("photo_id AS photoId, manifest, finalized_at AS finalizedAt");
+    const columns = sql.unsafe(
+      "photo_id AS photoId, manifest, finalized_at AS finalizedAt"
+    );
 
     const select = SqlSchema.findOneOption({
-      execute: (photoId) => sql`SELECT ${columns} FROM photo WHERE photo_id = ${photoId}`,
+      execute: (photoId) =>
+        sql`SELECT ${columns} FROM photo WHERE photo_id = ${photoId}`,
       Request: PhotoId,
       Result: PhotoRow,
     });
@@ -100,15 +109,23 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> = Eff
     const attempt =
       (operation: string) =>
       <A, E, R>(statement: Effect.Effect<A, E, R>) =>
-        Effect.mapError(statement, (cause) => new LedgerUnavailable({ cause, operation }));
+        Effect.mapError(
+          statement,
+          (cause) => new LedgerUnavailable({ cause, operation })
+        );
 
     const find: Ledger["find"] = (photoId) =>
-      select(photoId).pipe(attempt("ledger.find"), Effect.map(Option.map(toStored)));
+      select(photoId).pipe(
+        attempt("ledger.find"),
+        Effect.map(Option.map(toStored))
+      );
 
     const declare: Ledger["declare"] = (photoId, manifest, nowMillis) =>
       Effect.gen(function* () {
         const stored = toStored(
-          yield* upsert({ manifest, nowMillis, photoId }).pipe(attempt("ledger.declare")),
+          yield* upsert({ manifest, nowMillis, photoId }).pipe(
+            attempt("ledger.declare")
+          )
         );
         if (!sameManifest(stored.manifest, manifest)) {
           return yield* new LedgerManifestConflict({ photoId });
@@ -118,10 +135,14 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> = Eff
 
     const markFinal: Ledger["markFinal"] = (photoId, verified, nowMillis) =>
       Effect.gen(function* () {
-        const marked = yield* compareAndMark({ manifest: verified, nowMillis, photoId }).pipe(
-          attempt("ledger.markFinal"),
-        );
-        const stored = Option.isSome(marked) ? Option.map(marked, toStored) : yield* find(photoId);
+        const marked = yield* compareAndMark({
+          manifest: verified,
+          nowMillis,
+          photoId,
+        }).pipe(attempt("ledger.markFinal"));
+        const stored = Option.isSome(marked)
+          ? Option.map(marked, toStored)
+          : yield* find(photoId);
         if (
           Option.isSome(stored) &&
           stored.value._tag === "Draft" &&
@@ -133,5 +154,4 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> = Eff
       });
 
     return { declare, find, markFinal };
-  },
-);
+  });

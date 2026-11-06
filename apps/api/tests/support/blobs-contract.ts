@@ -8,10 +8,13 @@ import { ByteCount, Sha256 } from "../../src/photos/domain.ts";
 
 export interface BlobsCase {
   readonly name: string;
-  readonly run: (key: (name: string) => BlobKey) => Effect.Effect<void, unknown, Blobs>;
+  readonly run: (
+    key: (name: string) => BlobKey
+  ) => Effect.Effect<void, unknown, Blobs>;
 }
 
-const bytesOf = (length: number) => Uint8Array.from({ length }, (_, index) => (index * 7) % 256);
+const bytesOf = (length: number) =>
+  Uint8Array.from({ length }, (_, index) => (index * 7) % 256);
 
 const expectFor = (bytes: Uint8Array) =>
   Effect.gen(function* () {
@@ -27,8 +30,8 @@ const WRONG_SHA = Sha256.make("00".repeat(32));
 const chunked = (bytes: Uint8Array, size: number) =>
   Stream.fromIterable(
     Array.from({ length: Math.ceil(bytes.length / size) }, (_, index) =>
-      bytes.subarray(index * size, (index + 1) * size),
-    ),
+      bytes.subarray(index * size, (index + 1) * size)
+    )
   );
 
 export const blobsContract: ReadonlyArray<BlobsCase> = [
@@ -50,8 +53,13 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
       Effect.gen(function* () {
         const blobs = yield* Blobs;
         const bytes = bytesOf(5000);
-        const wrong = { bytes: ByteCount.make(bytes.length), sha256: WRONG_SHA };
-        const failure = yield* blobs.put(key("b"), Stream.make(bytes), wrong).pipe(Effect.flip);
+        const wrong = {
+          bytes: ByteCount.make(bytes.length),
+          sha256: WRONG_SHA,
+        };
+        const failure = yield* blobs
+          .put(key("b"), Stream.make(bytes), wrong)
+          .pipe(Effect.flip);
         strictEqual(failure._tag, "BlobRejected");
         strictEqual(yield* blobs.prefix(key("b"), 1), null);
       }),
@@ -63,7 +71,11 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
         const blobs = yield* Blobs;
         const bytes = bytesOf(5000);
         const exit = yield* Effect.exit(
-          blobs.put(key("c"), Stream.make(bytes.slice(0, 100)), yield* expectFor(bytes)),
+          blobs.put(
+            key("c"),
+            Stream.make(bytes.slice(0, 100)),
+            yield* expectFor(bytes)
+          )
         );
         strictEqual(Exit.isFailure(exit), true);
         strictEqual(yield* blobs.prefix(key("c"), 1), null);
@@ -78,10 +90,16 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
         const expected = yield* expectFor(bytes);
         strictEqual(yield* blobs.holds(key("d"), expected), false);
         yield* blobs.put(key("d"), Stream.make(bytes), expected);
-        strictEqual(yield* blobs.holds(key("d"), { ...expected, sha256: WRONG_SHA }), false);
         strictEqual(
-          yield* blobs.holds(key("d"), { ...expected, bytes: ByteCount.make(2999) }),
-          false,
+          yield* blobs.holds(key("d"), { ...expected, sha256: WRONG_SHA }),
+          false
+        );
+        strictEqual(
+          yield* blobs.holds(key("d"), {
+            ...expected,
+            bytes: ByteCount.make(2999),
+          }),
+          false
         );
       }),
   },
@@ -103,7 +121,9 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
         strictEqual(bad._tag, "BlobRejected");
         strictEqual(yield* blobs.prefix(key("to-bad"), 1), null);
 
-        const missing = yield* blobs.copy(key("absent"), key("to-2"), expected).pipe(Effect.flip);
+        const missing = yield* blobs
+          .copy(key("absent"), key("to-2"), expected)
+          .pipe(Effect.flip);
         strictEqual(missing._tag, "BlobMissing");
       }),
   },
@@ -121,4 +141,5 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   },
 ];
 
-export const contractKey = (scope: string) => (name: string) => BlobKey.make(`${scope}/${name}`);
+export const contractKey = (scope: string) => (name: string) =>
+  BlobKey.make(`${scope}/${name}`);

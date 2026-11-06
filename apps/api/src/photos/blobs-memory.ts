@@ -13,7 +13,9 @@ interface StoredBlob {
 }
 
 const concat = (chunks: ReadonlyArray<Uint8Array>): Uint8Array => {
-  const out = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
+  const out = new Uint8Array(
+    chunks.reduce((total, chunk) => total + chunk.length, 0)
+  );
   let at = 0;
   for (const chunk of chunks) {
     out.set(chunk, at);
@@ -24,10 +26,16 @@ const concat = (chunks: ReadonlyArray<Uint8Array>): Uint8Array => {
 
 export const makeMemoryBlobs = () => {
   const objects = new Map<BlobKey, StoredBlob>();
-  const pending = new Map<BlobOperation, Effect.Effect<void, BlobUnavailable>>();
+  const pending = new Map<
+    BlobOperation,
+    Effect.Effect<void, BlobUnavailable>
+  >();
 
   const faults = {
-    beforeNext: (operation: BlobOperation, effect: Effect.Effect<void, BlobUnavailable>) => {
+    beforeNext: (
+      operation: BlobOperation,
+      effect: Effect.Effect<void, BlobUnavailable>
+    ) => {
       pending.set(operation, effect);
     },
     corrupt: (key: BlobKey) => {
@@ -41,7 +49,7 @@ export const makeMemoryBlobs = () => {
     failNext: (operation: BlobOperation) => {
       pending.set(
         operation,
-        Effect.fail(new BlobUnavailable({ cause: "injected fault", operation })),
+        Effect.fail(new BlobUnavailable({ cause: "injected fault", operation }))
       );
     },
   };
@@ -81,18 +89,25 @@ export const makeMemoryBlobs = () => {
           fault("holds").pipe(
             Effect.map(() => {
               const blob = objects.get(key);
-              return blob?.bytes.length === expect.bytes && blob.sha256 === expect.sha256;
-            }),
+              return (
+                blob?.bytes.length === expect.bytes &&
+                blob.sha256 === expect.sha256
+              );
+            })
           ),
         prefix: (key, length) =>
-          fault("prefix").pipe(Effect.map(() => objects.get(key)?.bytes.slice(0, length) ?? null)),
+          fault("prefix").pipe(
+            Effect.map(() => objects.get(key)?.bytes.slice(0, length) ?? null)
+          ),
         put: (key, body, expect) =>
           Effect.gen(function* () {
             yield* fault("put");
             const bytes = concat(
               yield* Stream.runCollect(body).pipe(
-                Effect.mapError((cause) => new BlobUnavailable({ cause, operation: "put" })),
-              ),
+                Effect.mapError(
+                  (cause) => new BlobUnavailable({ cause, operation: "put" })
+                )
+              )
             );
             objects.set(key, yield* verified(key, bytes, expect));
           }),
@@ -102,10 +117,10 @@ export const makeMemoryBlobs = () => {
               for (const key of keys) {
                 objects.delete(key);
               }
-            }),
+            })
           ),
       });
-    }),
+    })
   );
 
   return { faults, layer, objects };

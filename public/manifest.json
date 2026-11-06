@@ -27,9 +27,7 @@
     }
   ],
   "orientation": "portrait",
-  "categories": [
-    "developer"
-  ],
+  "categories": ["developer"],
   "lang": "en-US",
   "dir": "ltr"
 }

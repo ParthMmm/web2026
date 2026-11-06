@@ -1,15 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [
-    ".astro/types.d.ts",
-    "**/*"
-  ],
-  "exclude": [
-    "dist",
-    ".alchemy",
-    "apps/api",
-    "workers"
-  ],
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", ".alchemy", "apps/api", "workers"],
   "compilerOptions": {
     "module": "preserve",
     "moduleResolution": "bundler",
@@ -23,9 +15,7 @@
     "skipLibCheck": true,
     "allowJs": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react"

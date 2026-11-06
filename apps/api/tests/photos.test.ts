@@ -25,7 +25,7 @@ const harness = () => {
   const layer = Photos.layer.pipe(
     Layer.provideMerge(blobs.layer),
     Layer.provideMerge(migratedSqlite()),
-    Layer.provideMerge(Digest.layerWebCrypto),
+    Layer.provideMerge(Digest.layerWebCrypto)
   );
   return { ...blobs, layer };
 };
@@ -33,7 +33,7 @@ const harness = () => {
 const uploadAll = (
   photoId: PhotoId,
   bodies: Bodies,
-  kinds: ReadonlyArray<VariantKind> = variantKinds,
+  kinds: ReadonlyArray<VariantKind> = variantKinds
 ) =>
   Effect.gen(function* () {
     const photos = yield* Photos;
@@ -49,7 +49,7 @@ const uploadAll = (
 
 const missingOf = (photoId: PhotoId) =>
   Photos.use((photos) => photos.get(photoId)).pipe(
-    Effect.map((view) => (view._tag === "Uploading" ? view.missing : [])),
+    Effect.map((view) => (view._tag === "Uploading" ? view.missing : []))
   );
 
 const keysUnder = (objects: ReadonlyMap<BlobKey, unknown>, prefix: string) =>
@@ -64,7 +64,9 @@ const expireStaging = (objects: Map<BlobKey, unknown>) => {
 const rejectedProblems = (photoId: PhotoId) =>
   Photos.use((photos) => photos.finalize(photoId)).pipe(
     Effect.flip,
-    Effect.map((failure) => (failure._tag === "FinalizeRejected" ? failure.problems : failure)),
+    Effect.map((failure) =>
+      failure._tag === "FinalizeRejected" ? failure.problems : failure
+    )
   );
 
 it.effect(
@@ -76,7 +78,11 @@ it.effect(
       const { bodies, manifest, photoId } = yield* fixture();
 
       const begun = yield* photos.begin(manifest);
-      expect(begun).toMatchObject({ _tag: "Uploading", missing: variantKinds, photoId });
+      expect(begun).toMatchObject({
+        _tag: "Uploading",
+        missing: variantKinds,
+        photoId,
+      });
 
       yield* uploadAll(photoId, bodies);
       expect(yield* missingOf(photoId)).toEqual([]);
@@ -89,101 +95,120 @@ it.effect(
       expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
       expect(keysUnder(objects, "staging/")).toEqual([]);
     }).pipe(Effect.provide(layer));
-  },
+  }
 );
 
-it.effect("store rejects bytes that do not hash to the declared sha256 and keeps nothing", () => {
-  const { layer, objects } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
+it.effect(
+  "store rejects bytes that do not hash to the declared sha256 and keeps nothing",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
 
-    const tampered = Uint8Array.from(bodies.original);
-    tampered[0] = (tampered[0] ?? 0) ^ 0xff;
-    const failure = yield* photos
-      .store({
-        body: Stream.make(tampered),
-        contentLength: tampered.length,
-        kind: "original",
-        photoId,
-      })
-      .pipe(Effect.flip);
+      const tampered = Uint8Array.from(bodies.original);
+      tampered[0] = (tampered[0] ?? 0) ^ 0xff;
+      const failure = yield* photos
+        .store({
+          body: Stream.make(tampered),
+          contentLength: tampered.length,
+          kind: "original",
+          photoId,
+        })
+        .pipe(Effect.flip);
 
-    expect(failure).toMatchObject({ _tag: "HashMismatch", kind: "original" });
-    expect(objects.size).toBe(0);
-    expect(yield* missingOf(photoId)).toEqual(variantKinds);
-  }).pipe(Effect.provide(layer));
-});
+      expect(failure).toMatchObject({ _tag: "HashMismatch", kind: "original" });
+      expect(objects.size).toBe(0);
+      expect(yield* missingOf(photoId)).toEqual(variantKinds);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-it.effect("store rejects a declared length that differs before reading the body", () => {
-  const { layer, objects } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
+it.effect(
+  "store rejects a declared length that differs before reading the body",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
 
-    const failure = yield* photos
-      .store({
-        body: Stream.die("the body must not be read"),
-        contentLength: bodies.w480.length + 1,
+      const failure = yield* photos
+        .store({
+          body: Stream.die("the body must not be read"),
+          contentLength: bodies.w480.length + 1,
+          kind: "w480",
+          photoId,
+        })
+        .pipe(Effect.flip);
+
+      expect(failure).toMatchObject({
+        _tag: "LengthMismatch",
+        expected: bodies.w480.length,
         kind: "w480",
-        photoId,
-      })
-      .pipe(Effect.flip);
+        received: bodies.w480.length + 1,
+      });
+      expect(objects.size).toBe(0);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-    expect(failure).toMatchObject({
-      _tag: "LengthMismatch",
-      expected: bodies.w480.length,
-      kind: "w480",
-      received: bodies.w480.length + 1,
-    });
-    expect(objects.size).toBe(0);
-  }).pipe(Effect.provide(layer));
-});
+it.effect(
+  "store names a body that ends early a LengthMismatch with the bytes counted",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
 
-it.effect("store names a body that ends early a LengthMismatch with the bytes counted", () => {
-  const { layer, objects } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
+      const failure = yield* photos
+        .store({
+          body: Stream.make(bodies.original.subarray(0, 100)),
+          contentLength: bodies.original.length,
+          kind: "original",
+          photoId,
+        })
+        .pipe(Effect.flip);
 
-    const failure = yield* photos
-      .store({
-        body: Stream.make(bodies.original.subarray(0, 100)),
+      expect(failure).toMatchObject({
+        _tag: "LengthMismatch",
+        kind: "original",
+        received: 100,
+      });
+      expect(objects.size).toBe(0);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "store, get and finalize answer PhotoNotFound for an undeclared photo",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, photoId } = yield* fixture();
+      const store = photos.store({
+        body: Stream.make(bodies.original),
         contentLength: bodies.original.length,
         kind: "original",
         photoId,
-      })
-      .pipe(Effect.flip);
-
-    expect(failure).toMatchObject({ _tag: "LengthMismatch", kind: "original", received: 100 });
-    expect(objects.size).toBe(0);
-  }).pipe(Effect.provide(layer));
-});
-
-it.effect("store, get and finalize answer PhotoNotFound for an undeclared photo", () => {
-  const { layer } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, photoId } = yield* fixture();
-    const store = photos.store({
-      body: Stream.make(bodies.original),
-      contentLength: bodies.original.length,
-      kind: "original",
-      photoId,
-    });
-    const calls: ReadonlyArray<Effect.Effect<unknown, unknown>> = [
-      store,
-      photos.get(photoId),
-      photos.finalize(photoId),
-    ];
-    for (const call of calls) {
-      expect(yield* Effect.flip(call)).toMatchObject({ _tag: "PhotoNotFound", photoId });
-    }
-  }).pipe(Effect.provide(layer));
-});
+      });
+      const calls: ReadonlyArray<Effect.Effect<unknown, unknown>> = [
+        store,
+        photos.get(photoId),
+        photos.finalize(photoId),
+      ];
+      for (const call of calls) {
+        expect(yield* Effect.flip(call)).toMatchObject({
+          _tag: "PhotoNotFound",
+          photoId,
+        });
+      }
+    }).pipe(Effect.provide(layer));
+  }
+);
 
 it.effect("store answers PhotoAlreadyDraft after finalize", () => {
   const { layer } = harness();
@@ -194,68 +219,79 @@ it.effect("store answers PhotoAlreadyDraft after finalize", () => {
     yield* uploadAll(photoId, bodies);
     yield* photos.finalize(photoId);
 
-    const failure = yield* uploadAll(photoId, bodies, ["w480"]).pipe(Effect.flip);
+    const failure = yield* uploadAll(photoId, bodies, ["w480"]).pipe(
+      Effect.flip
+    );
     expect(failure).toMatchObject({ _tag: "PhotoAlreadyDraft", photoId });
   }).pipe(Effect.provide(layer));
 });
 
-it.effect("finalize lists every missing variant and leaves the photo uploading", () => {
-  const { layer } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
-    yield* uploadAll(photoId, bodies, ["original", "w1200"]);
+it.effect(
+  "finalize lists every missing variant and leaves the photo uploading",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      yield* uploadAll(photoId, bodies, ["original", "w1200"]);
 
-    expect(yield* rejectedProblems(photoId)).toEqual([
-      { _tag: "Missing", kind: "w480" },
-      { _tag: "Missing", kind: "w2400" },
-    ]);
-    expect((yield* photos.get(photoId))._tag).toBe("Uploading");
-  }).pipe(Effect.provide(layer));
-});
+      expect(yield* rejectedProblems(photoId)).toEqual([
+        { _tag: "Missing", kind: "w480" },
+        { _tag: "Missing", kind: "w2400" },
+      ]);
+      expect((yield* photos.get(photoId))._tag).toBe("Uploading");
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-it.effect("finalize rejects a derivative whose header declares other dimensions", () => {
-  const { layer, objects } = harness();
-  return Effect.gen(function* () {
-    const { bodies, manifest, photoId } = yield* declare({
-      ...validBodies(),
-      w480: webp("VP8 ", EDGES.w480[0] + 1, EDGES.w480[1]),
-    });
-    yield* Photos.use((photos) => photos.begin(manifest));
-    yield* uploadAll(photoId, bodies);
+it.effect(
+  "finalize rejects a derivative whose header declares other dimensions",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* () {
+      const { bodies, manifest, photoId } = yield* declare({
+        ...validBodies(),
+        w480: webp("VP8 ", EDGES.w480[0] + 1, EDGES.w480[1]),
+      });
+      yield* Photos.use((photos) => photos.begin(manifest));
+      yield* uploadAll(photoId, bodies);
 
-    expect(yield* rejectedProblems(photoId)).toEqual([
-      {
-        _tag: "DimensionsMismatch",
-        expected: { height: 320, width: 480 },
-        found: { height: 320, width: 481 },
-        kind: "w480",
-      },
-    ]);
-    expect(keysUnder(objects, "photos/")).toEqual([]);
-  }).pipe(Effect.provide(layer));
-});
+      expect(yield* rejectedProblems(photoId)).toEqual([
+        {
+          _tag: "DimensionsMismatch",
+          expected: { height: 320, width: 480 },
+          found: { height: 320, width: 481 },
+          kind: "w480",
+        },
+      ]);
+      expect(keysUnder(objects, "photos/")).toEqual([]);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-it.effect("finalize rejects derivatives that are not WebP, carry metadata, or are animated", () => {
-  const { layer } = harness();
-  return Effect.gen(function* () {
-    const { bodies, manifest, photoId } = yield* declare({
-      ...validBodies(),
-      w1200: webp("VP8X", ...EDGES.w1200, withExif),
-      w2400: webp("VP8X", ...EDGES.w2400, animated),
-      w480: Uint8Array.from(validBodies(1).original.subarray(0, 64)),
-    });
-    yield* Photos.use((photos) => photos.begin(manifest));
-    yield* uploadAll(photoId, bodies);
+it.effect(
+  "finalize rejects derivatives that are not WebP, carry metadata, or are animated",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* () {
+      const { bodies, manifest, photoId } = yield* declare({
+        ...validBodies(),
+        w1200: webp("VP8X", ...EDGES.w1200, withExif),
+        w2400: webp("VP8X", ...EDGES.w2400, animated),
+        w480: Uint8Array.from(validBodies(1).original.subarray(0, 64)),
+      });
+      yield* Photos.use((photos) => photos.begin(manifest));
+      yield* uploadAll(photoId, bodies);
 
-    expect(yield* rejectedProblems(photoId)).toEqual([
-      { _tag: "NotWebp", kind: "w480" },
-      { _tag: "HasMetadata", kind: "w1200" },
-      { _tag: "Animated", kind: "w2400" },
-    ]);
-  }).pipe(Effect.provide(layer));
-});
+      expect(yield* rejectedProblems(photoId)).toEqual([
+        { _tag: "NotWebp", kind: "w480" },
+        { _tag: "HasMetadata", kind: "w1200" },
+        { _tag: "Animated", kind: "w2400" },
+      ]);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
 it.effect(
   "finalize reports a staged object whose bytes rotted as Corrupt and promotes nothing for it",
@@ -269,10 +305,14 @@ it.effect(
         faults.corrupt(staged);
       }
 
-      expect(yield* rejectedProblems(photoId)).toEqual([{ _tag: "Corrupt", kind: "w1200" }]);
-      expect((yield* Photos.use((photos) => photos.get(photoId)))._tag).toBe("Uploading");
+      expect(yield* rejectedProblems(photoId)).toEqual([
+        { _tag: "Corrupt", kind: "w1200" },
+      ]);
+      expect((yield* Photos.use((photos) => photos.get(photoId)))._tag).toBe(
+        "Uploading"
+      );
     }).pipe(Effect.provide(layer));
-  },
+  }
 );
 
 it.effect(
@@ -285,7 +325,10 @@ it.effect(
       yield* photos.begin(first.manifest);
       yield* uploadAll(first.photoId, first.bodies);
 
-      const rerendered = yield* declare({ ...first.bodies, w480: webp("VP8L", ...EDGES.w480) });
+      const rerendered = yield* declare({
+        ...first.bodies,
+        w480: webp("VP8L", ...EDGES.w480),
+      });
       const view = yield* photos.begin(rerendered.manifest);
 
       expect(view).toMatchObject({
@@ -294,46 +337,55 @@ it.effect(
         missing: ["w480"],
       });
     }).pipe(Effect.provide(layer));
-  },
+  }
 );
 
-it.effect("begin refuses a different manifest for a draft with PhotoManifestConflict", () => {
-  const { layer } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
-    yield* uploadAll(photoId, bodies);
-    const draft = yield* photos.finalize(photoId);
+it.effect(
+  "begin refuses a different manifest for a draft with PhotoManifestConflict",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      yield* uploadAll(photoId, bodies);
+      const draft = yield* photos.finalize(photoId);
 
-    const other: Manifest = { ...manifest, w480: { ...manifest.w480, height: 319 } };
-    expect(yield* Effect.flip(photos.begin(other))).toMatchObject({
-      _tag: "PhotoManifestConflict",
-      photoId,
-    });
-    expect(yield* photos.get(photoId)).toEqual(draft);
-  }).pipe(Effect.provide(layer));
-});
+      const other: Manifest = {
+        ...manifest,
+        w480: { ...manifest.w480, height: 319 },
+      };
+      expect(yield* Effect.flip(photos.begin(other))).toMatchObject({
+        _tag: "PhotoManifestConflict",
+        photoId,
+      });
+      expect(yield* photos.get(photoId)).toEqual(draft);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-it.effect("a finalize that fails part way through promotion converges when it runs again", () => {
-  const { faults, layer, objects } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
-    yield* uploadAll(photoId, bodies);
+it.effect(
+  "a finalize that fails part way through promotion converges when it runs again",
+  () => {
+    const { faults, layer, objects } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      yield* uploadAll(photoId, bodies);
 
-    faults.failNext("copy");
-    expect(yield* Effect.flip(photos.finalize(photoId))).toMatchObject({
-      _tag: "StorageUnavailable",
-      operation: "copy",
-    });
-    expect((yield* photos.get(photoId))._tag).toBe("Uploading");
+      faults.failNext("copy");
+      expect(yield* Effect.flip(photos.finalize(photoId))).toMatchObject({
+        _tag: "StorageUnavailable",
+        operation: "copy",
+      });
+      expect((yield* photos.get(photoId))._tag).toBe("Uploading");
 
-    expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
-    expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
-  }).pipe(Effect.provide(layer));
-});
+      expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
+      expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
 it.effect(
   "a finalize that promoted everything but failed to mark converges after staging has expired",
@@ -347,7 +399,7 @@ it.effect(
       yield* uploadAll(photoId, bodies);
 
       yield* sql.unsafe(
-        "CREATE TRIGGER refuse_mark BEFORE UPDATE OF finalized_at ON photo BEGIN SELECT RAISE(ABORT, 'injected'); END",
+        "CREATE TRIGGER refuse_mark BEFORE UPDATE OF finalized_at ON photo BEGIN SELECT RAISE(ABORT, 'injected'); END"
       );
       expect(yield* Effect.flip(photos.finalize(photoId))).toMatchObject({
         _tag: "StorageUnavailable",
@@ -360,40 +412,52 @@ it.effect(
       expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
       expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
     }).pipe(Effect.provide(layer));
-  },
+  }
 );
 
-it.effect("store answers StorageUnavailable when storage fails before the body is read", () => {
-  const { faults, layer } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
-    faults.failNext("put");
-    const failure = yield* Effect.flip(
-      photos.store({
-        body: Stream.make(bodies.w480),
-        contentLength: bodies.w480.length,
-        kind: "w480",
-        photoId,
-      }),
-    );
-    expect(failure).toMatchObject({ _tag: "StorageUnavailable", operation: "put" });
-  }).pipe(Effect.provide(layer));
-});
+it.effect(
+  "store answers StorageUnavailable when storage fails before the body is read",
+  () => {
+    const { faults, layer } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      faults.failNext("put");
+      const failure = yield* Effect.flip(
+        photos.store({
+          body: Stream.make(bodies.w480),
+          contentLength: bodies.w480.length,
+          kind: "w480",
+          photoId,
+        })
+      );
+      expect(failure).toMatchObject({
+        _tag: "StorageUnavailable",
+        operation: "put",
+      });
+    }).pipe(Effect.provide(layer));
+  }
+);
 
-it.effect("a finalize that loses a race to a finished finalize returns the draft", () => {
-  const { faults, layer, objects } = harness();
-  return Effect.gen(function* () {
-    const photos = yield* Photos;
-    const { bodies, manifest, photoId } = yield* fixture();
-    yield* photos.begin(manifest);
-    yield* uploadAll(photoId, bodies);
-    faults.beforeNext("copy", photos.finalize(photoId).pipe(Effect.asVoid, Effect.orDie));
-    expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
-    expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
-  }).pipe(Effect.provide(layer));
-});
+it.effect(
+  "a finalize that loses a race to a finished finalize returns the draft",
+  () => {
+    const { faults, layer, objects } = harness();
+    return Effect.gen(function* () {
+      const photos = yield* Photos;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      yield* uploadAll(photoId, bodies);
+      faults.beforeNext(
+        "copy",
+        photos.finalize(photoId).pipe(Effect.asVoid, Effect.orDie)
+      );
+      expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
+      expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
+    }).pipe(Effect.provide(layer));
+  }
+);
 
 it.effect(
   "a final object promoted for an older manifest does not satisfy a re-declared one",
@@ -406,19 +470,24 @@ it.effect(
       yield* photos.begin(first.manifest);
       yield* uploadAll(first.photoId, first.bodies);
       yield* sql.unsafe(
-        "CREATE TRIGGER refuse_mark BEFORE UPDATE OF finalized_at ON photo BEGIN SELECT RAISE(ABORT, 'injected'); END",
+        "CREATE TRIGGER refuse_mark BEFORE UPDATE OF finalized_at ON photo BEGIN SELECT RAISE(ABORT, 'injected'); END"
       );
       yield* Effect.flip(photos.finalize(first.photoId));
       yield* sql.unsafe("DROP TRIGGER refuse_mark");
       expireStaging(objects);
 
-      const rerendered = yield* declare({ ...first.bodies, w2400: webp("VP8L", ...EDGES.w2400) });
+      const rerendered = yield* declare({
+        ...first.bodies,
+        w2400: webp("VP8L", ...EDGES.w2400),
+      });
       const view = yield* photos.begin(rerendered.manifest);
 
       expect(view).toMatchObject({ _tag: "Uploading", missing: ["w2400"] });
-      expect(yield* rejectedProblems(first.photoId)).toEqual([{ _tag: "Missing", kind: "w2400" }]);
+      expect(yield* rejectedProblems(first.photoId)).toEqual([
+        { _tag: "Missing", kind: "w2400" },
+      ]);
     }).pipe(Effect.provide(layer));
-  },
+  }
 );
 
 it.effect(
@@ -430,11 +499,14 @@ it.effect(
       const first = yield* fixture();
       yield* photos.begin(first.manifest);
       yield* uploadAll(first.photoId, first.bodies);
-      const rerendered = yield* declare({ ...first.bodies, w480: webp("VP8L", ...EDGES.w480) });
+      const rerendered = yield* declare({
+        ...first.bodies,
+        w480: webp("VP8L", ...EDGES.w480),
+      });
 
       faults.beforeNext(
         "copy",
-        photos.begin(rerendered.manifest).pipe(Effect.asVoid, Effect.orDie),
+        photos.begin(rerendered.manifest).pipe(Effect.asVoid, Effect.orDie)
       );
 
       expect(yield* Effect.flip(photos.finalize(first.photoId))).toMatchObject({
@@ -447,5 +519,5 @@ it.effect(
         missing: ["w480"],
       });
     }).pipe(Effect.provide(layer));
-  },
+  }
 );

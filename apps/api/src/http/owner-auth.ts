@@ -11,15 +11,21 @@ export const ownerTokenAuth = (token: Redacted.Redacted<string>) =>
     OwnerAuth,
     Effect.gen(function* () {
       const digest = yield* Digest.Digest;
-      const wanted = yield* digest.digest(Digest.sha256, encode(Redacted.value(token)));
+      const wanted = yield* digest.digest(
+        Digest.sha256,
+        encode(Redacted.value(token))
+      );
       return OwnerAuth.of({
         bearer: (httpEffect, { credential }) =>
           Effect.gen(function* () {
-            const given = yield* digest.digest(Digest.sha256, encode(Redacted.value(credential)));
+            const given = yield* digest.digest(
+              Digest.sha256,
+              encode(Redacted.value(credential))
+            );
             return Mac.timingSafeEqual(wanted, given)
               ? yield* httpEffect
               : yield* new Unauthorized();
           }),
       });
-    }),
+    })
   );

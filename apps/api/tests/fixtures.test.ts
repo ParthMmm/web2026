@@ -25,8 +25,10 @@ const errors = [
   StorageUnavailable,
 ];
 
-const roundTrip = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: unknown) =>
-  Schema.encodeUnknownSync(schema)(Schema.decodeUnknownSync(schema)(value));
+const roundTrip = <S extends Schema.Codec<unknown, unknown>>(
+  schema: S,
+  value: unknown
+) => Schema.encodeUnknownSync(schema)(Schema.decodeUnknownSync(schema)(value));
 
 it("every shared view fixture decodes and re-encodes to the same JSON", () => {
   for (const view of fixtures.views) {
@@ -46,6 +48,8 @@ it("every shared error fixture carries its error's tag and status and round-trip
 
 it("every invalid begin fixture fails the request schema", () => {
   for (const begin of fixtures.invalidBegins) {
-    expect(Exit.isFailure(Schema.decodeUnknownExit(BeginRequest)(begin))).toBe(true);
+    expect(Exit.isFailure(Schema.decodeUnknownExit(BeginRequest)(begin))).toBe(
+      true
+    );
   }
 });

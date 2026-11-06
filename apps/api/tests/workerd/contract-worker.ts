@@ -17,12 +17,16 @@ interface Env {
 }
 
 // SAFETY: makeHelpers reads only `LogicalId` from the bucket resource, to find the binding in env.
-const privateBucket = { LogicalId: "Private" } as unknown as Cloudflare.R2.Bucket;
+const privateBucket = {
+  LogicalId: "Private",
+} as unknown as Cloudflare.R2.Bucket;
 
 const run = async (effect: Effect.Effect<void, unknown>) => {
   const exit = await Effect.runPromiseExit(effect);
   return Response.json(
-    Exit.isSuccess(exit) ? { ok: true } : { error: Cause.pretty(exit.cause), ok: false },
+    Exit.isSuccess(exit)
+      ? { ok: true }
+      : { error: Cause.pretty(exit.cause), ok: false }
   );
 };
 
@@ -34,14 +38,18 @@ export default {
 
     const contract = blobsContract.find((entry) => entry.name === name);
     if (url.pathname === "/blobs" && contract !== undefined) {
-      return run(contract.run(contractKey(crypto.randomUUID())).pipe(Effect.provide(blobs)));
+      return run(
+        contract
+          .run(contractKey(crypto.randomUUID()))
+          .pipe(Effect.provide(blobs))
+      );
     }
 
     const scenario = photosScenarios.find((entry) => entry.name === name);
     if (url.pathname === "/photos" && scenario !== undefined) {
       const photos = Photos.layer.pipe(
         Layer.provide([blobs, D1Client.layer({ db: env.Db })]),
-        Layer.provideMerge(Digest.layerWebCrypto),
+        Layer.provideMerge(Digest.layerWebCrypto)
       );
       return run(scenario.run.pipe(Effect.provide(photos)));
     }

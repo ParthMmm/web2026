@@ -31,22 +31,33 @@ import {
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
   "Unauthorized",
   {},
-  { httpApiStatus: 401 },
+  { httpApiStatus: 401 }
 ) {}
 
-export class OwnerAuth extends HttpApiMiddleware.Service<OwnerAuth>()("OwnerAuth", {
-  error: Unauthorized,
-  security: { bearer: HttpApiSecurity.bearer },
-}) {}
+export class OwnerAuth extends HttpApiMiddleware.Service<OwnerAuth>()(
+  "OwnerAuth",
+  {
+    error: Unauthorized,
+    security: { bearer: HttpApiSecurity.bearer },
+  }
+) {}
 
-export class RequestLog extends HttpApiMiddleware.Service<RequestLog>()("RequestLog") {}
+export class RequestLog extends HttpApiMiddleware.Service<RequestLog>()(
+  "RequestLog"
+) {}
 
-export const BeginRequest = Schema.Struct({ manifest: Manifest, photoId: PhotoId }).check(
+export const BeginRequest = Schema.Struct({
+  manifest: Manifest,
+  photoId: PhotoId,
+}).check(
   Schema.makeFilter(({ manifest, photoId }) =>
     photoId === photoIdOf(manifest)
       ? undefined
-      : { issue: "photoId must equal manifest.original.sha256", path: ["photoId"] },
-  ),
+      : {
+          issue: "photoId must equal manifest.original.sha256",
+          path: ["photoId"],
+        }
+  )
 );
 
 const PhotoParams = { photoId: PhotoId };
@@ -64,7 +75,13 @@ export const PhotosGroup = HttpApiGroup.make("photos")
       success: PhotoView,
     }),
     HttpApiEndpoint.put("put", "/v1/photos/:photoId/:kind", {
-      error: [PhotoNotFound, PhotoAlreadyDraft, LengthMismatch, HashMismatch, StorageUnavailable],
+      error: [
+        PhotoNotFound,
+        PhotoAlreadyDraft,
+        LengthMismatch,
+        HashMismatch,
+        StorageUnavailable,
+      ],
       headers: { "content-length": Schema.FiniteFromString },
       params: { kind: VariantKindSchema, photoId: PhotoId },
       payload: HttpApiSchema.StreamUint8Array({
@@ -74,10 +91,15 @@ export const PhotosGroup = HttpApiGroup.make("photos")
       success: HttpApiSchema.NoContent,
     }),
     HttpApiEndpoint.post("finalize", "/v1/photos/:photoId/finalize", {
-      error: [PhotoNotFound, PhotoManifestConflict, FinalizeRejected, StorageUnavailable],
+      error: [
+        PhotoNotFound,
+        PhotoManifestConflict,
+        FinalizeRejected,
+        StorageUnavailable,
+      ],
       params: PhotoParams,
       success: Draft,
-    }),
+    })
   )
   .middleware(OwnerAuth)
   .middleware(RequestLog);

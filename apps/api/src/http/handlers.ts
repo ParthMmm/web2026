@@ -26,15 +26,15 @@ const PhotosHandlers = HttpApiBuilder.group(
           photoId: params.photoId,
         }),
     });
-  }),
+  })
 );
 
 export const photosApp = <E>(
   photos: Layer.Layer<Photos, E>,
-  ownerToken: Redacted.Redacted<string>,
+  ownerToken: Redacted.Redacted<string>
 ) =>
   HttpApiBuilder.layer(Api).pipe(
     Layer.provide(PhotosHandlers),
     Layer.provide([photos, ownerTokenAuth(ownerToken), requestLog]),
-    Layer.provide([Digest.layerWebCrypto, Http.Platform]),
+    Layer.provide([Digest.layerWebCrypto, Http.Platform])
   );

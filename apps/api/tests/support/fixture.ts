@@ -17,7 +17,7 @@ export const webp = (
   chunk: "VP8 " | "VP8L" | "VP8X",
   width: number,
   height: number,
-  { flags = 0, totalBytes = WEBP_BYTES } = {},
+  { flags = 0, totalBytes = WEBP_BYTES } = {}
 ): Uint8Array => {
   const out = new Uint8Array(totalBytes);
   const view = new DataView(out.buffer);
@@ -44,7 +44,11 @@ export const webp = (
 export const withExif = { flags: VP8X_EXIF };
 export const animated = { flags: VP8X_ANIMATION };
 
-export const EDGES = { w1200: [1200, 800], w2400: [2400, 1600], w480: [480, 320] } as const;
+export const EDGES = {
+  w1200: [1200, 800],
+  w2400: [2400, 1600],
+  w480: [480, 320],
+} as const;
 
 export const factsOf = (bytes: Uint8Array) =>
   Effect.gen(function* () {
@@ -59,15 +63,30 @@ export const declare = (bodies: Bodies) =>
   Effect.gen(function* () {
     const manifest: Manifest = {
       original: yield* factsOf(bodies.original),
-      w1200: { ...(yield* factsOf(bodies.w1200)), height: EDGES.w1200[1], width: EDGES.w1200[0] },
-      w2400: { ...(yield* factsOf(bodies.w2400)), height: EDGES.w2400[1], width: EDGES.w2400[0] },
-      w480: { ...(yield* factsOf(bodies.w480)), height: EDGES.w480[1], width: EDGES.w480[0] },
+      w1200: {
+        ...(yield* factsOf(bodies.w1200)),
+        height: EDGES.w1200[1],
+        width: EDGES.w1200[0],
+      },
+      w2400: {
+        ...(yield* factsOf(bodies.w2400)),
+        height: EDGES.w2400[1],
+        width: EDGES.w2400[0],
+      },
+      w480: {
+        ...(yield* factsOf(bodies.w480)),
+        height: EDGES.w480[1],
+        width: EDGES.w480[0],
+      },
     };
     return { bodies, manifest, photoId: photoIdOf(manifest) };
   });
 
 export const validBodies = (seed = 0): Bodies => ({
-  original: Uint8Array.from({ length: ORIGINAL_BYTES }, (_, index) => (index + seed) % 251),
+  original: Uint8Array.from(
+    { length: ORIGINAL_BYTES },
+    (_, index) => (index + seed) % 251
+  ),
   w1200: webp("VP8L", ...EDGES.w1200),
   w2400: webp("VP8X", ...EDGES.w2400),
   w480: webp("VP8 ", ...EDGES.w480),

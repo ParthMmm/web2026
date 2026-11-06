@@ -9,7 +9,7 @@ import { fixture } from "../tests/support/fixture.ts";
 
 export const writePhotoFixture = async (dir: string) => {
   const { bodies, manifest } = await Effect.runPromise(
-    fixture().pipe(Effect.provide(Digest.layerWebCrypto)),
+    fixture().pipe(Effect.provide(Digest.layerWebCrypto))
   );
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));

@@ -4,7 +4,11 @@ import { Effect, Stream } from "effect";
 import { Digest } from "effect/crypto";
 
 import { variantKinds } from "../../src/photos/domain.ts";
-import type { Manifest, PhotoId, VariantKind } from "../../src/photos/domain.ts";
+import type {
+  Manifest,
+  PhotoId,
+  VariantKind,
+} from "../../src/photos/domain.ts";
 import { Photos } from "../../src/photos/photos.ts";
 import type { Bodies } from "../support/fixture.ts";
 import { declare, EDGES, validBodies, webp } from "../support/fixture.ts";
@@ -20,7 +24,7 @@ const declared = (seed: number) =>
 const upload = (
   photoId: PhotoId,
   bodies: Bodies,
-  kinds: ReadonlyArray<VariantKind> = variantKinds,
+  kinds: ReadonlyArray<VariantKind> = variantKinds
 ) =>
   Effect.forEach(
     kinds,
@@ -31,9 +35,9 @@ const upload = (
           contentLength: bodies[kind].length,
           kind,
           photoId,
-        }),
+        })
       ),
-    { discard: true },
+    { discard: true }
   );
 
 export const photosScenarios: ReadonlyArray<PhotosScenario> = [
@@ -43,7 +47,10 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(1);
       const begun = yield* photos.begin(manifest);
-      deepStrictEqual(begun._tag === "Uploading" && begun.missing, variantKinds);
+      deepStrictEqual(
+        begun._tag === "Uploading" && begun.missing,
+        variantKinds
+      );
       yield* upload(photoId, bodies);
       const first = yield* photos.finalize(photoId);
       strictEqual(first._tag, "Draft");
@@ -57,11 +64,15 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(2);
       yield* photos.begin(manifest);
-      const rerendered = yield* declare({ ...bodies, w480: webp("VP8L", ...EDGES.w480) }).pipe(
-        Effect.provide(Digest.layerWebCrypto),
-      );
+      const rerendered = yield* declare({
+        ...bodies,
+        w480: webp("VP8L", ...EDGES.w480),
+      }).pipe(Effect.provide(Digest.layerWebCrypto));
       const replaced = yield* photos.begin(rerendered.manifest);
-      deepStrictEqual(replaced._tag === "Uploading" && replaced.missing, variantKinds);
+      deepStrictEqual(
+        replaced._tag === "Uploading" && replaced.missing,
+        variantKinds
+      );
       yield* upload(photoId, rerendered.bodies);
       yield* photos.finalize(photoId);
       const conflict = yield* Effect.flip(photos.begin(manifest));
@@ -82,7 +93,7 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
           contentLength: tampered.length,
           kind: "w480",
           photoId,
-        }),
+        })
       );
       strictEqual(failure._tag, "HashMismatch");
       const view = yield* photos.get(photoId);
@@ -101,11 +112,14 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
           contentLength: bodies.original.length,
           kind: "original",
           photoId,
-        }),
+        })
       );
       deepStrictEqual(
-        failure._tag === "LengthMismatch" && { kind: failure.kind, received: failure.received },
-        { kind: "original", received: 100 },
+        failure._tag === "LengthMismatch" && {
+          kind: failure.kind,
+          received: failure.received,
+        },
+        { kind: "original", received: 100 }
       );
     }),
   },

@@ -10,12 +10,13 @@ const files = ["src", "tests", "scripts"].flatMap((dir) =>
   readdirSync(join(ROOT, dir), { encoding: "utf8", recursive: true })
     .filter((path) => path.endsWith(".ts"))
     .map((path) => join(dir, path))
-    .filter((path) => path !== SELF),
+    .filter((path) => path !== SELF)
 );
 
 const offenders = (allowed: (file: string) => boolean, pattern: string) =>
   files.filter(
-    (file) => !allowed(file) && readFileSync(join(ROOT, file), "utf8").includes(pattern),
+    (file) =>
+      !allowed(file) && readFileSync(join(ROOT, file), "utf8").includes(pattern)
   );
 
 it("keeps photos/internal reachable only from inside src/photos and the parser's own test", () => {
