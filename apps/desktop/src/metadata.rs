@@ -230,17 +230,27 @@ impl PhotoMetadata {
         let parts: Vec<String> = [
             self.iso.map(|iso| format!("ISO {iso}")),
             self.exposure_time.map(|time| time.to_string()),
-            self.f_number
-                .map(|f_number| format!("f/{}", trim_decimal(f_number, 1))),
-            self.focal_length_mm.map(|focal| {
-                let places = if focal < 10.0 { 1 } else { 0 };
-                format!("{} mm", trim_decimal(focal, places))
-            }),
+            self.aperture(),
+            self.focal_length(),
         ]
         .into_iter()
         .flatten()
         .collect();
         (!parts.is_empty()).then(|| parts.join(" · "))
+    }
+
+    /// For example `f/2.8`.
+    pub fn aperture(&self) -> Option<String> {
+        self.f_number
+            .map(|f_number| format!("f/{}", trim_decimal(f_number, 1)))
+    }
+
+    /// For example `85 mm`, or `4.5 mm` for a short lens.
+    pub fn focal_length(&self) -> Option<String> {
+        self.focal_length_mm.map(|focal| {
+            let places = if focal < 10.0 { 1 } else { 0 };
+            format!("{} mm", trim_decimal(focal, places))
+        })
     }
 
     /// Camera name without repeating a make the model already contains.

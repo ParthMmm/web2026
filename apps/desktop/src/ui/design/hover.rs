@@ -11,7 +11,7 @@
 
 use std::{cell::RefCell, collections::HashMap, time::Instant};
 
-use gpui_kit::{App, EntityId};
+use gpui::{App, EntityId};
 
 use super::motion::{HOVER_FADE, lease_while, lerp};
 

@@ -2,28 +2,30 @@
 
 mod benchmark;
 mod cache;
+mod components;
 pub mod design;
 mod format;
 mod gallery;
+mod layout;
+mod regions;
 mod view;
 
 pub use gallery::{Gallery, GalleryOptions};
 
 use design::{ActiveDesign as _, glass};
-use gpui_kit::{
+use gpui::{
     App, AppContext as _, Bounds, KeyBinding, Menu, MenuItem, Styled as _, WindowBounds,
-    WindowOptions,
-    component::{Root, Theme, TitleBar},
-    px, size, transparent_black,
+    WindowOptions, px, size, transparent_black,
 };
+use gpui_component::{Root, Theme, TitleBar};
 use std::path::PathBuf;
 
 const GRID_CONTEXT: &str = "PhotoGrid";
 const VIEWER_CONTEXT: &str = "PhotoViewer";
-/// The window's object, shown in the title strip.
+/// The app's name in the menu bar.
 pub(super) const APP_NAME: &str = "Photo prototype";
 
-gpui_kit::actions!(
+gpui::actions!(
     photo_library,
     [
         Import,
@@ -51,10 +53,11 @@ gpui_kit::actions!(
 pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
     let benchmark_seconds = benchmark::seconds_from_env();
     let benchmark_mode = benchmark_seconds.is_some();
-    gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+    gpui_platform::application()
+        .with_assets(gpui_component_assets::Assets)
         .run(move |cx| {
-            gpui_kit::init(cx);
+            gpui_component::init(cx);
+            design::theme::install(cx);
             // The material is read imperatively at paint time, so the surface
             // preference has to be resolved before the first paint.
             design::init(cx);
@@ -111,7 +114,7 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
 /// hierarchy whenever the value is anything but `Blurred`, so a window whose
 /// material was only ever set once goes permanently opaque the first time the
 /// system switches between light and dark.
-fn reapply_window_background(window: &mut gpui_kit::Window, cx: &mut App) {
+fn reapply_window_background(window: &mut gpui::Window, cx: &mut App) {
     let design = cx.design();
     let material = glass::window_background(design);
     if std::env::var_os("PHOTO_GLASS_DEBUG").is_some() {
@@ -123,7 +126,7 @@ fn reapply_window_background(window: &mut gpui_kit::Window, cx: &mut App) {
     window.set_background_appearance(material);
 }
 
-fn bind_keys(cx: &mut gpui_kit::App) {
+fn bind_keys(cx: &mut gpui::App) {
     let grid = Some(GRID_CONTEXT);
     let viewer = Some(VIEWER_CONTEXT);
     cx.bind_keys([

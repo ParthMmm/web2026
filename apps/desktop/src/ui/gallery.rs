@@ -9,10 +9,11 @@ use crate::{
     grid::{self, Movement},
     photos,
 };
-use gpui_kit::{
+use gpui::{
     Context, Entity, FocusHandle, PathPromptOptions, ScrollStrategy, SharedString, Subscription,
-    UniformListScrollHandle, Window, component::Theme,
+    UniformListScrollHandle, Window,
 };
+use gpui_component::Theme;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -400,6 +401,11 @@ impl Gallery {
         self.photos.iter_mut().find(|photo| &photo.record.id == id)
     }
 
+    /// The large-preview state, when it belongs to `photo`.
+    pub(super) fn preview_for(&self, photo: &PhotoId) -> Option<&Preview> {
+        self.preview.as_ref().filter(|preview| &preview.id == photo)
+    }
+
     pub(super) fn selected_index(&self) -> Option<usize> {
         let selected = self.selected.as_ref()?;
         self.photos
@@ -409,6 +415,12 @@ impl Gallery {
 
     pub(super) fn selected_photo(&self) -> Option<&GalleryPhoto> {
         self.selected_index().map(|index| &self.photos[index])
+    }
+
+    pub(super) fn select_id(&mut self, id: &PhotoId, cx: &mut Context<Self>) {
+        if let Some(index) = self.photos.iter().position(|photo| &photo.record.id == id) {
+            self.select_index(index, cx);
+        }
     }
 
     pub(super) fn select_index(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -625,7 +637,10 @@ impl Gallery {
                 self.selected = Some(photo.record.id.clone());
                 self.request_preview();
             }
-            window.request_animation_frame();
+            // ZUI caps an inactive window near 30 fps; the benchmark window is
+            // never active, and the gate measures display-rate frames.
+            let gallery = cx.entity_id();
+            window.on_next_display_frame(move |_, cx| cx.notify(gallery));
         }
         let image = self
             .preview
@@ -637,9 +652,9 @@ impl Gallery {
                 .as_ref()
                 .is_some_and(Benchmark::awaiting_decode),
         ) {
-            let resource = gpui_kit::Resource::from(image.to_path_buf());
+            let resource = gpui::Resource::from(image.to_path_buf());
             if let Some(result) = self.preview_cache.update(cx, |cache, cx| {
-                gpui_kit::ImageCache::load(cache, &resource, window, cx)
+                gpui::ImageCache::load(cache, &resource, window, cx)
             }) && let Some(benchmark) = &mut self.benchmark
             {
                 benchmark.preview_decoded(result.is_ok());

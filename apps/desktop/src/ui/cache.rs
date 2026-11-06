@@ -1,4 +1,4 @@
-use gpui_kit::{
+use gpui::{
     App, AppContext as _, Entity, ImageCache, ImageCacheError, RenderImage, Resource,
     RetainAllImageCache, Window,
 };

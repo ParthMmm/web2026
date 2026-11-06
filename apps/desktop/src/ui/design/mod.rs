@@ -7,17 +7,18 @@
 //! and hover fades for the states gpui snaps.
 //!
 //! `docs/photo-gallery/zeron-reference.md` carries the reasoning and the
-//! measurements. `gpui-pre 0.3.4` has no in-app backdrop blur and no per-pixel
-//! edge fade, so [`glass::frosted`] paints a tint without the blur pass and
-//! [`glass::edge_scrim`] gradients into an opaque plane.
+//! measurements. [`glass::frosted`] paints a tint without a blur pass and
+//! [`glass::edge_scrim`] gradients into an opaque plane; ZUI's `BackdropBlur`
+//! and `EdgeFade` can replace both.
 
 pub mod color;
 pub mod glass;
 pub mod hover;
 pub mod motion;
+pub mod theme;
 
-use gpui_kit::component::{ActiveTheme as _, Theme};
-use gpui_kit::{App, Hsla};
+use gpui::{App, Hsla};
+use gpui_component::{ActiveTheme as _, Theme};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use color::{best_on, flatten, hairline, ink, lighten_to_contrast, mix, wash};
@@ -112,18 +113,9 @@ const RECOMMENDED_TREATMENT: SurfaceTreatment = SurfaceTreatment::Frosted;
 
 /// Layout numbers. "Numbers drive layout, colours are paint": these are plain
 /// values and never depend on which palette is installed.
-///
-/// The titlebar arithmetic is worth keeping: a top-only pad moves a
-/// flex-centred row by half its value, so `38 / 2 + 5 / 2 = 21.5` lands the
-/// traffic lights and the title text on the same optical centre.
-pub const TITLEBAR_HEIGHT: f32 = 38.0;
-pub const TITLEBAR_TOP_PAD: f32 = 5.0;
 pub const HEADER_HEIGHT: f32 = 44.0;
 pub const STATUS_BAR_HEIGHT: f32 = 24.0;
-pub const PANEL_RADIUS: f32 = 10.0;
 pub const CONTROL_RADIUS: f32 = 6.0;
-pub const BUBBLE_RADIUS: f32 = 16.0;
-pub const SPACE_XS: f32 = 4.0;
 pub const SPACE_SM: f32 = 8.0;
 pub const SPACE_MD: f32 = 12.0;
 pub const SPACE_LG: f32 = 16.0;
@@ -135,7 +127,7 @@ pub const SCROLL_FADE_BAND: f32 = 24.0;
 ///
 /// Held here rather than left to the component's private default, so the grid's
 /// column count can subtract the width the sidebar takes.
-pub const SIDEBAR_WIDTH: f32 = 255.0;
+pub const SIDEBAR_WIDTH: f32 = 232.0;
 pub const SIDEBAR_COLLAPSED_WIDTH: f32 = 48.0;
 
 /// The resolved planes for one appearance. Everything is `Copy`, so a render
@@ -300,13 +292,13 @@ pub(crate) mod test_support {
     /// would pass by coincidence.
     pub(crate) fn design(appearance: Appearance, treatment: SurfaceTreatment) -> Design {
         let colors = match appearance {
-            Appearance::Dark => gpui_kit::component::ThemeColor::dark(),
-            Appearance::Light => gpui_kit::component::ThemeColor::light(),
+            Appearance::Dark => gpui_component::ThemeColor::dark(),
+            Appearance::Light => gpui_component::ThemeColor::light(),
         };
         let mut theme = Theme::from(colors.as_ref());
         theme.mode = match appearance {
-            Appearance::Dark => gpui_kit::component::ThemeMode::Dark,
-            Appearance::Light => gpui_kit::component::ThemeMode::Light,
+            Appearance::Dark => gpui_component::ThemeMode::Dark,
+            Appearance::Light => gpui_component::ThemeMode::Light,
         };
         let mut design = Design::new(&theme);
         design.surface_treatment = treatment;

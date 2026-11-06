@@ -3,9 +3,15 @@
 //! benchmark's contract.
 
 use super::cache::BoundedCache;
-use gpui_kit::gpui::{FrameEvent, FrameTimingCollector, WindowId, profiler};
-use gpui_kit::{App, Entity, Window, WindowKind, WindowOptions};
-use std::time::{Duration, Instant};
+use gpui::{
+    App, Canvas, Entity, FrameTiming, FrameTimingCollector, Window, WindowId, WindowKind,
+    WindowOptions, canvas, profiler,
+};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 /// Benchmark rows assume this many columns regardless of window width, so
 /// preview indices match `benchmark.py`'s warm preparation.
@@ -34,12 +40,11 @@ pub(super) fn seconds_from_env() -> Option<u64> {
 }
 
 pub(super) fn configure_window(window_options: &mut WindowOptions) {
-    // GPUI 0.3.4's macOS frame source follows NSWindowOcclusionState. A
-    // covered normal window stops receiving CVDisplayLink ticks even when it
-    // remains dirty. PopUp uses a non-activating panel at the popup level, so
-    // the benchmark stays visible to the compositor without taking focus.
+    // GPUI's macOS frame source follows NSWindowOcclusionState. A covered
+    // normal window stops receiving display-link ticks even when it remains
+    // dirty. PopUp uses a non-activating panel at the popup level, so the
+    // benchmark stays visible to the compositor without taking focus.
     window_options.focus = false;
-    window_options.inactive_frame_interval = None;
     window_options.kind = WindowKind::PopUp;
 }
 
@@ -69,29 +74,70 @@ pub(super) struct Benchmark {
     last_render: Instant,
 }
 
+/// One target-window event in time order. ZUI records draws; presentation
+/// times come from `Window::on_present`, which runs as the frame is handed to
+/// the platform layer.
+#[derive(Clone, Copy)]
+enum FrameEvent {
+    Draw { window_id: WindowId, at: Instant },
+    Present { window_id: WindowId, at: Instant },
+}
+
+impl FrameEvent {
+    fn at(self) -> Instant {
+        match self {
+            Self::Draw { at, .. } | Self::Present { at, .. } => at,
+        }
+    }
+}
+
 struct PresentTrace {
     collector: FrameTimingCollector,
+    presents: Rc<RefCell<Vec<Instant>>>,
     changed_trace_setting: bool,
 }
 
 impl PresentTrace {
     fn new() -> Self {
-        let changed_trace_setting = profiler::set_trace_enabled(true);
+        let changed_trace_setting = profiler::set_frame_trace_enabled(true);
         Self {
             collector: FrameTimingCollector::new(),
+            presents: Rc::default(),
             changed_trace_setting,
         }
     }
 
-    fn finish(&mut self, window_id: WindowId, started: Instant, ended: Instant) -> PresentSamples {
-        present_samples(&self.collector.collect_unseen(), window_id, started, ended)
+    fn finish(&mut self, window_id: WindowId) -> (Vec<FrameTiming>, Vec<FrameEvent>) {
+        let draws: Vec<FrameTiming> = self
+            .collector
+            .collect_unseen()
+            .into_iter()
+            .filter(|frame| frame.window_id == window_id)
+            .collect();
+        let mut events: Vec<FrameEvent> = draws
+            .iter()
+            .map(|frame| FrameEvent::Draw {
+                window_id,
+                at: frame.draw_end,
+            })
+            .chain(
+                self.presents
+                    .borrow()
+                    .iter()
+                    .map(|&at| FrameEvent::Present { window_id, at }),
+            )
+            .collect();
+        // Stable: a draw and its presentation can share an instant, and the
+        // draw was recorded first.
+        events.sort_by_key(|event| event.at());
+        (draws, events)
     }
 }
 
 impl Drop for PresentTrace {
     fn drop(&mut self) {
         if self.changed_trace_setting {
-            profiler::set_trace_enabled(false);
+            profiler::set_frame_trace_enabled(false);
         }
     }
 }
@@ -102,7 +148,6 @@ struct PresentSamples {
     superseded_draw_events: u64,
     pending_draw_events: u64,
     intervals_ms: Vec<f64>,
-    durations_ms: Vec<f64>,
     ordered: bool,
     first_present_ms: Option<f64>,
     last_present_age_ms: Option<f64>,
@@ -132,7 +177,6 @@ fn present_samples(
         superseded_draw_events: 0,
         pending_draw_events: 0,
         intervals_ms: Vec::new(),
-        durations_ms: Vec::new(),
         ordered: ended >= started,
         first_present_ms: None,
         last_present_age_ms: None,
@@ -140,12 +184,12 @@ fn present_samples(
     };
     let mut previous = None;
     for event in events {
-        match event {
-            FrameEvent::Draw(frame) if frame.window_id == window_id => {
+        match *event {
+            FrameEvent::Draw { window_id: id, .. } if id == window_id => {
                 samples.draw_events += 1;
                 samples.pending_draw_events += 1;
             }
-            FrameEvent::Present(frame) if frame.window_id == window_id => {
+            FrameEvent::Present { window_id: id, at } if id == window_id => {
                 samples.presented_frames += 1;
                 if samples.pending_draw_events == 0 {
                     samples.ordered = false;
@@ -153,30 +197,19 @@ fn present_samples(
                     samples.superseded_draw_events += samples.pending_draw_events - 1;
                     samples.pending_draw_events = 0;
                 }
-                samples.ordered &= frame.present_end >= started && frame.present_end <= ended;
-                if let Some(duration) = frame
-                    .present_end
-                    .checked_duration_since(frame.present_start)
-                {
-                    samples.durations_ms.push(millis(duration));
-                } else {
-                    samples.ordered = false;
-                }
+                samples.ordered &= at >= started && at <= ended;
                 if let Some(previous) = previous {
-                    if frame.present_end > previous {
+                    if at > previous {
                         samples
                             .intervals_ms
-                            .push(millis(frame.present_end.duration_since(previous)));
+                            .push(millis(at.duration_since(previous)));
                     } else {
                         samples.ordered = false;
                     }
                 } else {
-                    samples.first_present_ms = frame
-                        .present_end
-                        .checked_duration_since(started)
-                        .map(millis);
+                    samples.first_present_ms = at.checked_duration_since(started).map(millis);
                 }
-                previous = Some(frame.present_end);
+                previous = Some(at);
             }
             _ => {}
         }
@@ -222,6 +255,19 @@ impl Benchmark {
             inactive_frames: 0,
             last_render: now,
         }
+    }
+
+    /// An empty element whose paint asks to be told when its frame is
+    /// presented. Cached paints carry the request into reused frames.
+    pub(super) fn present_probe(&self) -> Canvas<()> {
+        let presents = self.present_trace.presents.clone();
+        canvas(
+            |_, _, _| {},
+            move |_, (), window, _| {
+                let presents = presents.clone();
+                window.on_present(move || presents.borrow_mut().push(Instant::now()));
+            },
+        )
     }
 
     pub(super) fn duration(&self) -> Duration {
@@ -311,22 +357,28 @@ impl Benchmark {
         cx: &App,
     ) -> serde_json::Value {
         let ended = Instant::now();
-        let frames = window.frame_duration_snapshot();
-        let presents =
-            self.present_trace
-                .finish(window.window_handle().window_id(), self.started, ended);
+        let window_id = window.window_handle().window_id();
+        let (draws, events) = self.present_trace.finish(window_id);
+        let presents = present_samples(&events, window_id, self.started, ended);
+        let draw_ms: Vec<f64> = draws
+            .iter()
+            .map(|frame| millis(frame.draw_duration()))
+            .collect();
+        let dirty_to_draw_ms: Vec<f64> = draws
+            .iter()
+            .filter_map(FrameTiming::dirty_to_draw_duration)
+            .map(millis)
+            .collect();
         let thumbnails = thumbnails.read(cx);
         let previews = previews.read(cx);
-        #[allow(clippy::cast_precision_loss)]
-        let histogram_ms = |nanos: u64| nanos as f64 / 1e6;
         let mut report = serde_json::json!({
             "photos": totals.photos,
             "thumbnails_completed": totals.thumbnails_completed,
             "failed": totals.failed,
             "seconds": self.started.elapsed().as_secs_f64(),
-            "draw_samples": frames.draw_duration_histogram.len(),
+            "draw_samples": draws.len(),
             "last_render_age_ms": millis(self.last_render.elapsed()),
-            "draw_p95_ms": histogram_ms(frames.draw_duration_histogram.value_at_quantile(0.95)),
+            "draw_p95_ms": p95(&draw_ms),
             "present_interval_p95_ms": quantile(&presents.intervals_ms, 0.95),
             "present_interval_p99_ms": quantile(&presents.intervals_ms, 0.99),
             "max_render_gap_ms": millis(self.max_render_gap.max(self.last_render.elapsed())),
@@ -357,19 +409,13 @@ impl Benchmark {
         report["trace_draw_events"] = serde_json::json!(presents.draw_events);
         report["superseded_draw_events"] = serde_json::json!(presents.superseded_draw_events);
         report["pending_draw_events"] = serde_json::json!(presents.pending_draw_events);
-        report["frame_timing_complete"] =
-            serde_json::json!(presents.complete(frames.draw_duration_histogram.len()));
+        report["frame_timing_complete"] = serde_json::json!(presents.complete(draws.len() as u64));
         report["first_present_ms"] = serde_json::json!(presents.first_present_ms);
         report["last_present_age_ms"] = serde_json::json!(presents.last_present_age_ms);
         report["max_present_gap_ms"] = serde_json::json!(presents.max_gap_ms);
-        report["present_duration_p95_ms"] = serde_json::json!(p95(&presents.durations_ms));
-        report["max_present_duration_ms"] =
-            serde_json::json!(presents.durations_ms.iter().copied().max_by(f64::total_cmp));
-        report["dirty_to_present_p95_ms"] = serde_json::json!(histogram_ms(
-            frames.dirty_to_present_histogram.value_at_quantile(0.95)
-        ));
+        report["dirty_to_draw_p95_ms"] = serde_json::json!(p95(&dirty_to_draw_ms));
         report["timing_definition"] = serde_json::json!(
-            "v1: target-window newly drawn frame submission end intervals; includes inactive frames and all gaps; quantile rank ceil((n-1)*q); excludes physical display scanout"
+            "v2: target-window intervals between frames handed to the platform layer (ZUI on_present); includes inactive frames and all gaps; quantile rank ceil((n-1)*q); excludes physical display scanout"
         );
         report
     }
@@ -400,22 +446,11 @@ mod tests {
     use super::*;
 
     fn draw(window_id: WindowId, at: Instant) -> FrameEvent {
-        FrameEvent::Draw(gpui_kit::gpui::FrameTiming {
-            window_id,
-            dirty_at: None,
-            invalidations: 1,
-            draw_start: at,
-            draw_end: at,
-        })
+        FrameEvent::Draw { window_id, at }
     }
 
     fn present(window_id: WindowId, at: Instant) -> FrameEvent {
-        FrameEvent::Present(gpui_kit::gpui::PresentTiming {
-            window_id,
-            present_start: at,
-            present_end: at,
-            animation_interval: None,
-        })
+        FrameEvent::Present { window_id, at }
     }
 
     #[::core::prelude::v1::test]
@@ -561,12 +596,11 @@ mod tests {
     }
 
     #[::core::prelude::v1::test]
-    fn benchmark_window_is_non_activating_and_unthrottled() {
+    fn benchmark_window_is_non_activating() {
         let mut options = WindowOptions::default();
         configure_window(&mut options);
 
         assert!(!options.focus);
-        assert_eq!(options.inactive_frame_interval, None);
         assert_eq!(options.kind, WindowKind::PopUp);
     }
 

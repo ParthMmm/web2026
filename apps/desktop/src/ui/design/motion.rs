@@ -17,8 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui_kit::base::Easing;
-use gpui_kit::{
+use gpui::{
     Animation, AnimationElement, AnimationExt as _, App, ElementId, EntityId, Global, IntoElement,
     Styled, px,
 };
@@ -117,13 +116,6 @@ impl Curve {
             return 1.0;
         }
         self.sample_y(self.solve_t_for_x(x)).clamp(0.0, 1.0)
-    }
-
-    /// This curve as the library's easing policy. Allocation is fine here:
-    /// one-shot element helpers build this once per mount, not per frame.
-    pub fn easing(self) -> Easing {
-        Easing::cubic_bezier(self.x1, self.y1, self.x2, self.y2)
-            .expect("catalog curves are valid cubic beziers")
     }
 }
 
@@ -400,21 +392,6 @@ mod tests {
             assert_eq!(curve.eval(0.0), 0.0, "{curve:?}");
             assert_eq!(curve.eval(1.0), 1.0, "{curve:?}");
             assert_eq!(curve.eval(2.0), 1.0, "{curve:?}");
-        }
-    }
-
-    #[test]
-    fn the_local_solver_and_the_library_easing_agree() {
-        // Both handlers solve the same bezier, so they must agree within the
-        // f32 noise the library's own solver leaves.
-        for curve in [EASE_OUT_EXPO, EASE_OUT_QUINT, EASE_TAILWIND] {
-            let library = curve.easing();
-            for step in 0..=10 {
-                #[allow(clippy::cast_precision_loss)]
-                let x = step as f32 / 10.0;
-                let difference = curve.eval(x) - library.sample(x);
-                assert!(difference.abs() < 1e-4, "{curve:?} at {x}: {difference}");
-            }
         }
     }
 
