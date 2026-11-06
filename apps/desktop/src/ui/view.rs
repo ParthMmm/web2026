@@ -101,7 +101,9 @@ impl Render for Gallery {
                     }),
             )
             .child(self.status_bar(design, cx))
-            .when(self.viewer_open, |this| this.child(self.viewer(design, cx)))
+            .when(self.viewer_open, |this| {
+                this.child(self.viewer(design, window.viewport_size().width.as_f32(), cx))
+            })
             .when(self.show_performance, |this| {
                 this.child(gpui_fps::fps_monitor(window, cx))
             })

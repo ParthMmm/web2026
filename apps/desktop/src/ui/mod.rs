@@ -73,6 +73,7 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
             // The material is read imperatively at paint time, so the surface
             // preference has to be resolved before the first paint.
             design::init(cx);
+            design::motion::sync_reduce_motion(cx);
             bind_keys(cx);
             cx.on_action(|_: &Quit, cx| cx.quit());
             cx.on_action(|_: &Hide, cx| cx.hide());

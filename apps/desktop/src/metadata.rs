@@ -80,6 +80,29 @@ impl CaptureTime {
     pub fn offset(&self) -> Option<&str> {
         self.offset.as_deref()
     }
+
+    /// The capture date in words, for example "January 29, 2025".
+    pub fn long_date(&self) -> String {
+        const MONTHS: [&str; 12] = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        // `new` validated the shape, so these slices always parse.
+        let year = &self.local[..4];
+        let month: usize = self.local[5..7].parse().unwrap_or(1);
+        let day: u32 = self.local[8..10].parse().unwrap_or(1);
+        format!("{} {day}, {year}", MONTHS[month.clamp(1, 12) - 1])
+    }
 }
 
 impl fmt::Display for CaptureTime {
@@ -410,6 +433,12 @@ fn trim_decimal(value: f64, places: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn long_date_names_the_month_without_a_leading_zero() {
+        let time = CaptureTime::new("2025-01-09T15:38:00", None).expect("valid time");
+        assert_eq!(time.long_date(), "January 9, 2025");
+    }
+
     use super::*;
 
     fn note(tags: &[(u16, u16)]) -> Vec<u8> {

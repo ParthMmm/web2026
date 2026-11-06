@@ -20,20 +20,30 @@ impl ExposureReadout {
     /// `None` when the photo records no exposure settings: an empty strip of
     /// dashes would claim values the camera never wrote.
     pub(in crate::ui) fn new(design: Design, metadata: &PhotoMetadata) -> Option<Self> {
-        let cells: Vec<(SharedString, &'static str)> = [
-            metadata.aperture().map(|value| (value, "APERTURE")),
-            metadata
-                .exposure_time
-                .map(|time| (time.to_string(), "SHUTTER")),
-            metadata.iso.map(|iso| (iso.to_string(), "ISO")),
-            metadata.focal_length().map(|value| (value, "FOCAL")),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|(value, name)| (value.into(), name))
-        .collect();
+        let cells = settings(metadata);
         (!cells.is_empty()).then_some(Self { design, cells })
     }
+}
+
+/// The recorded exposure settings, each with its short name, in the order a
+/// camera's display shows them. Settings the camera did not write are left
+/// out rather than shown as a dash.
+/// The short name of the ISO setting, which a bare number does not explain.
+pub(in crate::ui) const ISO: &str = "ISO";
+
+pub(in crate::ui) fn settings(metadata: &PhotoMetadata) -> Vec<(SharedString, &'static str)> {
+    [
+        metadata.aperture().map(|value| (value, "APERTURE")),
+        metadata
+            .exposure_time
+            .map(|time| (time.to_string(), "SHUTTER")),
+        metadata.iso.map(|iso| (iso.to_string(), ISO)),
+        metadata.focal_length().map(|value| (value, "FOCAL")),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|(value, name)| (value.into(), name))
+    .collect()
 }
 
 impl RenderOnce for ExposureReadout {

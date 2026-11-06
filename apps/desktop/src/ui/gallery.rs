@@ -131,6 +131,9 @@ impl Gallery {
             // the material has to be re-applied here too or the chrome goes
             // permanently opaque the first time macOS flips light and dark.
             super::reapply_window_background(window, cx);
+            // Accessibility display settings change through the same system
+            // pass, so this is a cheap moment to pick up Reduce Motion too.
+            super::design::motion::sync_reduce_motion(cx);
         });
         let zoom_slider = cx.new(|_| {
             // `max` first: `min` clamps against the default maximum of 100.
@@ -768,11 +771,20 @@ fn capture_snapshots(window: &mut Window, cx: &mut Context<Gallery>) {
     let Some(directory) = std::env::var_os("PHOTO_SNAPSHOT_DIR") else {
         return;
     };
+    // `PHOTO_SNAPSHOT_VIEWER` opens the viewer just before the first frame.
+    let open_viewer = std::env::var_os("PHOTO_SNAPSHOT_VIEWER").is_some();
+    // A background window gets no display frames, so an entrance would be
+    // captured at its first frame. Captures show the settled state.
+    cx.set_reduce_motion(true);
     // Capture only this app's Metal scene; no desktop/screen-recording API.
     cx.spawn_in(window, async move |this, cx| {
         let directory = PathBuf::from(directory);
         for frame in 1..=2 {
             smol::Timer::after(Duration::from_secs(4)).await;
+            if open_viewer && frame == 1 {
+                let _ = this.update_in(cx, |view, window, cx| view.open_viewer(window, cx));
+                smol::Timer::after(Duration::from_millis(600)).await;
+            }
             let _ = this.update_in(cx, |_, window, _| {
                 let result = (|| -> anyhow::Result<()> {
                     std::fs::create_dir_all(&directory)?;

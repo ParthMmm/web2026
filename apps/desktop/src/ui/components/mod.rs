@@ -5,9 +5,11 @@
 //! [`Design`]: super::design::Design
 
 mod detail_list;
+mod exposure_pill;
 mod exposure_readout;
 mod film_chip;
 
 pub(super) use detail_list::DetailList;
+pub(super) use exposure_pill::ExposurePill;
 pub(super) use exposure_readout::ExposureReadout;
 pub(super) use film_chip::FilmChip;

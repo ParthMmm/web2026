@@ -246,6 +246,33 @@ where
     })
 }
 
+/// Follow the system's Reduce Motion setting (System Settings ›
+/// Accessibility › Display). gpui does not read it, so every entrance would
+/// otherwise play for people who asked for none.
+pub fn sync_reduce_motion(cx: &mut App) {
+    cx.set_reduce_motion(system_reduces_motion());
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated, unexpected_cfgs)]
+fn system_reduces_motion() -> bool {
+    use cocoa::base::{YES, id};
+    use objc::{class, msg_send, sel, sel_impl};
+    // SAFETY: both selectors exist on every supported macOS release and take
+    // no arguments; the workspace object is a process-wide singleton.
+    unsafe {
+        let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let reduce: cocoa::base::BOOL =
+            msg_send![workspace, accessibilityDisplayShouldReduceMotion];
+        reduce == YES
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_reduces_motion() -> bool {
+    false
+}
+
 /// Overlay or dialog entrance over [`DIALOG_IN`].
 pub fn dialog_in<E>(id: impl Into<ElementId>, element: E) -> AnimationElement<E>
 where
