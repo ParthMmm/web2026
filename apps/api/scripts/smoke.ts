@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { writePhotoFixture } from "./photo-fixture.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "photo-smoke-"));
+const dir = mkdtempSync(path.join(tmpdir(), "photo-smoke-"));
 await writePhotoFixture(dir);
 
 const env = {
@@ -23,13 +23,10 @@ try {
   const first = await reader.read();
   const output = new TextDecoder().decode(first.value);
   process.stdout.write(output);
+  reader.releaseLock();
   void (async () => {
-    for (
-      let chunk = await reader.read();
-      !chunk.done;
-      chunk = await reader.read()
-    ) {
-      process.stdout.write(chunk.value);
+    for await (const chunk of server.stdout) {
+      process.stdout.write(chunk);
     }
   })();
   const url = output.match(/http:\/\/127\.0\.0\.1:\d+\//u)?.[0];

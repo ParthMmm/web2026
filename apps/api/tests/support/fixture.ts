@@ -51,7 +51,7 @@ export const EDGES = {
 } as const;
 
 export const factsOf = (bytes: Uint8Array) =>
-  Effect.gen(function* () {
+  Effect.gen(function* digestFacts() {
     const digest = yield* Digest.Digest;
     return {
       bytes: ByteCount.make(bytes.length),
@@ -60,7 +60,7 @@ export const factsOf = (bytes: Uint8Array) =>
   });
 
 export const declare = (bodies: Bodies) =>
-  Effect.gen(function* () {
+  Effect.gen(function* declareManifest() {
     const manifest: Manifest = {
       original: yield* factsOf(bodies.original),
       w1200: {

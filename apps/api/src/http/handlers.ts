@@ -12,7 +12,7 @@ import { requestLog } from "./request-log.ts";
 const PhotosHandlers = HttpApiBuilder.group(
   Api,
   "photos",
-  Effect.fn(function* (handlers) {
+  Effect.fn(function* handlePhotos(handlers) {
     const photos = yield* Photos;
     return handlers.handleAll({
       begin: ({ payload }) => photos.begin(payload.manifest),

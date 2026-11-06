@@ -23,5 +23,24 @@ export default defineConfig({
         ],
       },
     },
+    {
+      files: [
+        "apps/api/src/photos/internal/webp.ts",
+        "apps/api/tests/support/fixture.ts",
+      ],
+      rules: {
+        // These files read and write WebP header bit fields, so bitwise
+        // operators are the format, not a typo for && or ||.
+        "no-bitwise": "off",
+      },
+    },
+    {
+      files: ["apps/api/src/photos/blobs.ts", "apps/api/src/photos/domain.ts"],
+      rules: {
+        // Effect schemas export a value and its type under one name. The
+        // core rule does not know types and values are separate namespaces.
+        "no-redeclare": "off",
+      },
+    },
   ],
 });

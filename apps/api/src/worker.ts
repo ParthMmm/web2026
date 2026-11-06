@@ -26,7 +26,7 @@ export default Cloudflare.Worker(
     },
     workersDev: { enabled: true, previewsEnabled: false },
   },
-  Effect.gen(function* () {
+  Effect.gen(function* makeWorker() {
     const bucket = yield* Cloudflare.R2.ReadWriteBucket(PrivateBucket);
     const database = yield* Cloudflare.D1.QueryDatabase(PhotoDatabase);
     const ownerToken = yield* OwnerToken;

@@ -9,7 +9,7 @@ const SECONDS_PER_DAY = 86_400;
 const STAGING_RETENTION_DAYS = 7;
 
 const retainInProd = RemovalPolicy.retain(
-  Effect.map(Stage, (stage) => stage === "prod")
+  Stage.pipe(Effect.map((stage) => stage === "prod"))
 );
 
 export const PrivateBucket = Cloudflare.R2.Bucket("Private", {

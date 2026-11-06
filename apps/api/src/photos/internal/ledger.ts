@@ -54,6 +54,14 @@ const toStored = ({
 
 const sameManifest = Schema.toEquivalence(Manifest);
 
+const attempt =
+  (operation: string) =>
+  <A, E, R>(statement: Effect.Effect<A, E, R>) =>
+    Effect.mapError(
+      statement,
+      (cause) => new LedgerUnavailable({ cause, operation })
+    );
+
 export interface Ledger {
   readonly find: (
     photoId: PhotoId
@@ -71,20 +79,22 @@ export interface Ledger {
 }
 
 export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
-  Effect.gen(function* () {
+  Effect.gen(function* makeLedger() {
     const sql = yield* SqlClient.SqlClient;
     const columns = sql.unsafe(
       "photo_id AS photoId, manifest, finalized_at AS finalizedAt"
     );
 
     const select = SqlSchema.findOneOption({
-      execute: (photoId) =>
-        sql`SELECT ${columns} FROM photo WHERE photo_id = ${photoId}`,
       Request: PhotoId,
       Result: PhotoRow,
+      execute: (photoId) =>
+        sql`SELECT ${columns} FROM photo WHERE photo_id = ${photoId}`,
     });
 
     const upsert = SqlSchema.findOne({
+      Request: Write,
+      Result: PhotoRow,
       execute: ({ manifest, nowMillis, photoId }) => sql`
         INSERT INTO photo (photo_id, manifest, created_at)
         VALUES (${photoId}, ${manifest}, ${nowMillis})
@@ -93,26 +103,16 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
           ELSE photo.manifest
         END
         RETURNING ${columns}`,
-      Request: Write,
-      Result: PhotoRow,
     });
 
     const compareAndMark = SqlSchema.findOneOption({
+      Request: Write,
+      Result: PhotoRow,
       execute: ({ manifest, nowMillis, photoId }) => sql`
         UPDATE photo SET finalized_at = ${nowMillis}
         WHERE photo_id = ${photoId} AND finalized_at IS NULL AND manifest = ${manifest}
         RETURNING ${columns}`,
-      Request: Write,
-      Result: PhotoRow,
     });
-
-    const attempt =
-      (operation: string) =>
-      <A, E, R>(statement: Effect.Effect<A, E, R>) =>
-        Effect.mapError(
-          statement,
-          (cause) => new LedgerUnavailable({ cause, operation })
-        );
 
     const find: Ledger["find"] = (photoId) =>
       select(photoId).pipe(
@@ -121,7 +121,7 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
       );
 
     const declare: Ledger["declare"] = (photoId, manifest, nowMillis) =>
-      Effect.gen(function* () {
+      Effect.gen(function* declarePhoto() {
         const stored = toStored(
           yield* upsert({ manifest, nowMillis, photoId }).pipe(
             attempt("ledger.declare")
@@ -134,14 +134,14 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
       });
 
     const markFinal: Ledger["markFinal"] = (photoId, verified, nowMillis) =>
-      Effect.gen(function* () {
+      Effect.gen(function* markPhotoFinal() {
         const marked = yield* compareAndMark({
           manifest: verified,
           nowMillis,
           photoId,
         }).pipe(attempt("ledger.markFinal"));
         const stored = Option.isSome(marked)
-          ? Option.map(marked, toStored)
+          ? Option.some(toStored(marked.value))
           : yield* find(photoId);
         if (
           Option.isSome(stored) &&

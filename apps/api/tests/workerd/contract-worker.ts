@@ -17,9 +17,7 @@ interface Env {
 }
 
 // SAFETY: makeHelpers reads only `LogicalId` from the bucket resource, to find the binding in env.
-const privateBucket = {
-  LogicalId: "Private",
-} as unknown as Cloudflare.R2.Bucket;
+const privateBucket = { LogicalId: "Private" } as Cloudflare.R2.Bucket;
 
 const run = async (effect: Effect.Effect<void, unknown>) => {
   const exit = await Effect.runPromiseExit(effect);

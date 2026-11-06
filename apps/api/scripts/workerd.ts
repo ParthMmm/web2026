@@ -76,19 +76,20 @@ export const startWorkerd = async (
   const miniflare = new Miniflare({
     bindings,
     compatibilityDate: COMPATIBILITY_DATE,
-    host: "127.0.0.1",
-    port,
     compatibilityFlags: COMPATIBILITY_FLAGS,
     d1Databases: ["Db"],
+    host: "127.0.0.1",
     modules,
     modulesRoot: ROOT,
+    port,
     r2Buckets: ["Private"],
   });
   const db = await miniflare.getD1Database("Db");
-  for (const file of readdirSync(MIGRATIONS).sort()) {
+  for (const file of readdirSync(MIGRATIONS).toSorted()) {
     for (const statement of splitSqliteStatements(
-      readFileSync(new URL(file, MIGRATIONS), "utf8")
+      readFileSync(new URL(file, MIGRATIONS), "utf-8")
     )) {
+      // oxlint-disable-next-line no-await-in-loop -- migrations apply in order, one statement at a time
       await db.prepare(statement).run();
     }
   }

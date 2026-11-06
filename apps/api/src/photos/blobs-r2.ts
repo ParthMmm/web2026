@@ -39,7 +39,7 @@ export const r2Blobs = (
     Blobs,
     Blobs.of({
       copy: (from, to, expect) =>
-        Effect.gen(function* () {
+        Effect.gen(function* copy() {
           const source = yield* bucket
             .get(from)
             .pipe(runtime, Effect.mapError(unavailable("copy.get")));

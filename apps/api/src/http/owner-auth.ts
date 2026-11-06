@@ -9,7 +9,7 @@ const encode = (text: string) => new TextEncoder().encode(text);
 export const ownerTokenAuth = (token: Redacted.Redacted<string>) =>
   Layer.effect(
     OwnerAuth,
-    Effect.gen(function* () {
+    Effect.gen(function* buildOwnerAuth() {
       const digest = yield* Digest.Digest;
       const wanted = yield* digest.digest(
         Digest.sha256,
@@ -17,7 +17,7 @@ export const ownerTokenAuth = (token: Redacted.Redacted<string>) =>
       );
       return OwnerAuth.of({
         bearer: (httpEffect, { credential }) =>
-          Effect.gen(function* () {
+          Effect.gen(function* bearer() {
             const given = yield* digest.digest(
               Digest.sha256,
               encode(Redacted.value(credential))

@@ -12,7 +12,7 @@ interface StoredBlob {
   readonly sha256: Sha256;
 }
 
-const concat = (chunks: ReadonlyArray<Uint8Array>): Uint8Array => {
+const concat = (chunks: readonly Uint8Array[]): Uint8Array => {
   const out = new Uint8Array(
     chunks.reduce((total, chunk) => total + chunk.length, 0)
   );
@@ -42,7 +42,7 @@ export const makeMemoryBlobs = () => {
       const blob = objects.get(key);
       if (blob !== undefined) {
         const bytes = Uint8Array.from(blob.bytes);
-        bytes[bytes.length - 1] = (bytes.at(-1) ?? 0) ^ 0xff;
+        bytes[bytes.length - 1] = 0xff - (bytes.at(-1) ?? 0);
         objects.set(key, { ...blob, bytes });
       }
     },
@@ -63,11 +63,11 @@ export const makeMemoryBlobs = () => {
 
   const layer = Layer.effect(
     Blobs,
-    Effect.gen(function* () {
+    Effect.gen(function* buildBlobs() {
       const digest = yield* Digest.Digest;
 
       const verified = (key: BlobKey, bytes: Uint8Array, expect: Expected) =>
-        Effect.gen(function* () {
+        Effect.gen(function* verifyBlob() {
           const sha256 = yield* digest.digestHex(Digest.sha256, bytes);
           if (bytes.length !== expect.bytes || sha256 !== expect.sha256) {
             return yield* new BlobRejected({ key });
@@ -77,7 +77,7 @@ export const makeMemoryBlobs = () => {
 
       return Blobs.of({
         copy: (from, to, expect) =>
-          Effect.gen(function* () {
+          Effect.gen(function* copy() {
             yield* fault("copy");
             const source = objects.get(from);
             if (source === undefined) {
@@ -100,7 +100,7 @@ export const makeMemoryBlobs = () => {
             Effect.map(() => objects.get(key)?.bytes.slice(0, length) ?? null)
           ),
         put: (key, body, expect) =>
-          Effect.gen(function* () {
+          Effect.gen(function* put() {
             yield* fault("put");
             const bytes = concat(
               yield* Stream.runCollect(body).pipe(
@@ -113,11 +113,13 @@ export const makeMemoryBlobs = () => {
           }),
         remove: (keys) =>
           fault("remove").pipe(
-            Effect.map(() => {
-              for (const key of keys) {
-                objects.delete(key);
-              }
-            })
+            Effect.andThen(
+              Effect.sync(() => {
+                for (const key of keys) {
+                  objects.delete(key);
+                }
+              })
+            )
           ),
       });
     })

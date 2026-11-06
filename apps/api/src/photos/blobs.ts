@@ -62,7 +62,7 @@ export class Blobs extends Context.Service<
       length: number
     ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
     readonly remove: (
-      keys: ReadonlyArray<BlobKey>
+      keys: readonly BlobKey[]
     ) => Effect.Effect<void, BlobUnavailable>;
   }
 >()("@web2026/api/Blobs") {}

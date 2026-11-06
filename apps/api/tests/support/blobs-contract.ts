@@ -17,7 +17,7 @@ const bytesOf = (length: number) =>
   Uint8Array.from({ length }, (_, index) => (index * 7) % 256);
 
 const expectFor = (bytes: Uint8Array) =>
-  Effect.gen(function* () {
+  Effect.gen(function* digestExpected() {
     const digest = yield* Digest.Digest;
     return {
       bytes: ByteCount.make(bytes.length),
@@ -34,11 +34,11 @@ const chunked = (bytes: Uint8Array, size: number) =>
     )
   );
 
-export const blobsContract: ReadonlyArray<BlobsCase> = [
+export const blobsContract: readonly BlobsCase[] = [
   {
     name: "put keeps exactly the verified bytes, streamed in chunks",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(70_000);
         const expected = yield* expectFor(bytes);
@@ -50,7 +50,7 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   {
     name: "put with a wrong sha256 is rejected and stores nothing",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(5000);
         const wrong = {
@@ -67,7 +67,7 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   {
     name: "put with a body shorter than declared fails and stores nothing",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(5000);
         const exit = yield* Effect.exit(
@@ -84,7 +84,7 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   {
     name: "holds is false for an absent key, another size, or another hash",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(3000);
         const expected = yield* expectFor(bytes);
@@ -106,7 +106,7 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   {
     name: "copy verifies again and leaves no destination on a wrong hash",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(3000);
         const expected = yield* expectFor(bytes);
@@ -130,7 +130,7 @@ export const blobsContract: ReadonlyArray<BlobsCase> = [
   {
     name: "remove deletes keys and ignores absent ones",
     run: (key) =>
-      Effect.gen(function* () {
+      Effect.gen(function* run() {
         const blobs = yield* Blobs;
         const bytes = bytesOf(10);
         const expected = yield* expectFor(bytes);

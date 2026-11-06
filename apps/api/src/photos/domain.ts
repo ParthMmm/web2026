@@ -31,6 +31,7 @@ const derivative = (longestEdge: number) => {
   });
 };
 
+// oxlint-disable-next-line sort-keys -- field order sets variantKinds and the stored JSON that ledger.markFinal compares as text
 export const Manifest = Schema.Struct({
   original: Original,
   w480: derivative(480),
@@ -45,7 +46,7 @@ export type DerivativeKind = Exclude<VariantKind, "original">;
 // SAFETY: a Struct's field names are exactly the keys of its Type, which VariantKind names.
 export const variantKinds = Object.keys(
   Manifest.fields
-) as ReadonlyArray<VariantKind>;
+) as readonly VariantKind[];
 export const VariantKindSchema = Schema.Literals(variantKinds);
 
 export const isDerivativeKind = (kind: VariantKind): kind is DerivativeKind =>

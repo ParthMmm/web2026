@@ -24,7 +24,7 @@ const declared = (seed: number) =>
 const upload = (
   photoId: PhotoId,
   bodies: Bodies,
-  kinds: ReadonlyArray<VariantKind> = variantKinds
+  kinds: readonly VariantKind[] = variantKinds
 ) =>
   Effect.forEach(
     kinds,
@@ -40,10 +40,10 @@ const upload = (
     { discard: true }
   );
 
-export const photosScenarios: ReadonlyArray<PhotosScenario> = [
+export const photosScenarios: readonly PhotosScenario[] = [
   {
     name: "a fully uploaded photo becomes a draft once, and finalize again returns the same draft",
-    run: Effect.gen(function* () {
+    run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(1);
       const begun = yield* photos.begin(manifest);
@@ -60,7 +60,7 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
   },
   {
     name: "begin replaces the manifest while uploading and refuses another manifest for a draft",
-    run: Effect.gen(function* () {
+    run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(2);
       yield* photos.begin(manifest);
@@ -81,12 +81,12 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
   },
   {
     name: "a wrong-hash upload is HashMismatch and the variant stays missing",
-    run: Effect.gen(function* () {
+    run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(3);
       yield* photos.begin(manifest);
       const tampered = Uint8Array.from(bodies.w480);
-      tampered[40] = (tampered[40] ?? 0) ^ 0xff;
+      tampered[40] = 0xff - (tampered[40] ?? 0);
       const failure = yield* Effect.flip(
         photos.store({
           body: Stream.make(tampered),
@@ -102,7 +102,7 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
   },
   {
     name: "a body that ends early is LengthMismatch with the bytes R2 was given",
-    run: Effect.gen(function* () {
+    run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(4);
       yield* photos.begin(manifest);
@@ -125,7 +125,7 @@ export const photosScenarios: ReadonlyArray<PhotosScenario> = [
   },
   {
     name: "a manifest the ledger round-trips through D1 JSON compares equal",
-    run: Effect.gen(function* () {
+    run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { manifest } = yield* declared(5);
       const view = yield* photos.begin(manifest);

@@ -33,9 +33,9 @@ const harness = () => {
 const uploadAll = (
   photoId: PhotoId,
   bodies: Bodies,
-  kinds: ReadonlyArray<VariantKind> = variantKinds
+  kinds: readonly VariantKind[] = variantKinds
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* uploadVariants() {
     const photos = yield* Photos;
     for (const kind of kinds) {
       yield* photos.store({
@@ -73,7 +73,7 @@ it.effect(
   "finalize makes a fully uploaded photo a draft, and every later call returns the same draft",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
 
@@ -102,13 +102,13 @@ it.effect(
   "store rejects bytes that do not hash to the declared sha256 and keeps nothing",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
 
       const tampered = Uint8Array.from(bodies.original);
-      tampered[0] = (tampered[0] ?? 0) ^ 0xff;
+      tampered[0] = 0xff - (tampered[0] ?? 0);
       const failure = yield* photos
         .store({
           body: Stream.make(tampered),
@@ -129,7 +129,7 @@ it.effect(
   "store rejects a declared length that differs before reading the body",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -158,7 +158,7 @@ it.effect(
   "store names a body that ends early a LengthMismatch with the bytes counted",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -186,7 +186,7 @@ it.effect(
   "store, get and finalize answer PhotoNotFound for an undeclared photo",
   () => {
     const { layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, photoId } = yield* fixture();
       const store = photos.store({
@@ -195,7 +195,7 @@ it.effect(
         kind: "original",
         photoId,
       });
-      const calls: ReadonlyArray<Effect.Effect<unknown, unknown>> = [
+      const calls: readonly Effect.Effect<unknown, unknown>[] = [
         store,
         photos.get(photoId),
         photos.finalize(photoId),
@@ -212,7 +212,7 @@ it.effect(
 
 it.effect("store answers PhotoAlreadyDraft after finalize", () => {
   const { layer } = harness();
-  return Effect.gen(function* () {
+  return Effect.gen(function* run() {
     const photos = yield* Photos;
     const { bodies, manifest, photoId } = yield* fixture();
     yield* photos.begin(manifest);
@@ -230,7 +230,7 @@ it.effect(
   "finalize lists every missing variant and leaves the photo uploading",
   () => {
     const { layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -249,7 +249,7 @@ it.effect(
   "finalize rejects a derivative whose header declares other dimensions",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const { bodies, manifest, photoId } = yield* declare({
         ...validBodies(),
         w480: webp("VP8 ", EDGES.w480[0] + 1, EDGES.w480[1]),
@@ -274,7 +274,7 @@ it.effect(
   "finalize rejects derivatives that are not WebP, carry metadata, or are animated",
   () => {
     const { layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const { bodies, manifest, photoId } = yield* declare({
         ...validBodies(),
         w1200: webp("VP8X", ...EDGES.w1200, withExif),
@@ -297,7 +297,7 @@ it.effect(
   "finalize reports a staged object whose bytes rotted as Corrupt and promotes nothing for it",
   () => {
     const { faults, layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const { bodies, manifest, photoId } = yield* fixture();
       yield* Photos.use((photos) => photos.begin(manifest));
       yield* uploadAll(photoId, bodies);
@@ -319,7 +319,7 @@ it.effect(
   "begin replaces the manifest while uploading, and an upload for the old bytes no longer counts",
   () => {
     const { layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const first = yield* fixture();
       yield* photos.begin(first.manifest);
@@ -344,7 +344,7 @@ it.effect(
   "begin refuses a different manifest for a draft with PhotoManifestConflict",
   () => {
     const { layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -368,7 +368,7 @@ it.effect(
   "a finalize that fails part way through promotion converges when it runs again",
   () => {
     const { faults, layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -391,7 +391,7 @@ it.effect(
   "a finalize that promoted everything but failed to mark converges after staging has expired",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const sql = yield* SqlClient.SqlClient;
       const { bodies, manifest, photoId } = yield* fixture();
@@ -419,7 +419,7 @@ it.effect(
   "store answers StorageUnavailable when storage fails before the body is read",
   () => {
     const { faults, layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -444,7 +444,7 @@ it.effect(
   "a finalize that loses a race to a finished finalize returns the draft",
   () => {
     const { faults, layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* fixture();
       yield* photos.begin(manifest);
@@ -463,7 +463,7 @@ it.effect(
   "a final object promoted for an older manifest does not satisfy a re-declared one",
   () => {
     const { layer, objects } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const sql = yield* SqlClient.SqlClient;
       const first = yield* fixture();
@@ -494,7 +494,7 @@ it.effect(
   "a manifest re-declared between inspection and the mark fails finalize with PhotoManifestConflict",
   () => {
     const { faults, layer } = harness();
-    return Effect.gen(function* () {
+    return Effect.gen(function* run() {
       const photos = yield* Photos;
       const first = yield* fixture();
       yield* photos.begin(first.manifest);

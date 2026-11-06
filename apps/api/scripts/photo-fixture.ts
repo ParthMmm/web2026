@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { Effect } from "effect";
 import { Digest } from "effect/crypto";
@@ -12,9 +12,9 @@ export const writePhotoFixture = async (dir: string) => {
     fixture().pipe(Effect.provide(Digest.layerWebCrypto))
   );
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest));
   for (const kind of variantKinds) {
-    writeFileSync(join(dir, kind), bodies[kind]);
+    writeFileSync(path.join(dir, kind), bodies[kind]);
   }
 };
 

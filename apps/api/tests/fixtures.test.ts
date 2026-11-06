@@ -25,9 +25,15 @@ const errors = [
   StorageUnavailable,
 ];
 
+/** One JSON document from fixtures/contract.json, which the Rust client tests share. */
+type FixtureDocument =
+  | (typeof fixtures)["begin"]
+  | (typeof fixtures)["views"][number]
+  | (typeof fixtures)["errors"][number]["body"];
+
 const roundTrip = <S extends Schema.Codec<unknown, unknown>>(
   schema: S,
-  value: unknown
+  value: FixtureDocument | undefined
 ) => Schema.encodeUnknownSync(schema)(Schema.decodeUnknownSync(schema)(value));
 
 it("every shared view fixture decodes and re-encodes to the same JSON", () => {

@@ -76,15 +76,11 @@ const parseVp8x = (prefix: Uint8Array): WebpHeader => {
   };
 };
 
-const parsers: Readonly<
-  Partial<
-    Record<string, (prefix: Uint8Array, totalBytes: number) => WebpHeader>
-  >
-> = {
-  "VP8 ": parseVp8,
-  VP8L: parseVp8l,
-  VP8X: parseVp8x,
-};
+const parsers = new Map([
+  ["VP8 ", parseVp8],
+  ["VP8L", parseVp8l],
+  ["VP8X", parseVp8x],
+]);
 
 // The RIFF size must match the verified object size, so a truncated file fails even with a valid header.
 export const parseWebpHeader = (
@@ -96,6 +92,6 @@ export const parseWebpHeader = (
     fourcc(prefix, 0) === "RIFF" &&
     fourcc(prefix, 8) === "WEBP" &&
     u32(prefix, 4) === totalBytes - 8;
-  const parse = framed ? parsers[fourcc(prefix, 12)] : undefined;
+  const parse = framed ? parsers.get(fourcc(prefix, 12)) : undefined;
   return parse === undefined ? NOT_WEBP : parse(prefix, totalBytes);
 };
