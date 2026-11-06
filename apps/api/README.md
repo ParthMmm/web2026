@@ -53,16 +53,7 @@ OpenAPI Generator **7.23.0**, generator `rust`, library `reqwest`, warns that Op
 "Published": Ok(...)
 ```
 
-Reproduce with OpenAPI Generator 7.23.0 and Java installed:
-
-```sh
-openapi-generator version  # must be 7.23.0 for this recorded result
-openapi-generator generate -i openapi.json -g rust --library reqwest \
-  -o client/generated --additional-properties=packageName=photo_probe_sdk
-cargo run --locked --manifest-path generator-check/Cargo.toml
-```
-
-The last command intentionally exits **1** when the generator rejects a valid fixture. It is a compatibility experiment, not a failing test in the selected client's suite. Generated code/build output stays ignored. No document relabeling, 3.0 conversion, generated-code hand edits, or assumption of Progenitor compatibility was used. This is evidence about one generator/configuration/version, not a claim that all generators fail.
+The experiment crate that decoded the fixtures with the generated client was removed because CI never ran it. This result is the record it left. No document relabeling, 3.0 conversion, generated-code hand edits, or assumption of Progenitor compatibility was used. This is evidence about one generator/configuration/version, not a claim that all generators fail.
 
 ## Drift and installed-client compatibility
 

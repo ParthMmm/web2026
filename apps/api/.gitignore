@@ -5,6 +5,5 @@ node_modules/
 !.env.example
 *.tsbuildinfo
 client/target/
-generator-check/target/
 client/generated/
 artifacts/local/
