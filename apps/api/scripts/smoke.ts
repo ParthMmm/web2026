@@ -1,21 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
-import { Digest } from "effect/crypto";
+import { writePhotoFixture } from "./photo-fixture.ts";
 
-import { variantKinds } from "../src/photos/domain.ts";
-import { fixture } from "../tests/support/fixture.ts";
-
-const { bodies, manifest } = await Effect.runPromise(
-  fixture().pipe(Effect.provide(Digest.layerWebCrypto)),
-);
 const dir = mkdtempSync(join(tmpdir(), "photo-smoke-"));
-writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
-for (const kind of variantKinds) {
-  writeFileSync(join(dir, kind), bodies[kind]);
-}
+await writePhotoFixture(dir);
 
 const env = { ...process.env, OWNER_TOKEN: crypto.randomUUID().repeat(2), PORT: "0" };
 const server = Bun.spawn(["bun", "scripts/serve.ts"], { env, stderr: "inherit", stdout: "pipe" });
