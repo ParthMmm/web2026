@@ -89,7 +89,11 @@ export const makeMemoryBlobs = () => {
         put: (key, body, expect) =>
           Effect.gen(function* () {
             yield* fault("put");
-            const bytes = concat(yield* Stream.runCollect(body));
+            const bytes = concat(
+              yield* Stream.runCollect(body).pipe(
+                Effect.mapError((cause) => new BlobUnavailable({ cause, operation: "put" })),
+              ),
+            );
             objects.set(key, yield* verified(key, bytes, expect));
           }),
         remove: (keys) =>

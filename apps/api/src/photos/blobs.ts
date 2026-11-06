@@ -34,11 +34,11 @@ export class BlobUnavailable extends Schema.TaggedError<BlobUnavailable>()("Blob
 export class Blobs extends Context.Service<
   Blobs,
   {
-    readonly put: <E>(
+    readonly put: (
       key: BlobKey,
-      body: Stream.Stream<Uint8Array, E>,
+      body: Stream.Stream<Uint8Array, unknown>,
       expect: Expected,
-    ) => Effect.Effect<void, BlobRejected | BlobUnavailable | E>;
+    ) => Effect.Effect<void, BlobRejected | BlobUnavailable>;
     readonly copy: (
       from: BlobKey,
       to: BlobKey,

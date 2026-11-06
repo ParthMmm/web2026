@@ -33,6 +33,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run test
+      - run: bun run test:workerd
       - run: bun run openapi --check
       - run: go install github.com/oasdiff/oasdiff@v1.31.0
       - run: oasdiff breaking --allow-external-refs=false --fail-on WARN baseline/openapi-v1.json openapi.json

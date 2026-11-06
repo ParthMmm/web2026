@@ -246,7 +246,6 @@ export class Photos extends Context.Service<
                 received += chunk.length;
               }),
             ),
-            Stream.mapError((cause) => new BlobUnavailable({ cause, operation: "put.body" })),
           );
           const rejected = (otherwise: Effect.Effect<never, HashMismatch | StorageUnavailable>) =>
             received === facts.bytes

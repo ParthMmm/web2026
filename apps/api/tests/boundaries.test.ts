@@ -32,6 +32,12 @@ it("builds blob keys only in the key scheme and the port's contract suite", () =
   expect(offenders((file) => allowed.has(file), "BlobKey.make(")).toEqual([]);
 });
 
+it("keeps R2's error vocabulary inside the R2 adapter", () => {
+  const adapter = join("src", "photos", "blobs-r2.ts");
+  expect(offenders((file) => file === adapter, "R2Error")).toEqual([]);
+  expect(offenders((file) => file === adapter, "10037")).toEqual([]);
+});
+
 it("never opens a SQL transaction, because the D1 client has none", () => {
   expect(offenders(() => false, "withTransaction")).toEqual([]);
 });
