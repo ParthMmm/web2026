@@ -1,10 +1,11 @@
 {
-  "name": "@web2026/api-prototype",
+  "name": "@web2026/api",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.1",
   "scripts": {
     "test": "vitest run",
+    "test:workerd": "vitest run --config vitest.workerd.config.ts",
     "typecheck": "tsc --noEmit",
     "dev": "bun scripts/serve.ts",
     "openapi": "bun scripts/openapi.ts",
@@ -17,13 +18,19 @@
   },
   "devDependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.85",
+    "@alchemy.run/sql": "2.0.0-beta.85",
     "@apidevtools/swagger-parser": "13.0.0",
+    "@cloudflare/workers-types": "5.20261026.1",
     "@effect/language-service": "0.87.2",
     "@effect/platform-bun": "4.1.2",
     "@effect/platform-node": "4.1.2",
+    "@effect/sql-d1": "4.1.2",
+    "@effect/sql-sqlite-node": "4.1.2",
     "@effect/vitest": "4.1.2",
     "@types/bun": "1.4.1",
     "alchemy": "2.0.0-beta.85",
+    "miniflare": "4.20260730.0",
+    "rolldown": "1.2.13",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

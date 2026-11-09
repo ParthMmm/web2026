@@ -1,16 +1,16 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Photo contract probe",
+    "title": "Photo upload API",
     "version": "0.0.1"
   },
   "paths": {
-    "/v1/probe/photos": {
+    "/v1/photos": {
       "post": {
         "tags": [
-          "probe"
+          "photos"
         ],
-        "operationId": "probe.echoPhoto",
+        "operationId": "photos.begin",
         "parameters": [],
         "security": [
           {
@@ -19,17 +19,322 @@
         ],
         "responses": {
           "200": {
-            "description": "ProbePhoto",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProbePhoto"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": [
+                            "Uploading"
+                          ]
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "properties": {
+                            "original": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "sha256"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w480": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w1200": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w2400": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "original",
+                            "w480",
+                            "w1200",
+                            "w2400"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "original",
+                              "w480",
+                              "w1200",
+                              "w2400"
+                            ]
+                          }
+                        },
+                        "photoId": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "_tag",
+                        "manifest",
+                        "missing",
+                        "photoId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": [
+                            "Draft"
+                          ]
+                        },
+                        "finalizedAt": {
+                          "type": "string"
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "properties": {
+                            "original": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "sha256"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w480": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w1200": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w2400": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "original",
+                            "w480",
+                            "w1200",
+                            "w2400"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "photoId": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "_tag",
+                        "finalizedAt",
+                        "manifest",
+                        "photoId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               }
             }
-          },
-          "400": {
-            "description": "BadRequest"
           },
           "401": {
             "description": "Unauthorized",
@@ -37,6 +342,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PhotoManifestConflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoManifestConflictEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "StorageUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUnavailableEncoded"
                 }
               }
             }
@@ -46,26 +371,164 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProbePhoto"
+                "type": "object",
+                "properties": {
+                  "manifest": {
+                    "type": "object",
+                    "properties": {
+                      "original": {
+                        "type": "object",
+                        "properties": {
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 104857600
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          }
+                        },
+                        "required": [
+                          "bytes",
+                          "sha256"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "w480": {
+                        "type": "object",
+                        "properties": {
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 104857600
+                          },
+                          "height": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 480
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 480
+                          }
+                        },
+                        "required": [
+                          "bytes",
+                          "height",
+                          "sha256",
+                          "width"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "w1200": {
+                        "type": "object",
+                        "properties": {
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 104857600
+                          },
+                          "height": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1200
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1200
+                          }
+                        },
+                        "required": [
+                          "bytes",
+                          "height",
+                          "sha256",
+                          "width"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "w2400": {
+                        "type": "object",
+                        "properties": {
+                          "bytes": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 104857600
+                          },
+                          "height": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2400
+                          },
+                          "sha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2400
+                          }
+                        },
+                        "required": [
+                          "bytes",
+                          "height",
+                          "sha256",
+                          "width"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "original",
+                      "w480",
+                      "w1200",
+                      "w2400"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "photoId": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "manifest",
+                  "photoId"
+                ],
+                "additionalProperties": false
               }
             }
           },
           "required": true
         }
-      },
+      }
+    },
+    "/v1/photos/{photoId}": {
       "get": {
         "tags": [
-          "probe"
+          "photos"
         ],
-        "operationId": "probe.listPhotos",
+        "operationId": "photos.get",
         "parameters": [
           {
-            "name": "cursor",
-            "in": "query",
+            "name": "photoId",
+            "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
             },
-            "required": false
+            "required": true
           }
         ],
         "security": [
@@ -75,21 +538,319 @@
         ],
         "responses": {
           "200": {
-            "description": "PhotoPage",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PhotoPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidCursor",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidCursorEncoded"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": [
+                            "Uploading"
+                          ]
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "properties": {
+                            "original": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "sha256"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w480": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w1200": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w2400": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "original",
+                            "w480",
+                            "w1200",
+                            "w2400"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "original",
+                              "w480",
+                              "w1200",
+                              "w2400"
+                            ]
+                          }
+                        },
+                        "photoId": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "_tag",
+                        "manifest",
+                        "missing",
+                        "photoId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "_tag": {
+                          "type": "string",
+                          "enum": [
+                            "Draft"
+                          ]
+                        },
+                        "finalizedAt": {
+                          "type": "string"
+                        },
+                        "manifest": {
+                          "type": "object",
+                          "properties": {
+                            "original": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "sha256"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w480": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 480
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w1200": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1200
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "w2400": {
+                              "type": "object",
+                              "properties": {
+                                "bytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 104857600
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2400
+                                }
+                              },
+                              "required": [
+                                "bytes",
+                                "height",
+                                "sha256",
+                                "width"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "original",
+                            "w480",
+                            "w1200",
+                            "w2400"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "photoId": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "_tag",
+                        "finalizedAt",
+                        "manifest",
+                        "photoId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               }
             }
@@ -100,6 +861,380 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PhotoNotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "StorageUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUnavailableEncoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/photos/{photoId}/{kind}": {
+      "put": {
+        "tags": [
+          "photos"
+        ],
+        "operationId": "photos.put",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "original",
+                "w480",
+                "w1200",
+                "w2400"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "photoId",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "required": true
+          },
+          {
+            "name": "content-length",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PhotoNotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PhotoAlreadyDraft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoAlreadyDraftEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "LengthMismatch | HashMismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LengthMismatchEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HashMismatchEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "StorageUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUnavailableEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "x-effect-stream": {
+                "encoding": "uint8array"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/photos/{photoId}/finalize": {
+      "post": {
+        "tags": [
+          "photos"
+        ],
+        "operationId": "photos.finalize",
+        "parameters": [
+          {
+            "name": "photoId",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "Draft"
+                      ]
+                    },
+                    "finalizedAt": {
+                      "type": "string"
+                    },
+                    "manifest": {
+                      "type": "object",
+                      "properties": {
+                        "original": {
+                          "type": "object",
+                          "properties": {
+                            "bytes": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 104857600
+                            },
+                            "sha256": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$"
+                            }
+                          },
+                          "required": [
+                            "bytes",
+                            "sha256"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "w480": {
+                          "type": "object",
+                          "properties": {
+                            "bytes": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 104857600
+                            },
+                            "height": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 480
+                            },
+                            "sha256": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$"
+                            },
+                            "width": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 480
+                            }
+                          },
+                          "required": [
+                            "bytes",
+                            "height",
+                            "sha256",
+                            "width"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "w1200": {
+                          "type": "object",
+                          "properties": {
+                            "bytes": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 104857600
+                            },
+                            "height": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 1200
+                            },
+                            "sha256": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$"
+                            },
+                            "width": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 1200
+                            }
+                          },
+                          "required": [
+                            "bytes",
+                            "height",
+                            "sha256",
+                            "width"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "w2400": {
+                          "type": "object",
+                          "properties": {
+                            "bytes": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 104857600
+                            },
+                            "height": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 2400
+                            },
+                            "sha256": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$"
+                            },
+                            "width": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 2400
+                            }
+                          },
+                          "required": [
+                            "bytes",
+                            "height",
+                            "sha256",
+                            "width"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "photoId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "finalizedAt",
+                    "manifest",
+                    "photoId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PhotoNotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PhotoManifestConflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoManifestConflictEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FinalizeRejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizeRejectedEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "StorageUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUnavailableEncoded"
                 }
               }
             }
@@ -110,71 +1245,6 @@
   },
   "components": {
     "schemas": {
-      "ProbePhoto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "caption": {
-            "type": "string"
-          },
-          "capturedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "state": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "_tag": {
-                    "type": "string",
-                    "enum": [
-                      "Draft"
-                    ]
-                  }
-                },
-                "required": [
-                  "_tag"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "_tag": {
-                    "type": "string",
-                    "enum": [
-                      "Published"
-                    ]
-                  },
-                  "url": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "_tag",
-                  "url"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "capturedAt",
-          "state"
-        ],
-        "additionalProperties": false
-      },
       "UnauthorizedEncoded": {
         "type": "object",
         "properties": {
@@ -190,48 +1260,563 @@
         ],
         "additionalProperties": false
       },
-      "PhotoPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProbePhoto"
-            }
-          },
-          "nextCursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "InvalidCursorEncoded": {
+      "StorageUnavailableEncoded": {
         "type": "object",
         "properties": {
           "_tag": {
             "type": "string",
             "enum": [
-              "InvalidCursor"
+              "StorageUnavailable"
             ]
           },
-          "cursor": {
+          "operation": {
             "type": "string"
           }
         },
         "required": [
           "_tag",
-          "cursor"
+          "operation"
+        ],
+        "additionalProperties": false
+      },
+      "FinalizeRejectedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "FinalizeRejected"
+            ]
+          },
+          "photoId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "problems": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "Missing"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "Corrupt"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "NotWebp"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "HasMetadata"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "Animated"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "_tag": {
+                        "type": "string",
+                        "enum": [
+                          "DimensionsMismatch"
+                        ]
+                      },
+                      "expected": {
+                        "type": "object",
+                        "properties": {
+                          "height": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "height",
+                          "width"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "found": {
+                        "type": "object",
+                        "properties": {
+                          "height": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "height",
+                          "width"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "w480",
+                          "w1200",
+                          "w2400"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_tag",
+                      "expected",
+                      "found",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "Missing"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "Corrupt"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "NotWebp"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "HasMetadata"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "Animated"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "_tag": {
+                      "type": "string",
+                      "enum": [
+                        "DimensionsMismatch"
+                      ]
+                    },
+                    "expected": {
+                      "type": "object",
+                      "properties": {
+                        "height": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "height",
+                        "width"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "found": {
+                      "type": "object",
+                      "properties": {
+                        "height": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "height",
+                        "width"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "original",
+                        "w480",
+                        "w1200",
+                        "w2400"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_tag",
+                    "expected",
+                    "found",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "_tag",
+          "photoId",
+          "problems"
+        ],
+        "additionalProperties": false
+      },
+      "PhotoManifestConflictEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "PhotoManifestConflict"
+            ]
+          },
+          "photoId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "_tag",
+          "photoId"
+        ],
+        "additionalProperties": false
+      },
+      "PhotoNotFoundEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "PhotoNotFound"
+            ]
+          },
+          "photoId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "_tag",
+          "photoId"
+        ],
+        "additionalProperties": false
+      },
+      "HashMismatchEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "HashMismatch"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "original",
+              "w480",
+              "w1200",
+              "w2400"
+            ]
+          }
+        },
+        "required": [
+          "_tag",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "LengthMismatchEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "LengthMismatch"
+            ]
+          },
+          "expected": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 104857600
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "original",
+              "w480",
+              "w1200",
+              "w2400"
+            ]
+          },
+          "received": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "_tag",
+          "expected",
+          "kind",
+          "received"
+        ],
+        "additionalProperties": false
+      },
+      "PhotoAlreadyDraftEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "PhotoAlreadyDraft"
+            ]
+          },
+          "photoId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "_tag",
+          "photoId"
         ],
         "additionalProperties": false
       }
@@ -246,7 +1831,7 @@
   "security": [],
   "tags": [
     {
-      "name": "probe"
+      "name": "photos"
     }
   ]
 }
