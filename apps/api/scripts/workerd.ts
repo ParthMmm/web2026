@@ -20,7 +20,9 @@ const virtualEntry = (source: string): Plugin => ({
   resolveId: (id) => (id === VIRTUAL_ENTRY ? id : null),
 });
 
-export const bundle = async (entry: { readonly path: string } | { readonly source: string }) => {
+export const bundle = async (
+  entry: { readonly path: string } | { readonly source: string }
+) => {
   const build = await rolldown({
     checks: { ineffectiveDynamicImport: false, unresolvedImport: false },
     cwd: ROOT,
@@ -40,12 +42,21 @@ export const bundle = async (entry: { readonly path: string } | { readonly sourc
     // repo root's extends Astro's, which CI never installs for this job.
     tsconfig: `${ROOT}tsconfig.json`,
   });
-  const { output } = await build.generate({ codeSplitting: false, format: "esm" });
+  const { output } = await build.generate({
+    codeSplitting: false,
+    format: "esm",
+  });
   await build.close();
   return output.flatMap((chunk) =>
     chunk.type === "chunk"
-      ? [{ contents: chunk.code, path: `${ROOT}${chunk.fileName}`, type: "ESModule" as const }]
-      : [],
+      ? [
+          {
+            contents: chunk.code,
+            path: `${ROOT}${chunk.fileName}`,
+            type: "ESModule" as const,
+          },
+        ]
+      : []
   );
 };
 
@@ -53,31 +64,32 @@ export const bundleWorker = () =>
   bundle({
     source: makeEffectVirtualEntry(
       {},
-      { name: "web2026-photos", stage: "test" },
+      { name: "web2026-photos", stage: "test" }
     )(`${ROOT}src/worker.ts`),
   });
 
 export const startWorkerd = async (
   modules: Awaited<ReturnType<typeof bundle>>,
   bindings: Record<string, string> = {},
-  port?: number,
+  port?: number
 ) => {
   const miniflare = new Miniflare({
     bindings,
     compatibilityDate: COMPATIBILITY_DATE,
-    host: "127.0.0.1",
-    port,
     compatibilityFlags: COMPATIBILITY_FLAGS,
     d1Databases: ["Db"],
+    host: "127.0.0.1",
     modules,
     modulesRoot: ROOT,
+    port,
     r2Buckets: ["Private"],
   });
   const db = await miniflare.getD1Database("Db");
-  for (const file of readdirSync(MIGRATIONS).sort()) {
+  for (const file of readdirSync(MIGRATIONS).toSorted()) {
     for (const statement of splitSqliteStatements(
-      readFileSync(new URL(file, MIGRATIONS), "utf8"),
+      readFileSync(new URL(file, MIGRATIONS), "utf-8")
     )) {
+      // oxlint-disable-next-line no-await-in-loop -- migrations apply in order, one statement at a time
       await db.prepare(statement).run();
     }
   }

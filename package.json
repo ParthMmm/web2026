@@ -1,4 +1,23 @@
 {
+  "name": "web2024",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "deploy": "alchemy deploy --stage prod",
+    "destroy": "alchemy destroy --stage prod",
+    "lint": "ultracite check",
+    "lint:fix": "ultracite fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "prepare": "lefthook install"
+  },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/sitemap": "^3.7.4",
@@ -32,33 +51,16 @@
     "@tailwindcss/vite": "4.3.3",
     "alchemy": "2.0.0-beta.85",
     "effect": "4.1.2",
+    "lefthook": "2.2.2",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",
     "ultracite": "7.12.0"
   },
-  "name": "web2024",
   "packageManager": "bun@1.4.1",
-  "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "deploy": "alchemy deploy --stage prod",
-    "destroy": "alchemy destroy --stage prod",
-    "lint": "ultracite check",
-    "lint:fix": "ultracite fix",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "typecheck": "tsc --noEmit",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
-  },
   "trustedDependencies": [
     "esbuild",
     "sharp"
-  ],
-  "type": "module",
-  "version": "0.0.1"
+  ]
 }

@@ -96,28 +96,30 @@ const result = (track: (typeof set.tracks)[number]): string => {
     const list = root.querySelector<HTMLElement>(".tracks");
     const run = sequence();
 
+    const mark = (step: number) => {
+      root.dataset.step = String(step);
+      for (const [i, item] of [...root.querySelectorAll(".steps li")].entries()) {
+        if (i === step) {
+          item.setAttribute("aria-current", "step");
+        } else {
+          item.removeAttribute("aria-current");
+        }
+      }
+    };
+
     const play = async () => {
       const { wait } = run.start();
       for (const details of root.querySelectorAll("details")) {
         details.open = false;
       }
       list?.scrollTo({ top: 0 });
-      const mark = (step: number) => {
-        root.dataset.step = String(step);
-        for (const [i, item] of [...root.querySelectorAll(".steps li")].entries()) {
-          if (i === step) {
-            item.setAttribute("aria-current", "step");
-          } else {
-            item.removeAttribute("aria-current");
-          }
-        }
-      };
       mark(0);
       for (const [step, delay] of [
         [1, 700],
         [2, 1300],
         [3, 1300],
       ] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- each step starts after the one before it
         if (!(await wait(delay))) {
           return;
         }
@@ -128,8 +130,8 @@ const result = (track: (typeof set.tracks)[number]): string => {
       }
     };
 
-    replay?.addEventListener("click", () => void play());
-    if (!playOnce("versos", root, () => void play()) && replay) {
+    replay?.addEventListener("click", play);
+    if (!playOnce("versos", root, play) && replay) {
       replay.hidden = false;
     }
   }

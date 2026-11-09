@@ -8,13 +8,18 @@ import { STAGING_PREFIX } from "./internal/keys.ts";
 const SECONDS_PER_DAY = 86_400;
 const STAGING_RETENTION_DAYS = 7;
 
-const retainInProd = RemovalPolicy.retain(Effect.map(Stage, (stage) => stage === "prod"));
+const retainInProd = RemovalPolicy.retain(
+  Stage.pipe(Effect.map((stage) => stage === "prod"))
+);
 
 export const PrivateBucket = Cloudflare.R2.Bucket("Private", {
   lifecycleRules: [
     {
       deleteObjectsTransition: {
-        condition: { maxAge: STAGING_RETENTION_DAYS * SECONDS_PER_DAY, type: "Age" },
+        condition: {
+          maxAge: STAGING_RETENTION_DAYS * SECONDS_PER_DAY,
+          type: "Age",
+        },
       },
       id: "expire-staging",
       prefix: STAGING_PREFIX,
@@ -23,6 +28,6 @@ export const PrivateBucket = Cloudflare.R2.Bucket("Private", {
   publicAccess: false,
 }).pipe(retainInProd);
 
-export const PhotoDatabase = Cloudflare.D1.Database("Db", { migrations: "./migrations" }).pipe(
-  retainInProd,
-);
+export const PhotoDatabase = Cloudflare.D1.Database("Db", {
+  migrations: "./migrations",
+}).pipe(retainInProd);

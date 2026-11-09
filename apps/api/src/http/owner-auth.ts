@@ -9,17 +9,23 @@ const encode = (text: string) => new TextEncoder().encode(text);
 export const ownerTokenAuth = (token: Redacted.Redacted<string>) =>
   Layer.effect(
     OwnerAuth,
-    Effect.gen(function* () {
+    Effect.gen(function* buildOwnerAuth() {
       const digest = yield* Digest.Digest;
-      const wanted = yield* digest.digest(Digest.sha256, encode(Redacted.value(token)));
+      const wanted = yield* digest.digest(
+        Digest.sha256,
+        encode(Redacted.value(token))
+      );
       return OwnerAuth.of({
         bearer: (httpEffect, { credential }) =>
-          Effect.gen(function* () {
-            const given = yield* digest.digest(Digest.sha256, encode(Redacted.value(credential)));
+          Effect.gen(function* bearer() {
+            const given = yield* digest.digest(
+              Digest.sha256,
+              encode(Redacted.value(credential))
+            );
             return Mac.timingSafeEqual(wanted, given)
               ? yield* httpEffect
               : yield* new Unauthorized();
           }),
       });
-    }),
+    })
   );

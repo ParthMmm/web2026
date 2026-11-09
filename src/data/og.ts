@@ -2,7 +2,7 @@ import { projects, work } from "./site";
 
 export type Tone = "green" | "orange";
 
-export type OgCard = {
+export interface OgCard {
   /** Section the page belongs to, shown above the title. */
   kicker?: string;
   title: string;
@@ -10,7 +10,7 @@ export type OgCard = {
   quiet?: string;
   description?: string;
   tone: Tone;
-};
+}
 
 const describe = (list: typeof projects, url: string): string =>
   list.find((item) => item.url === url)?.description ?? "";
@@ -27,23 +27,17 @@ export const ogCards = {
     title: "Projects",
     tone: "green",
   },
+  "projects/auriom": {
+    description: describe(projects, "/projects/auriom"),
+    kicker: "Projects",
+    title: "Auriom",
+    tone: "green",
+  },
   "projects/beacon": {
     description: describe(projects, "/projects/beacon"),
     kicker: "Projects",
     title: "Beacon",
     tone: "orange",
-  },
-  "projects/versos": {
-    description: describe(projects, "/projects/versos"),
-    kicker: "Projects",
-    title: "Versos",
-    tone: "orange",
-  },
-  "projects/orbis": {
-    description: describe(projects, "/projects/orbis"),
-    kicker: "Projects",
-    title: "Orbis",
-    tone: "green",
   },
   "projects/mote": {
     description: describe(projects, "/projects/mote"),
@@ -51,11 +45,17 @@ export const ogCards = {
     title: "Möte",
     tone: "green",
   },
-  "projects/auriom": {
-    description: describe(projects, "/projects/auriom"),
+  "projects/orbis": {
+    description: describe(projects, "/projects/orbis"),
     kicker: "Projects",
-    title: "Auriom",
+    title: "Orbis",
     tone: "green",
+  },
+  "projects/versos": {
+    description: describe(projects, "/projects/versos"),
+    kicker: "Projects",
+    title: "Versos",
+    tone: "orange",
   },
   work: {
     description:

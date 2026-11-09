@@ -12,5 +12,5 @@ export default Alchemy.Stack(
     const api = yield* PhotosApi;
     yield* PublicBucket;
     return { url: api.url };
-  }),
+  })
 );

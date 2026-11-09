@@ -5,5 +5,5 @@ import { applyMigrations } from "./migrate.ts";
 
 export const migratedSqlite = () =>
   Layer.effectDiscard(applyMigrations).pipe(
-    Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })),
+    Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" }))
   );

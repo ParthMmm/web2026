@@ -408,7 +408,9 @@ mark {
 @layer components {
   .page {
     width: 100%;
-    max-width: calc(var(--rail) + var(--gutter) + var(--measure) + 2 * var(--page-pad));
+    max-width: calc(
+      var(--rail) + var(--gutter) + var(--measure) + 2 * var(--page-pad)
+    );
     margin-inline: auto;
     padding-inline: var(--page-pad);
   }

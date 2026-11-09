@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { expect, it } from "vitest";
 
-import { parseWebpHeader, WEBP_PREFIX_BYTES } from "../src/photos/internal/webp.ts";
+import {
+  parseWebpHeader,
+  WEBP_PREFIX_BYTES,
+} from "../src/photos/internal/webp.ts";
 
 const readFixture = (name: string) =>
   readFileSync(new URL(`fixtures/webp/${name}.webp`, import.meta.url));
@@ -28,13 +31,18 @@ it.each([
   expect(parseFixture(name)).toEqual({ _tag: "Webp", ...expected });
 });
 
-it.each(["trunc_fixedriff", "vp8l_badver"])("refuses the malformed file %s", (name) => {
-  expect(parseFixture(name)).toEqual({ _tag: "NotWebp" });
-});
+it.each(["trunc_fixedriff", "vp8l_badver"])(
+  "refuses the malformed file %s",
+  (name) => {
+    expect(parseFixture(name)).toEqual({ _tag: "NotWebp" });
+  }
+);
 
 it("refuses a valid file whose stored size differs from its RIFF size", () => {
   const bytes = readFixture("lossy");
-  expect(parseWebpHeader(bytes.subarray(0, WEBP_PREFIX_BYTES), bytes.length + 2)).toEqual({
+  expect(
+    parseWebpHeader(bytes.subarray(0, WEBP_PREFIX_BYTES), bytes.length + 2)
+  ).toEqual({
     _tag: "NotWebp",
   });
 });

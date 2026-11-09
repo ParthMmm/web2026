@@ -13,6 +13,4 @@ The owner asked to save this as the reference for the intended result. The video
 - [GPUI Kit](https://github.com/longbridge/gpui-kit), used before the move to ZUI
 - [Zed GPUI image example](https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/image/image.rs)
 - [GPUI FPS monitor](https://gpui-kit.com/docs/fps/)
-- [Zeron](https://github.com/zeronsh/zeron) — native GPUI desktop app we take design and
-  performance from. Read [the reference](zeron-reference.md), which pins revision
-  `7a472fce41b6a834da87b460e189adb05eacf3d4`.
+- [Zeron](https://github.com/zeronsh/zeron) — native GPUI desktop app we take design and performance from. Read [the reference](zeron-reference.md), which pins revision `7a472fce41b6a834da87b460e189adb05eacf3d4`.

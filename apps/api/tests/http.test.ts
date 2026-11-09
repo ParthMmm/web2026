@@ -3,6 +3,7 @@ import { Digest } from "effect/crypto";
 import { HttpRouter } from "effect/http";
 import { afterEach, expect, it } from "vitest";
 
+import type { BeginRequest } from "../src/http/contract.ts";
 import { photosApp } from "../src/http/handlers.ts";
 import { makeMemoryBlobs } from "../src/photos/blobs-memory.ts";
 import { variantKinds } from "../src/photos/domain.ts";
@@ -13,25 +14,32 @@ import { migratedSqlite } from "./support/sqlite.ts";
 const TOKEN = "owner-token-for-tests-only-0123456789";
 const ORIGIN = "http://photos.test";
 
-const disposers: Array<() => Promise<void>> = [];
+const disposers: (() => Promise<void>)[] = [];
 afterEach(async () => {
   await Promise.all(disposers.splice(0).map((dispose) => dispose()));
 });
 
 const serve = () => {
-  const lines: Array<string> = [];
+  const lines: string[] = [];
   const capture = Logger.make((options) => {
     lines.push(Logger.formatJson.log(options));
   });
   const photos = Photos.layer.pipe(
     Layer.provide([makeMemoryBlobs().layer, migratedSqlite()]),
-    Layer.provide(Digest.layerWebCrypto),
+    Layer.provide(Digest.layerWebCrypto)
   );
   const { dispose, handler } = HttpRouter.toWebHandler(
-    Layer.merge(photosApp(photos, Redacted.make(TOKEN)), Logger.layer([capture])),
+    Layer.merge(
+      photosApp(photos, Redacted.make(TOKEN)),
+      Logger.layer([capture])
+    )
   );
   disposers.push(dispose);
-  const call = (path: string, init: RequestInit = {}, token: string | null = TOKEN) => {
+  const call = (
+    path: string,
+    init: RequestInit = {},
+    token: string | null = TOKEN
+  ) => {
     const headers = new Headers(init.headers);
     if (token !== null) {
       headers.set("authorization", `Bearer ${token}`);
@@ -41,7 +49,7 @@ const serve = () => {
   return { call, lines };
 };
 
-const json = (body: unknown): RequestInit => ({
+const json = (body: typeof BeginRequest.Encoded): RequestInit => ({
   body: JSON.stringify(body),
   headers: { "content-type": "application/json" },
   method: "POST",
@@ -49,26 +57,40 @@ const json = (body: unknown): RequestInit => ({
 
 const put = (body: Uint8Array): RequestInit => ({
   body: Uint8Array.from(body),
-  headers: { "content-length": String(body.length), "content-type": "application/octet-stream" },
+  headers: {
+    "content-length": String(body.length),
+    "content-type": "application/octet-stream",
+  },
   method: "PUT",
 });
 
-const photo = () => Effect.runPromise(fixture().pipe(Effect.provide(Digest.layerWebCrypto)));
+const photo = () =>
+  Effect.runPromise(fixture().pipe(Effect.provide(Digest.layerWebCrypto)));
 
 it("rejects a missing or wrong bearer token with 401 Unauthorized", async () => {
   const { call } = serve();
   const { photoId } = await photo();
-  for (const token of [null, "x".repeat(TOKEN.length)]) {
-    const response = await call(`/v1/photos/${photoId}`, {}, token);
+  const responses = await Promise.all(
+    [null, "x".repeat(TOKEN.length)].map((token) =>
+      call(`/v1/photos/${photoId}`, {}, token)
+    )
+  );
+  for (const response of responses) {
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ _tag: "Unauthorized" });
   }
+  const bodies = await Promise.all(
+    responses.map((response) => response.json())
+  );
+  expect(bodies).toEqual([{ _tag: "Unauthorized" }, { _tag: "Unauthorized" }]);
 });
 
 it("rejects a photoId that is not the original's sha256 with 400", async () => {
   const { call } = serve();
   const { manifest } = await photo();
-  const response = await call("/v1/photos", json({ manifest, photoId: "b".repeat(64) }));
+  const response = await call(
+    "/v1/photos",
+    json({ manifest, photoId: "b".repeat(64) })
+  );
   expect(response.status).toBe(400);
   const malformed = await call("/v1/photos/not-a-hash");
   expect(malformed.status).toBe(400);
@@ -80,19 +102,30 @@ it("uploads every object over HTTP and finalizes the photo into a draft", async 
 
   const begun = await call("/v1/photos", json({ manifest, photoId }));
   expect(begun.status).toBe(200);
-  expect(await begun.json()).toMatchObject({ _tag: "Uploading", missing: variantKinds });
+  expect(await begun.json()).toMatchObject({
+    _tag: "Uploading",
+    missing: variantKinds,
+  });
 
-  for (const kind of variantKinds) {
-    const stored = await call(`/v1/photos/${photoId}/${kind}`, put(bodies[kind]));
-    expect(stored.status).toBe(204);
-  }
+  const stored = await Promise.all(
+    variantKinds.map((kind) =>
+      call(`/v1/photos/${photoId}/${kind}`, put(bodies[kind]))
+    )
+  );
+  expect(stored.map((response) => response.status)).toEqual(
+    variantKinds.map(() => 204)
+  );
 
-  const finalized = await call(`/v1/photos/${photoId}/finalize`, { method: "POST" });
+  const finalized = await call(`/v1/photos/${photoId}/finalize`, {
+    method: "POST",
+  });
   expect(finalized.status).toBe(200);
   const draft = await finalized.json();
   expect(draft).toMatchObject({ _tag: "Draft", manifest, photoId });
 
-  const again = await call(`/v1/photos/${photoId}/finalize`, { method: "POST" });
+  const again = await call(`/v1/photos/${photoId}/finalize`, {
+    method: "POST",
+  });
   expect(await again.json()).toEqual(draft);
 });
 
@@ -101,7 +134,7 @@ it("answers a body with the wrong hash with 422 HashMismatch", async () => {
   const { bodies, manifest, photoId } = await photo();
   await call("/v1/photos", json({ manifest, photoId }));
   const tampered = Uint8Array.from(bodies.w480);
-  tampered[tampered.length - 1] ^= 0xff;
+  tampered[tampered.length - 1] = 0xff - (tampered.at(-1) ?? 0);
 
   const response = await call(`/v1/photos/${photoId}/w480`, put(tampered));
   expect(response.status).toBe(422);

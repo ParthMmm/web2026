@@ -12,7 +12,7 @@ import { requestLog } from "./request-log.ts";
 const PhotosHandlers = HttpApiBuilder.group(
   Api,
   "photos",
-  Effect.fn(function* (handlers) {
+  Effect.fn(function* handlePhotos(handlers) {
     const photos = yield* Photos;
     return handlers.handleAll({
       begin: ({ payload }) => photos.begin(payload.manifest),
@@ -26,15 +26,15 @@ const PhotosHandlers = HttpApiBuilder.group(
           photoId: params.photoId,
         }),
     });
-  }),
+  })
 );
 
 export const photosApp = <E>(
   photos: Layer.Layer<Photos, E>,
-  ownerToken: Redacted.Redacted<string>,
+  ownerToken: Redacted.Redacted<string>
 ) =>
   HttpApiBuilder.layer(Api).pipe(
     Layer.provide(PhotosHandlers),
     Layer.provide([photos, ownerTokenAuth(ownerToken), requestLog]),
-    Layer.provide([Digest.layerWebCrypto, Http.Platform]),
+    Layer.provide([Digest.layerWebCrypto, Http.Platform])
   );

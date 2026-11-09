@@ -1,0 +1,10 @@
+# `ultracite check` is oxlint plus `oxfmt --check`. The hook calls them
+# directly because ultracite passes flags to oxlint only, and oxfmt fails
+# when every staged file is one it skips (an .astro file, openapi.json).
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      run: bunx oxlint --no-error-on-unmatched-pattern {staged_files}
+    format:
+      run: bunx oxfmt --check --no-error-on-unmatched-pattern {staged_files}

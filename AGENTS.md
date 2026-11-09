@@ -1,4 +1,5 @@
 <!-- effect-solutions:start -->
+
 ## Effect Best Practices
 
 **IMPORTANT:** Always consult effect-solutions before writing Effect code.
@@ -29,7 +30,6 @@ Use the five canonical triage labels. See `docs/agents/triage-labels.md`.
 ### Domain docs
 
 Use a single root context. See `docs/agents/domain.md`.
-
 
 # Ultracite Code Standards
 
@@ -121,14 +121,17 @@ Write code that is **accessible, performant, type-safe, and maintainable**. Focu
 ### Framework-Specific Guidance
 
 **Next.js:**
+
 - Use Next.js `<Image>` component for images
 - Use `next/head` or App Router metadata API for head elements
 - Use Server Components for async data fetching instead of async Client Components
 
 **React 19+:**
+
 - Use ref as a prop instead of `React.forwardRef`
 
 **Solid/Svelte/Vue/Qwik:**
+
 - Use `class` and `for` attributes (not `className` or `htmlFor`)
 
 ---

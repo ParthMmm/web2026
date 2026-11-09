@@ -13,18 +13,27 @@ export interface Expected {
   readonly sha256: Sha256;
 }
 
-export class BlobMissing extends Schema.TaggedError<BlobMissing>()("BlobMissing", {
-  key: BlobKey,
-}) {}
+export class BlobMissing extends Schema.TaggedError<BlobMissing>()(
+  "BlobMissing",
+  {
+    key: BlobKey,
+  }
+) {}
 
-export class BlobRejected extends Schema.TaggedError<BlobRejected>()("BlobRejected", {
-  key: BlobKey,
-}) {}
+export class BlobRejected extends Schema.TaggedError<BlobRejected>()(
+  "BlobRejected",
+  {
+    key: BlobKey,
+  }
+) {}
 
-export class BlobUnavailable extends Schema.TaggedError<BlobUnavailable>()("BlobUnavailable", {
-  cause: Schema.Defect(),
-  operation: Schema.String,
-}) {}
+export class BlobUnavailable extends Schema.TaggedError<BlobUnavailable>()(
+  "BlobUnavailable",
+  {
+    cause: Schema.Defect(),
+    operation: Schema.String,
+  }
+) {}
 
 /**
  * Every implementation keeps one invariant: an object exists at a key only if
@@ -37,18 +46,23 @@ export class Blobs extends Context.Service<
     readonly put: (
       key: BlobKey,
       body: Stream.Stream<Uint8Array, unknown>,
-      expect: Expected,
+      expect: Expected
     ) => Effect.Effect<void, BlobRejected | BlobUnavailable>;
     readonly copy: (
       from: BlobKey,
       to: BlobKey,
-      expect: Expected,
+      expect: Expected
     ) => Effect.Effect<void, BlobMissing | BlobRejected | BlobUnavailable>;
-    readonly holds: (key: BlobKey, expect: Expected) => Effect.Effect<boolean, BlobUnavailable>;
+    readonly holds: (
+      key: BlobKey,
+      expect: Expected
+    ) => Effect.Effect<boolean, BlobUnavailable>;
     readonly prefix: (
       key: BlobKey,
-      length: number,
+      length: number
     ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
-    readonly remove: (keys: ReadonlyArray<BlobKey>) => Effect.Effect<void, BlobUnavailable>;
+    readonly remove: (
+      keys: readonly BlobKey[]
+    ) => Effect.Effect<void, BlobUnavailable>;
   }
 >()("@web2026/api/Blobs") {}

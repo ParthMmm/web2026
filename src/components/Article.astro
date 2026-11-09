@@ -1,5 +1,5 @@
 ---
-type Props = {
+interface Props {
 	/** Rail label: which part of the site this document belongs to. */
 	section: string;
 	sectionUrl: string;
@@ -8,7 +8,7 @@ type Props = {
 	/** Live site or repository, when the thing itself is reachable. */
 	url?: string;
 	urlLabel?: string;
-};
+}
 
 const { section, sectionUrl, title, description, url, urlLabel } = Astro.props;
 ---

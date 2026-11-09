@@ -96,14 +96,14 @@
     localStorage.removeItem("theme");
     const stored = localStorage.getItem(KEY);
 
-    const CANVAS = { light: "#fcf6e9", dark: "#1f1d17" };
+    const CANVAS = { dark: "#1f1d17", light: "#fcf6e9" };
 
     const apply = (isDark) => {
       document.documentElement.classList.toggle("dark", isDark);
       document
         .querySelector('meta[name="theme-color"]')
         ?.setAttribute("content", isDark ? CANVAS.dark : CANVAS.light);
-      const button = document.getElementById("themeToggle");
+      const button = document.querySelector("#themeToggle");
       button?.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
     };
 
@@ -124,7 +124,7 @@
       }
     };
 
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
       if (!event.target.closest?.("#themeToggle")) {
         return;
       }
@@ -133,12 +133,11 @@
         toggle();
         return;
       }
-      document.startViewTransition(toggle).ready.then(() => {
-        document.documentElement.animate([{ opacity: 0 }, { opacity: 1 }], {
-          duration: 240,
-          easing: "ease",
-          pseudoElement: "::view-transition-new(root)",
-        });
+      await document.startViewTransition(toggle).ready;
+      document.documentElement.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: 240,
+        easing: "ease",
+        pseudoElement: "::view-transition-new(root)",
       });
     });
   })();

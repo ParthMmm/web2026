@@ -6,11 +6,11 @@ import { SqlClient } from "effect/sql";
 
 const MIGRATIONS = new URL("../../migrations/", import.meta.url);
 
-export const applyMigrations = Effect.gen(function* () {
+export const applyMigrations = Effect.gen(function* applyMigrations() {
   const sql = yield* SqlClient.SqlClient;
-  for (const file of readdirSync(MIGRATIONS).sort()) {
+  for (const file of readdirSync(MIGRATIONS).toSorted()) {
     for (const statement of splitSqliteStatements(
-      readFileSync(new URL(file, MIGRATIONS), "utf8"),
+      readFileSync(new URL(file, MIGRATIONS), "utf-8")
     )) {
       yield* sql.unsafe(statement);
     }
