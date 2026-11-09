@@ -20,7 +20,7 @@ The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` f
 
 ### Issue tracker
 
-Use GitHub Issues for ParthMmm/web2026. See `docs/agents/issue-tracker.md`.
+Use Linear (team Pallas, project web2026). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
