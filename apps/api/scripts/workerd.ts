@@ -36,6 +36,9 @@ export const bundle = async (entry: { readonly path: string } | { readonly sourc
       "source" in entry ? virtualEntry(entry.source) : null,
     ],
     transform: { define: { "globalThis.__ALCHEMY_RUNTIME__": "true" } },
+    // The virtual entry has no directory, so name the API's own tsconfig. The
+    // repo root's extends Astro's, which CI never installs for this job.
+    tsconfig: `${ROOT}tsconfig.json`,
   });
   const { output } = await build.generate({ codeSplitting: false, format: "esm" });
   await build.close();
