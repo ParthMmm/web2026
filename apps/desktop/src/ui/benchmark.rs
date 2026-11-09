@@ -2,16 +2,8 @@
 //! preview requests, and a JSON report on stdout. The report keys are the
 //! benchmark's contract.
 
-use super::cache::BoundedCache;
-use gpui::{
-    App, Canvas, Entity, FrameTiming, FrameTimingCollector, Window, WindowId, WindowKind,
-    WindowOptions, canvas, profiler,
-};
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use super::{frames::FrameSample, images::ImageSlots};
+use std::time::{Duration, Instant};
 
 /// Benchmark rows assume this many columns regardless of window width, so
 /// preview indices match `benchmark.py`'s warm preparation.
@@ -19,6 +11,8 @@ pub(super) const COLUMNS: usize = 4;
 const ROWS_PER_SECOND: f64 = 4.0;
 const PREVIEW_INTERVAL_SECONDS: u64 = 3;
 const PREVIEW_TAIL_SECONDS: u64 = 2;
+/// AppKit's pop-up menu window level, above normal windows.
+pub(super) const WINDOW_LEVEL: isize = 101;
 
 pub(super) fn seconds_from_env() -> Option<u64> {
     match std::env::var("PHOTO_BENCH_SECONDS") {
@@ -39,15 +33,6 @@ pub(super) fn seconds_from_env() -> Option<u64> {
     }
 }
 
-pub(super) fn configure_window(window_options: &mut WindowOptions) {
-    // GPUI's macOS frame source follows NSWindowOcclusionState. A covered
-    // normal window stops receiving display-link ticks even when it remains
-    // dirty. PopUp uses a non-activating panel at the popup level, so the
-    // benchmark stays visible to the compositor without taking focus.
-    window_options.focus = false;
-    window_options.kind = WindowKind::PopUp;
-}
-
 pub(super) struct Step {
     pub(super) scroll_row: usize,
     pub(super) preview_index: Option<usize>,
@@ -55,7 +40,6 @@ pub(super) struct Step {
 
 pub(super) struct Benchmark {
     seconds: u64,
-    present_trace: PresentTrace,
     started: Instant,
     next_preview_at: u64,
     preview_requested: Option<Instant>,
@@ -66,164 +50,11 @@ pub(super) struct Benchmark {
     preview_decoded_ms: Vec<f64>,
     preview_latencies_ms: Vec<f64>,
     preview_samples: Vec<(usize, f64)>,
-    max_render_gap: Duration,
-    max_render_gap_before_frame: usize,
-    render_count: usize,
-    first_frame_ms: Option<f64>,
-    inactive_frames: usize,
-    last_render: Instant,
-}
-
-/// One target-window event in time order. ZUI records draws; presentation
-/// times come from `Window::on_present`, which runs as the frame is handed to
-/// the platform layer.
-#[derive(Clone, Copy)]
-enum FrameEvent {
-    Draw { window_id: WindowId, at: Instant },
-    Present { window_id: WindowId, at: Instant },
-}
-
-impl FrameEvent {
-    fn at(self) -> Instant {
-        match self {
-            Self::Draw { at, .. } | Self::Present { at, .. } => at,
-        }
-    }
-}
-
-struct PresentTrace {
-    collector: FrameTimingCollector,
-    presents: Rc<RefCell<Vec<Instant>>>,
-    changed_trace_setting: bool,
-}
-
-impl PresentTrace {
-    fn new() -> Self {
-        let changed_trace_setting = profiler::set_frame_trace_enabled(true);
-        Self {
-            collector: FrameTimingCollector::new(),
-            presents: Rc::default(),
-            changed_trace_setting,
-        }
-    }
-
-    fn finish(&mut self, window_id: WindowId) -> (Vec<FrameTiming>, Vec<FrameEvent>) {
-        let draws: Vec<FrameTiming> = self
-            .collector
-            .collect_unseen()
-            .into_iter()
-            .filter(|frame| frame.window_id == window_id)
-            .collect();
-        let mut events: Vec<FrameEvent> = draws
-            .iter()
-            .map(|frame| FrameEvent::Draw {
-                window_id,
-                at: frame.draw_end,
-            })
-            .chain(
-                self.presents
-                    .borrow()
-                    .iter()
-                    .map(|&at| FrameEvent::Present { window_id, at }),
-            )
-            .collect();
-        // Stable: a draw and its presentation can share an instant, and the
-        // draw was recorded first.
-        events.sort_by_key(|event| event.at());
-        (draws, events)
-    }
-}
-
-impl Drop for PresentTrace {
-    fn drop(&mut self) {
-        if self.changed_trace_setting {
-            profiler::set_frame_trace_enabled(false);
-        }
-    }
-}
-
-struct PresentSamples {
-    draw_events: u64,
-    presented_frames: u64,
-    superseded_draw_events: u64,
-    pending_draw_events: u64,
-    intervals_ms: Vec<f64>,
-    ordered: bool,
-    first_present_ms: Option<f64>,
-    last_present_age_ms: Option<f64>,
-    max_gap_ms: Option<f64>,
-}
-
-impl PresentSamples {
-    fn complete(&self, expected_draws: u64) -> bool {
-        self.ordered
-            && self.presented_frames > 0
-            && self.draw_events == expected_draws
-            && self.pending_draw_events == 0
-            && self.draw_events == self.presented_frames + self.superseded_draw_events
-            && u64::try_from(self.intervals_ms.len()).ok() == Some(self.presented_frames - 1)
-    }
-}
-
-fn present_samples(
-    events: &[FrameEvent],
-    window_id: WindowId,
-    started: Instant,
-    ended: Instant,
-) -> PresentSamples {
-    let mut samples = PresentSamples {
-        draw_events: 0,
-        presented_frames: 0,
-        superseded_draw_events: 0,
-        pending_draw_events: 0,
-        intervals_ms: Vec::new(),
-        ordered: ended >= started,
-        first_present_ms: None,
-        last_present_age_ms: None,
-        max_gap_ms: None,
-    };
-    let mut previous = None;
-    for event in events {
-        match *event {
-            FrameEvent::Draw { window_id: id, .. } if id == window_id => {
-                samples.draw_events += 1;
-                samples.pending_draw_events += 1;
-            }
-            FrameEvent::Present { window_id: id, at } if id == window_id => {
-                samples.presented_frames += 1;
-                if samples.pending_draw_events == 0 {
-                    samples.ordered = false;
-                } else {
-                    samples.superseded_draw_events += samples.pending_draw_events - 1;
-                    samples.pending_draw_events = 0;
-                }
-                samples.ordered &= at >= started && at <= ended;
-                if let Some(previous) = previous {
-                    if at > previous {
-                        samples
-                            .intervals_ms
-                            .push(millis(at.duration_since(previous)));
-                    } else {
-                        samples.ordered = false;
-                    }
-                } else {
-                    samples.first_present_ms = at.checked_duration_since(started).map(millis);
-                }
-                previous = Some(at);
-            }
-            _ => {}
-        }
-    }
-    samples.last_present_age_ms = previous
-        .and_then(|last| ended.checked_duration_since(last))
-        .map(millis);
-    samples.max_gap_ms = samples
-        .first_present_ms
-        .into_iter()
-        .chain(samples.last_present_age_ms)
-        .chain(samples.intervals_ms.iter().copied())
-        .max_by(f64::total_cmp);
-    samples
+    max_poll_gap: Duration,
+    max_poll_gap_before: usize,
+    poll_count: usize,
+    first_poll_ms: Option<f64>,
+    last_poll: Instant,
 }
 
 pub(super) struct Totals {
@@ -237,7 +68,6 @@ impl Benchmark {
         let now = Instant::now();
         Self {
             seconds,
-            present_trace: PresentTrace::new(),
             started: now,
             next_preview_at: 1,
             preview_requested: None,
@@ -248,45 +78,33 @@ impl Benchmark {
             preview_decoded_ms: Vec::new(),
             preview_latencies_ms: Vec::new(),
             preview_samples: Vec::new(),
-            max_render_gap: Duration::ZERO,
-            max_render_gap_before_frame: 0,
-            render_count: 0,
-            first_frame_ms: None,
-            inactive_frames: 0,
-            last_render: now,
+            max_poll_gap: Duration::ZERO,
+            max_poll_gap_before: 0,
+            poll_count: 0,
+            first_poll_ms: None,
+            last_poll: now,
         }
     }
 
-    /// An empty element whose paint asks to be told when its frame is
-    /// presented. Cached paints carry the request into reused frames.
-    pub(super) fn present_probe(&self) -> Canvas<()> {
-        let presents = self.present_trace.presents.clone();
-        canvas(
-            |_, _, _| {},
-            move |_, (), window, _| {
-                let presents = presents.clone();
-                window.on_present(move || presents.borrow_mut().push(Instant::now()));
-            },
-        )
-    }
-
-    pub(super) fn duration(&self) -> Duration {
+    /// Time left in the run, or `None` once it is over.
+    pub(super) fn remaining(&self) -> Option<Duration> {
         Duration::from_secs(self.seconds)
+            .checked_sub(self.started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
     }
 
-    pub(super) fn record_frame(&mut self, window: &Window) {
-        self.render_count += 1;
-        let since_last = self.last_render.elapsed();
-        if self.render_count == 1 {
-            self.first_frame_ms = Some(millis(self.started.elapsed()));
-        } else if since_last > self.max_render_gap {
-            self.max_render_gap = since_last;
-            self.max_render_gap_before_frame = self.render_count;
+    /// Records one poll. Rune polls once before every frame, so the gaps
+    /// between polls bound the gaps between frames the app could build.
+    pub(super) fn record_poll(&mut self) {
+        self.poll_count += 1;
+        let since_last = self.last_poll.elapsed();
+        if self.poll_count == 1 {
+            self.first_poll_ms = Some(millis(self.started.elapsed()));
+        } else if since_last > self.max_poll_gap {
+            self.max_poll_gap = since_last;
+            self.max_poll_gap_before = self.poll_count;
         }
-        self.last_render = Instant::now();
-        if self.started.elapsed().as_secs() > 1 && !window.is_window_active() {
-            self.inactive_frames += 1;
-        }
+        self.last_poll = Instant::now();
     }
 
     /// Advances the script. `None` once the run is over or nothing is loaded.
@@ -349,43 +167,29 @@ impl Benchmark {
     }
 
     pub(super) fn report(
-        mut self,
+        self,
         totals: &Totals,
-        thumbnails: &Entity<BoundedCache>,
-        previews: &Entity<BoundedCache>,
-        window: &Window,
-        cx: &App,
+        frames: &[FrameSample],
+        thumbnails: &ImageSlots,
+        previews: &ImageSlots,
     ) -> serde_json::Value {
         let ended = Instant::now();
-        let window_id = window.window_handle().window_id();
-        let (draws, events) = self.present_trace.finish(window_id);
-        let presents = present_samples(&events, window_id, self.started, ended);
-        let draw_ms: Vec<f64> = draws
-            .iter()
-            .map(|frame| millis(frame.draw_duration()))
-            .collect();
-        let dirty_to_draw_ms: Vec<f64> = draws
-            .iter()
-            .filter_map(FrameTiming::dirty_to_draw_duration)
-            .map(millis)
-            .collect();
-        let thumbnails = thumbnails.read(cx);
-        let previews = previews.read(cx);
-        let mut report = serde_json::json!({
+        let presents = present_samples(frames, self.started, ended);
+        let cpu_ms: Vec<f64> = frames.iter().map(|frame| frame.cpu_ms).collect();
+        serde_json::json!({
             "photos": totals.photos,
             "thumbnails_completed": totals.thumbnails_completed,
             "failed": totals.failed,
             "seconds": self.started.elapsed().as_secs_f64(),
-            "draw_samples": draws.len(),
-            "last_render_age_ms": millis(self.last_render.elapsed()),
-            "draw_p95_ms": p95(&draw_ms),
+            "draw_samples": frames.len(),
+            "last_render_age_ms": millis(self.last_poll.elapsed()),
+            "draw_p95_ms": p95(&cpu_ms),
             "present_interval_p95_ms": quantile(&presents.intervals_ms, 0.95),
             "present_interval_p99_ms": quantile(&presents.intervals_ms, 0.99),
-            "max_render_gap_ms": millis(self.max_render_gap.max(self.last_render.elapsed())),
-            "max_render_gap_before_frame": self.max_render_gap_before_frame,
-            "render_count": self.render_count,
-            "first_frame_ms": self.first_frame_ms,
-            "inactive_frames": self.inactive_frames,
+            "max_render_gap_ms": millis(self.max_poll_gap.max(self.last_poll.elapsed())),
+            "max_render_gap_before_frame": self.max_poll_gap_before,
+            "render_count": self.poll_count,
+            "first_frame_ms": self.first_poll_ms,
             "preview_attempts": self.preview_attempts,
             "preview_failures": self.preview_failures,
             "preview_cache_hits": self.preview_cache_hits,
@@ -397,27 +201,74 @@ impl Benchmark {
             "preview_ready_p95_ms": p95(&self.preview_latencies_ms),
             "thumbnail_cache_limit": thumbnails.capacity(),
             "large_cache_limit": previews.capacity(),
-            "thumbnail_cache_entries": thumbnails.entries(cx),
-            "preview_cache_entries": previews.entries(cx),
+            "thumbnail_cache_entries": thumbnails.len(),
+            "preview_cache_entries": previews.len(),
             "thumbnail_cache_peak_entries": thumbnails.peak_entries,
             "preview_cache_peak_entries": previews.peak_entries,
             "thumbnail_peak_in_flight": thumbnails.peak_loading,
-            "preview_peak_in_flight": previews.peak_loading
-        });
-        report["present_interval_samples"] = serde_json::json!(presents.intervals_ms.len());
-        report["presented_frames"] = serde_json::json!(presents.presented_frames);
-        report["trace_draw_events"] = serde_json::json!(presents.draw_events);
-        report["superseded_draw_events"] = serde_json::json!(presents.superseded_draw_events);
-        report["pending_draw_events"] = serde_json::json!(presents.pending_draw_events);
-        report["frame_timing_complete"] = serde_json::json!(presents.complete(draws.len() as u64));
-        report["first_present_ms"] = serde_json::json!(presents.first_present_ms);
-        report["last_present_age_ms"] = serde_json::json!(presents.last_present_age_ms);
-        report["max_present_gap_ms"] = serde_json::json!(presents.max_gap_ms);
-        report["dirty_to_draw_p95_ms"] = serde_json::json!(p95(&dirty_to_draw_ms));
-        report["timing_definition"] = serde_json::json!(
-            "v2: target-window intervals between frames handed to the platform layer (ZUI on_present); includes inactive frames and all gaps; quantile rank ceil((n-1)*q); excludes physical display scanout"
-        );
-        report
+            "preview_peak_in_flight": previews.peak_loading,
+            "present_interval_samples": presents.intervals_ms.len(),
+            "presented_frames": frames.len(),
+            // Rune presents every frame it encodes, so no draw is superseded
+            // or left pending; the keys stay for the harness's accounting.
+            "trace_draw_events": frames.len(),
+            "superseded_draw_events": 0,
+            "pending_draw_events": 0,
+            "frame_timing_complete": presents.complete(frames.len()),
+            "first_present_ms": presents.first_present_ms,
+            "last_present_age_ms": presents.last_present_age_ms,
+            "max_present_gap_ms": presents.max_gap_ms,
+            "timing_definition": "v2 (Rune): drawn frames from App::on_frame_encoded; intervals are gaps between display-paced frame starts; draw is CPU update plus encode; render gaps are gaps between polls; quantile rank ceil((n-1)*q); excludes GPU time and physical display scanout"
+        })
+    }
+}
+
+struct PresentSamples {
+    intervals_ms: Vec<f64>,
+    ordered: bool,
+    first_present_ms: Option<f64>,
+    last_present_age_ms: Option<f64>,
+    max_gap_ms: Option<f64>,
+}
+
+impl PresentSamples {
+    fn complete(&self, frames: usize) -> bool {
+        self.ordered && frames > 0 && self.intervals_ms.len() == frames - 1
+    }
+}
+
+fn present_samples(frames: &[FrameSample], started: Instant, ended: Instant) -> PresentSamples {
+    let mut ordered = ended >= started;
+    let mut intervals_ms = Vec::new();
+    for pair in frames.windows(2) {
+        if pair[1].started > pair[0].started {
+            intervals_ms.push(millis(pair[1].started.duration_since(pair[0].started)));
+        } else {
+            ordered = false;
+        }
+    }
+    ordered &= frames
+        .iter()
+        .all(|frame| frame.submitted >= started && frame.submitted <= ended);
+    let first_present_ms = frames
+        .first()
+        .and_then(|frame| frame.submitted.checked_duration_since(started))
+        .map(millis);
+    let last_present_age_ms = frames
+        .last()
+        .and_then(|frame| ended.checked_duration_since(frame.submitted))
+        .map(millis);
+    let max_gap_ms = first_present_ms
+        .into_iter()
+        .chain(last_present_age_ms)
+        .chain(intervals_ms.iter().copied())
+        .max_by(f64::total_cmp);
+    PresentSamples {
+        intervals_ms,
+        ordered,
+        first_present_ms,
+        last_present_age_ms,
+        max_gap_ms,
     }
 }
 
@@ -445,166 +296,57 @@ fn quantile(samples: &[f64], q: f64) -> Option<f64> {
 mod tests {
     use super::*;
 
-    fn draw(window_id: WindowId, at: Instant) -> FrameEvent {
-        FrameEvent::Draw { window_id, at }
-    }
-
-    fn present(window_id: WindowId, at: Instant) -> FrameEvent {
-        FrameEvent::Present { window_id, at }
-    }
-
-    #[::core::prelude::v1::test]
-    fn inactive_presentations_include_long_gaps_and_boundary_ages() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let first = start + Duration::from_millis(10);
-        let last = first + Duration::from_millis(500);
-        let samples = present_samples(
-            &[
-                draw(id, first),
-                present(id, first),
-                draw(id, last),
-                present(id, last),
-            ],
-            id,
-            start,
-            last + Duration::from_millis(20),
-        );
-        assert!(samples.complete(2));
-        assert_eq!(samples.intervals_ms, vec![500.0]);
-        assert_eq!(p95(&samples.intervals_ms), Some(500.0));
-        assert_eq!(samples.first_present_ms, Some(10.0));
-        assert_eq!(samples.last_present_age_ms, Some(20.0));
-        assert_eq!(samples.max_gap_ms, Some(500.0));
-    }
-
-    #[::core::prelude::v1::test]
-    fn other_windows_do_not_interrupt_target_intervals() {
-        let id = WindowId::from(1);
-        let other = WindowId::from(2);
-        let start = Instant::now();
-        let last = start + Duration::from_millis(16);
-        let samples = present_samples(
-            &[
-                draw(id, start),
-                present(id, start),
-                draw(other, last),
-                present(other, last),
-                draw(id, last),
-                present(id, last),
-            ],
-            id,
-            start,
-            last,
-        );
-        assert!(samples.complete(2));
-        assert_eq!(samples.intervals_ms, vec![16.0]);
-    }
-
-    #[::core::prelude::v1::test]
-    fn empty_and_single_presentations_have_no_interval_quantile() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let empty = present_samples(&[], id, start, start);
-        assert!(!empty.complete(0));
-        assert_eq!(empty.max_gap_ms, None);
-        assert_eq!(p95(&empty.intervals_ms), None);
-        let single = present_samples(&[draw(id, start), present(id, start)], id, start, start);
-        assert!(single.complete(1));
-        assert_eq!(p95(&single.intervals_ms), None);
-    }
-
-    #[::core::prelude::v1::test]
-    fn equal_or_backward_present_timestamps_fail_coverage() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let later = start + Duration::from_millis(10);
-        for last in [start, later] {
-            let samples = present_samples(
-                &[
-                    draw(id, later),
-                    present(id, later),
-                    draw(id, last),
-                    present(id, last),
-                ],
-                id,
-                start,
-                later,
-            );
-            assert!(!samples.complete(2));
+    fn frame(started: Instant, offset_ms: u64) -> FrameSample {
+        let at = started + Duration::from_millis(offset_ms);
+        FrameSample {
+            started: at,
+            submitted: at + Duration::from_millis(2),
+            cpu_ms: 2.0,
         }
     }
 
-    #[::core::prelude::v1::test]
-    fn missing_prefix_draws_fail_snapshot_coverage() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let samples = present_samples(&[draw(id, start), present(id, start)], id, start, start);
-        assert!(!samples.complete(2));
-    }
+    #[test]
+    fn boundary_ages_count_as_gaps() {
+        let started = Instant::now();
+        let frames = [frame(started, 300), frame(started, 316)];
+        let samples = present_samples(&frames, started, started + Duration::from_millis(1000));
 
-    #[::core::prelude::v1::test]
-    fn consecutive_draws_before_presentation_have_complete_coverage() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let later = start + Duration::from_millis(16);
-        let samples = present_samples(
-            &[
-                draw(id, start),
-                draw(id, start),
-                present(id, start),
-                draw(id, later),
-                present(id, later),
-            ],
-            id,
-            start,
-            later,
-        );
-        assert!(samples.complete(3));
-        assert_eq!(samples.superseded_draw_events, 1);
-        assert_eq!(samples.pending_draw_events, 0);
+        assert!(samples.complete(frames.len()));
         assert_eq!(samples.intervals_ms, vec![16.0]);
+        assert_eq!(samples.first_present_ms, Some(302.0));
+        assert_eq!(samples.last_present_age_ms, Some(682.0));
+        assert_eq!(samples.max_gap_ms, Some(682.0));
     }
 
-    #[::core::prelude::v1::test]
-    fn presentation_without_pending_draw_fails_coverage() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let later = start + Duration::from_millis(16);
-        let samples = present_samples(
-            &[draw(id, start), present(id, start), present(id, later)],
-            id,
-            start,
-            later,
-        );
-        assert!(!samples.complete(1));
-        assert_eq!(samples.intervals_ms, vec![16.0]);
+    #[test]
+    fn no_frames_have_no_interval_and_are_incomplete() {
+        let started = Instant::now();
+        let samples = present_samples(&[], started, started + Duration::from_millis(10));
+
+        assert!(!samples.complete(0));
+        assert_eq!(quantile(&samples.intervals_ms, 0.95), None);
+        assert_eq!(samples.max_gap_ms, None);
     }
 
-    #[::core::prelude::v1::test]
-    fn final_draw_without_presentation_fails_coverage() {
-        let id = WindowId::from(1);
-        let start = Instant::now();
-        let samples = present_samples(
-            &[draw(id, start), present(id, start), draw(id, start)],
-            id,
-            start,
-            start,
-        );
-        assert!(!samples.complete(2));
-        assert_eq!(samples.pending_draw_events, 1);
+    #[test]
+    fn repeated_frame_starts_fail_coverage() {
+        let started = Instant::now();
+        let frames = [frame(started, 10), frame(started, 10)];
+        let samples = present_samples(&frames, started, started + Duration::from_millis(100));
+
+        assert!(!samples.complete(frames.len()));
     }
 
-    #[::core::prelude::v1::test]
-    fn benchmark_window_is_non_activating() {
-        let mut options = WindowOptions::default();
-        configure_window(&mut options);
+    #[test]
+    fn frames_after_the_run_ended_fail_coverage() {
+        let started = Instant::now();
+        let frames = [frame(started, 10), frame(started, 200)];
+        let samples = present_samples(&frames, started, started + Duration::from_millis(100));
 
-        assert!(!options.focus);
-        assert_eq!(options.kind, WindowKind::PopUp);
+        assert!(!samples.complete(frames.len()));
     }
 
-    #[::core::prelude::v1::test]
+    #[test]
     fn p95_uses_the_nearest_rank_at_or_above() {
         assert_eq!(p95(&[]), None);
         assert_eq!(p95(&[3.0, 1.0, 2.0]), Some(3.0));

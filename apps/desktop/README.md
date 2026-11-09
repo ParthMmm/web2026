@@ -1,10 +1,10 @@
 # Photo prototype
 
-Local-only macOS photo library built with [ZUI](https://github.com/zeronsh/zui), Zeron's fork of GPUI. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
+Local-only macOS photo library built with [Rune](https://github.com/anomalyco/rune) and rune-kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
 
 ## Run on macOS
 
-Requires Xcode with its Metal toolchain, Rust, and **libvips 8.18.3**. The app checks `vips --version` before any Vips import or preview, rejects other versions, and caches a successful check for the process. `gpui` and `gpui_platform` come from [ZUI](https://github.com/zeronsh/zui), and `gpui-base`, `gpui-component`, `gpui-component-assets`, and `gpui-fps` come from [Zeron's `gpui-component` fork](https://github.com/zeronsh/gpui-component). Both are pinned to the revisions Zeron ships. To update, copy the new revisions from Zeron's `Cargo.toml`.
+Requires Xcode with its Metal toolchain, Rust, and **libvips 8.18.3**. The app checks `vips --version` before any Vips import or preview, rejects other versions, and caches a successful check for the process. Rune and rune-kit are pre-release and pinned to `dev` revision `3e0cf8fe58d592cdda1ec5533461192edcfcdb47`. `Cargo.lock` started from that revision's own lock file.
 
 If Homebrew still provides 8.18.3, install it with `brew install vips`, then verify and pin it:
 
@@ -29,13 +29,13 @@ The recorded checks used an existing 8.18.3 install; archived-formula installati
 cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bin photo-desktop -- "$HOME/Pictures"
 ```
 
-Arguments are JPEG files or folders to import on launch. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the toolbar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
+Arguments are JPEG files or folders to import on launch. Rune reads its own flags first (`--help` lists them) and passes the rest to the app. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the title bar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
 - **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
 - **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, and Show in Finder (also Cmd-Alt-R).
 - **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
-- **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
-- **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) toggles the gpui-fps display: frames per second, a rolling frame-time chart, and the app's CPU and memory use. Its numbers come from the time GPUI spends drawing each frame.
+- **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar, with their count (also File › Files Not Imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
+- **Performance:** the chip button in the title bar (Cmd-Alt-P, or View › Show or Hide Performance) shows the frames drawn in the last second and the slowest frame's CPU time, from Rune's per-frame reports. An idle window draws no frames, so the panel then says it is idle.
 
 The theme follows the system's light or dark appearance. Both palettes live in `src/ui/design/theme.json`, which is installed over the component library's defaults at startup.
 
@@ -55,7 +55,7 @@ The library lives in `~/Library/Application Support/dev.parth.photo-prototype/li
 
 ## Processing and memory bounds
 
-The grid virtualizes rows. Columns follow the window width (square tiles, at least 168 px wide, 6 px apart), and the inspector collapses below 760 px. Encoded renditions stay on disk. GPUI caches retain at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Pending loads are settled before eviction, including loads that scroll off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
+The grid virtualizes rows. Columns follow the window width (square tiles, at least the zoom's width, 6 px apart), and the inspector collapses below 760 px. Encoded renditions stay on disk. Decoded images go through `rune::ImageCache`, held in two bounded slot lists (`src/ui/images.rs`): at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Only visible rows, plus one row each side, request thumbnails. A pending decode is never evicted, including one for a row that scrolled off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
 
 Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
 
@@ -80,7 +80,6 @@ Library tests (`tests/library.rs`) cover:
 ```sh
 cargo fmt --manifest-path apps/desktop/Cargo.toml --all -- --check
 cargo test --locked --manifest-path apps/desktop/Cargo.toml --features desktop
-cargo build --locked --manifest-path apps/desktop/Cargo.toml --features visual-check
 cargo check --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo build --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bins
 python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --output apps/desktop/benchmarks/local/pipeline-run
@@ -94,12 +93,12 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 ### Conditions and measurement
 
 - **Cold:** empty library, not a flushed OS file cache. Repeated selections within that run can hit derivatives created earlier in the same run.
-- **Warm:** the library already holds every photo, its grid rendition, **and the exact deterministic large-preview request sequence** before a fresh GUI process starts. Every requested large derivative must report a hit. Decoded GPUI images are not preloaded into the new process.
+- **Warm:** the library already holds every photo, its grid rendition, **and the exact deterministic large-preview request sequence** before a fresh GUI process starts. Every requested large derivative must report a hit. Decoded images are not preloaded into the new process.
 - **GUI scope:** a fixed 30-second browsing window while imports continue, not a complete cold import. Larger cold libraries show placeholders when scrolling outpaces thumbnail production. The warm workload exercises fully populated rows. Pipeline mode measures complete thumbnail imports.
-- **Window behavior:** GUI benchmarks use a non-activating popup-level window. They set `focus = false`, do not call `cx.activate`, and do not repeatedly force the window to the front. This keeps GPUI's macOS frame source running when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
+- **Window behavior:** GUI benchmarks open a non-activating panel at the pop-up window level (`App::open_inactive`, `MacWindowOptions::nonactivating_panel`, level 101), always on top, and do not repeatedly force the window to the front. Rune skips frames for a covered window, so this keeps frames coming when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
 - Benchmark mode uses four columns regardless of width, disables manual selection and web-size preparation, scrolls automatically, requests a preview every three seconds, and sustains frame demand. An independent deadline ends the run even when rendering stops. Failed runs remain failed.
-- File readiness ends when the generated derivative reaches the GUI. Decoded readiness ends when GPUI's image cache resolves it. **Neither proves pixels reached the display.** Draw and present-interval histograms are not GPU execution timings. The maximum gap measures time between Gallery render calls; initial render invocation is reported separately.
-- Frame intervals come from every newly drawn target-window frame submission, including inactive frames. They measure time between `Window::on_present` callbacks, which ZUI runs as it hands each frame to the platform layer, not physical display scanout. Earlier reports, up to the move to ZUI, measured the end of that handoff instead. Ordered trace accounting includes draws superseded before presentation; a pass requires zero trailing unpresented draws and exact draw coverage. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
+- File readiness ends when the generated derivative reaches the GUI. Decoded readiness ends when `rune::ImageCache` finishes the decode; a repeated preview that is already decoded counts at once. **Neither proves pixels reached the display.** Draw p95 is the CPU time Rune reports per drawn frame (update plus encode), not GPU time. The render-gap keys measure the time between polls, which Rune runs once before every frame.
+- Frames come from `App::on_frame_encoded`, keeping only `Drawn` frames. Intervals are the gaps between frame starts; a display-paced window starts each frame on a refresh. They are not physical display scanout. Rune presents every frame it encodes, so the superseded and pending draw counts are always zero, and coverage requires ordered frame starts inside the run. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
 - RSS samples sum the app and encoder children every 100 ms. Short-lived peaks can be missed; shared pages can be counted more than once. An unsampled run reports null, not zero memory.
 
 ### Budgets
@@ -119,6 +118,8 @@ A pass also requires more than 100 measured presentation intervals, complete ord
 
 ## Measured evidence
 
+**Every measurement in this section was taken on the earlier GPUI and ZUI builds.** The Rune port changes what the frame keys measure (see above), so none of these numbers carries over. The Rune build has not yet passed the GUI gate; rerun the matrix with an unlocked, awake display before relying on it.
+
 On November 6, 2026, the move from GPUI Kit to ZUI was checked with one 30-second run per condition and stack, using 24 photos sampled from `~/Pictures` (median 26 MB) on **Apple M1 Pro, 32 GiB, macOS 27.0, libvips 8.18.3**. Each row is a single run.
 
 | Condition | Stack | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
@@ -128,7 +129,7 @@ On November 6, 2026, the move from GPUI Kit to ZUI was checked with one 30-secon
 | Warm | GPUI Kit 0.6.1 | 1.33 | 17.09 / 17.78 | 90.07 | 18.96 | 235.11 |
 | Warm | ZUI | 1.24 | 17.62 / 17.78 | 73.28 | 24.00 | 212.83 |
 
-Both warm runs passed. Both cold runs failed the same check: 11 preview requests and 10 ready previews, because the last request was still pending when the run ended. ZUI caps an inactive window near 30 fps, which held a first ZUI run at 50.2 ms present intervals. Benchmark mode now requests its frames with `Window::on_next_display_frame`, which keeps the display's rate; normal use keeps the cap.
+Both warm runs passed. Both cold runs failed the same check: 11 preview requests and 10 ready previews, because the last request was still pending when the run ended. ZUI caps an inactive window near 30 fps, which held a first ZUI run at 50.2 ms present intervals. The ZUI build's benchmark mode then requested its frames with `Window::on_next_display_frame`, which keeps the display's rate.
 
 On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
 
@@ -149,7 +150,7 @@ The earlier 30-second GUI workload passed before the persistent-library changes.
 
 Measured on **Apple M1 Pro, 32 GiB, macOS 26.6.2**, Rust **1.97.1**, libvips **8.18.3**, using owner-authorized JPEGs under Pictures. The full tree contains **944 JPEGs / 17.35 GB**, median **20.92 MB**. Twenty- and 200-photo samples contain 368 MB and 3.74 GB respectively. Lightroom provenance was supplied by the owner, not independently established.
 
-Benchmark mode now uses GPUI's `WindowKind::PopUp`, which maps to a non-activating macOS panel at popup level. It sets `focus = false`, leaves the inactive-window throttle disabled, and does not call `cx.activate` or repeatedly raise the window. This keeps the frame source alive while another normal app is active without taking keyboard focus. The trade-off is intentional and documented: the benchmark window can appear above normal windows and across Spaces. A first post-fix 200-photo warm run still recorded a **1125.08 ms** gap and failed; it was retained. Three direct warm reruns, the next 200-photo harness run, and the full-library run stayed below 52 ms. This is evidence for the fixed path, not a claim that external display or user actions cannot interrupt a run.
+The GPUI build's benchmark mode used GPUI's `WindowKind::PopUp`, which maps to a non-activating macOS panel at popup level. It sets `focus = false`, leaves the inactive-window throttle disabled, and does not call `cx.activate` or repeatedly raise the window. This keeps the frame source alive while another normal app is active without taking keyboard focus. The trade-off is intentional and documented: the benchmark window can appear above normal windows and across Spaces. A first post-fix 200-photo warm run still recorded a **1125.08 ms** gap and failed; it was retained. Three direct warm reruns, the next 200-photo harness run, and the full-library run stayed below 52 ms. This is evidence for the fixed path, not a claim that external display or user actions cannot interrupt a run.
 
 The post-fix 30-second harness runs passed the unchanged budgets:
 
@@ -168,81 +169,42 @@ Earlier failures informed fixes and were not discarded: thumbnail-only warming p
 
 ### Native UI check
 
-The September 29, 2026 check found a panic when opening **Not imported…**: the sheet builder read Gallery while Gallery was already being updated during rendering. The builder now captures the failure list before opening the sheet; Retry and Clear still update the live Gallery. A headless GPUI regression test renders the actual Gallery and sheet, verifies Retry/Clear callbacks and focus restoration, and confirms the empty sheet’s controls do nothing. All 32 unit and 15 library tests pass with `visual-check`. The test reproduces the original borrow panic when the old builder is restored. The repaired binary starts and exits cleanly, but the native input driver could not reliably focus its window, so repaired-sheet interaction through macOS input remains unverified.
-
-Inspected actual app-owned **2400×1640 Metal scene captures** with real images. Native pointer events selected a photo and toggled the FPS HUD off. Captures confirmed aligned columns and fitted portrait/landscape images; the sizing check caught and fixed intrinsic-image overflow. Native Cmd-Q through System Events exited successfully. These are scene/interaction checks, not OS screenshots or frame-presentation proofs. Screen-recording capture was denied and was not required.
-
-For local visual inspection, `visual-check` enables GPUI's test-support scene renderer. It writes only this app's scene at four and eight seconds; interact during that interval, then quit normally:
+Any flag other than `--native` runs the window headless with the same renderer and a demo library: made-up photos with generated pixels, and no library on disk. So a render never shows real photos, and needs no import first. Each state the window can show has a named scene in `src/ui/demo.rs`:
 
 ```sh
-PHOTO_SNAPSHOT_DIR="$PWD/apps/desktop/benchmarks/local/visual-check" \
-  cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features visual-check --bin photo-desktop -- /path/to/authorized/jpeg-folder
+B=apps/desktop/target/debug/photo-desktop
+$B --list-scenes
+$B --snap grid.png --scene grid --at 1.5
+$B --snap viewer.png --scene viewer --theme light --at 1.5
+$B --snap narrow.png --scene grid --size 640x480 --at 1.5
+echo '{"events": [{"t": 0.2, "type": "key", "name": "Right"}, {"t": 0.5, "type": "key", "name": "Enter"}]}' > keys.json
+$B --script keys.json --snap stepped.png --at 1.5
+$B --tree tree.json --scene failures --at 1.5
 ```
 
-Never commit these captures. Production benchmark binaries use `--features desktop`, without `visual-check`.
+Render at `--at 1.5`: Rune animates elements in, so earlier frames show them half in. `cargo test --features desktop` also presses the real view (`src/ui/tests.rs`) and compares every scene's element tree with `goldens/<scene>.txt`. After a change you meant to make, rewrite them with `PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens`, read the diff, and commit them with the change. A refactor rewrites none. `scripts/check` runs format, file size, clippy with no warnings, and every test and golden.
+
+A headless run moves the wall clock and the animation clock together, so anything driven by time (the poll's wakes, the performance panel's refresh) also needs a real window. The benchmark above is that check.
 
 ## Design system
 
-The window's planes, glass, motion and hover behaviour come from a design system
-ported from [Zeron](https://github.com/zeronsh/zeron), a larger GPUI app. Read
-[the reference](../../docs/photo-gallery/zeron-reference.md) for the reasoning,
-the numbers and the upstream measurements; `src/ui/design/` is the
-implementation, and `THIRD_PARTY_NOTICES.md` carries the attribution.
+The window keeps the Library design from the ZUI build (#21), drawn with Rune and rune-kit. `src/ui/look.rs` holds its palette for each appearance (`docs/photo-gallery` has the references) and lays it over rune-kit's tokens, so kit controls and the app's own parts agree:
 
-What it does here:
-
-- **Shell.** Title strip above a sidebar workspace: persistent navigation beside
-  the work area. One destination per collection the library keeps, its count as a
-  suffix; the weight of the originals in the sidebar footer, which is the one
-  thing neither the grid nor the status line can show. The status bar owns
-  transient import state and is empty when idle, so no datum appears twice.
-  Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed
-  column count.
-- **Window glass.** The window asks macOS to blur the desktop behind it, and the
-  chrome — sidebar, title strip, inspector, status bar — paints a translucent tint
-  of its own plane over that blur, so the wallpaper shows through. This only works
-  because the root paints nothing and the grid region is the single opaque plane:
-  a backdrop covered by an opaque plane has nothing to show. The sidebar and
-  status bar override the component library's opaque tokens for the same reason.
-  Tint coverage is raised until the chrome's own text stays legible against the
-  worst desktop the compositor could place behind it, so a harder-to-read palette
-  gets denser glass rather than unreadable labels. The material is re-applied on
-  every appearance change, because gpui's macOS backend discards the blur
-  otherwise, and `PHOTO_GLASS_DEBUG=1` prints the resolved material and tint.
-- **Planes.** The grid and the viewer sit on an opaque content plane, the
-  inspector on the chrome plane, which sits above it in dark mode and below it in
-  light mode. Chrome recedes in both appearances, and the direction is pinned by
-  a test.
-- **Tiles.** Square crops on a dark plate, a selection ring set 3 px outside
-  the tile that doubles as the keyboard focus indicator and dims when the region
-  is not focused, and a hover plate that fades in over the frame rather than
-  snapping on. A photo whose original is missing turns grey and says so.
-- **Motion.** One shared 33ms clock drives everything animated and parks itself
-  when nothing is, so an idle window schedules no frames.
-
-What it cannot do at this GPUI revision, and how it copes instead:
-
-- **No in-app backdrop blur.** `frosted` paints a floating card's tint, border
-  and shadow without the blur pass. Only the *window* blurs, so glass appears
-  where the chrome is and nowhere else.
-- **No per-pixel edge fade.** The grid's scroll edges use gradient scrims into
-  the content plane, which is exact there and approximate over glass.
-- **No scale transform for `div`s.** Entrances are fade plus a small relative
-  offset, as in Zeron.
+- **Shell.** One 44 pt title bar across the window: the sidebar toggle past the traffic lights, the grid's title where the grid starts, and the zoom slider, the Info and performance toggles, and **Import** at the trailing edge. Below it, the sidebar, the grid and the inspector. The sidebar has one destination per collection the library keeps, with its count, and the weight of the originals in its footer. The status bar is mono, shows what is in view and selected at rest, and owns transient import state, so no datum appears twice. Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed column count.
+- **Planes.** The grid and the viewer sit on the opaque content plane (`#060606` dark, white light). The title bar, sidebar, inspector and status bar sit on the chrome plane, with a hairline between planes. The accent is red (`#E5483A` dark, `#C8372A` light) and marks only the primary action and progress.
+- **Tiles.** Square crops on a plate, 6 pt apart, with a selection ring set 3 pt outside the photo. Rune paints hover and press itself, so the pointer crossing tiles never re-runs the view. A photo whose original is missing turns grey and says so. The grid's scroll edges fade while content is hidden under them.
+- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, and a detail list that leaves out values the camera never wrote.
+- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheet slides in at the trailing edge and lists each file with its reason and path.
+- **Type and icons.** Geist and Geist Mono (OFL, `fonts/`), with tabular figures for counts, sizes and camera settings. Icons are Lucide, as SVG bodies (`src/ui/icons.rs`).
+- **Numbers from the kit.** Radii come from `k.radius`. Status words appear only for transient import state or when something went wrong.
 
 ## Code layout
 
-- `src/ui/gallery.rs` holds the window's state and the actions that change it.
-- `src/ui/view.rs` computes the layout and assembles the regions.
-- `src/ui/layout.rs` is pure geometry: which panels fit, and the grid's columns
-  and tile size. `uniform_list` needs exact row heights, so this is unit tested
-  rather than left to flex layout.
-- `src/ui/regions/` has one file per window region: toolbar, sidebar,
-  photo grid, inspector, status bar, viewer, and the failures sheet. Each adds
-  methods to `Gallery`.
-- `src/ui/components/` holds presentational pieces that take data and render it
-  (the exposure readout, the film chip, the detail list). They hold no state.
-- `src/ui/design/` holds the theme, planes, glass, motion and hover rules.
+- `src/ui/gallery/` holds the window's state and the actions that change it. `layout()` computes the grid's columns and tile size, because the grid is virtualised by row and needs exact row heights.
+- `src/ui/look.rs` holds the palette, the fonts and the text styles.
+- `src/ui/view/` has one file per window region: title bar, grid, inspector, viewer, and the failures sheet. `view/mod.rs` assembles them with the sidebar and the status bar.
+- `src/ui/view/parts.rs` holds pieces that take data and draw it (the exposure readout and pill, the film chip, the detail list). They hold no state.
+- `src/ui/demo.rs` holds the demo library and the scenes, and `goldens/` each scene's element tree.
 
 ## Pipeline choice and remaining product work
 
@@ -253,11 +215,10 @@ Remaining product work:
 - Bundle the supported libvips library or helper, and audit licenses, before distribution.
 - Tune the WebP quality with real photos and settle on a final value.
 - Add derivative quota and cleanup of orphaned files.
-- Verify the new grid tile names, selection state, and activation actions with VoiceOver. Native accessibility-tree inspection did not expose the GPUI descendants, so screen-reader behavior is unverified.
-- Label the icon-only buttons (performance, close viewer, previous and next photo) for screen readers. Zeron's `gpui-component` fork labels a `Button` only from its visible text and has no label setter.
+- Verify the grid tile names, selection state, and activation actions with VoiceOver. Rune exposes elements through AccessKit, but screen-reader behavior is unverified.
 - Add upload and publishing.
 
-Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
+Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No budget was relaxed for the Rune port. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
 
 ## Camera film simulation export
 

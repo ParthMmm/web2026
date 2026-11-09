@@ -13,6 +13,6 @@ fn library_root() -> PathBuf {
 }
 
 fn main() {
-    let inputs = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let inputs = photo_prototype::ui::inputs();
     photo_prototype::ui::run(library_root(), inputs);
 }

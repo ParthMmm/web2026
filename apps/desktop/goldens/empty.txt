@@ -1,0 +1,53 @@
+kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
+ window	group	window	-	-	-	0,0,1200,820	#060606ff	-	1.00
+  title-bar	toolbar	title-bar	-	-	-	0,0,1200,44	#0d0d0dff	-	1.00
+   toggle-sidebar	button	toggle-sidebar	Hide sidebar (⌃⌘S)	-	Hide sidebar (⌃⌘S)	12,10,24,24	#ffffff1c	-	1.00
+    icon	icon	icon	-	-	-	16,14,16,16	#00000000	#edededff	1.00
+   title	group	title	-	-	-	248,12.6,74,18.8	#00000000	-	1.00
+    #0	text	-	-	All photos	-	248,12.6,74,18.8	#00000000	#edededff	1.00
+   #2	group	-	-	-	-	322,22,696,0	#00000000	-	1.00
+   title-bar-commands	group	title-bar-commands	-	-	-	1018,10,172,24	#00000000	-	1.00
+    toggle-info	button	toggle-info	Hide info (⌘I)	-	Hide info (⌘I)	1018,10,24,24	#ffffff1c	-	1.00
+     icon	icon	icon	-	-	-	1022,14,16,16	#00000000	#edededff	1.00
+    performance-toggle	button	performance-toggle	Show performance (⌥⌘P)	-	Show performance (⌥⌘P)	1048,10,24,24	#00000000	-	1.00
+     icon	icon	icon	-	-	-	1052,14,16,16	#00000000	#9a9a9aff	1.00
+    #2	group	-	-	-	-	1082,14,1,16	#ffffff14	-	1.00
+    import	group	import	-	-	-	1093,10,97,24	#e5483aff	-	1.00
+     import-files	button	import-files	Import	-	Import files or folders (⌘O)	1093,10,75,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1101,15,14,14	#00000000	#ffffffff	1.00
+      #1	text	-	-	Import	-	1119,12,41,20	#00000000	#ffffffff	1.00
+     import-more	button	import-more	More import sources	-	-	1168,10,22,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1173,16,12,12	#00000000	#ffffffff	1.00
+  panes	group	panes	-	-	-	0,44,1200,752	#00000000	-	1.00
+   sidebar-pane	group	sidebar-pane	-	-	-	0,44,232,752	#0d0d0dff	-	1.00
+    sidebar	group	sidebar	-	-	-	0,52,232,744	#00000000	-	1.00
+     sidebar-scroll	group	sidebar-scroll	-	-	-	0,52,232,704	#00000000	-	1.00
+      sidebar-list	list	sidebar-list	Library	-	-	0,52,232,66	#00000000	-	1.00
+       library	group	library	Library	-	-	8,52,216,58	#00000000	-	1.00
+        section-header	heading	section-header	Library	-	-	8,52,216,28	#00000000	-	1.00
+         section-title	group	section-title	-	-	-	16,59,40,18	#00000000	-	1.00
+          #0	text	-	-	Library	-	16,59,40,18	#00000000	#9a9a9aff	1.00
+         spacer	group	spacer	-	-	-	56,68,160,0	#00000000	-	1.00
+        all-photos	listitem	all-photos	All photos	-	-	8,82,216,28	#ffffff1c	-	1.00
+         icon	icon	icon	-	-	-	16,88,16,16	#00000000	#edededff	1.00
+         label	text	label	-	All photos	-	38,86,164,20	#00000000	#edededff	1.00
+         detail	text	detail	-	0	-	208,90,8,12	#00000000	#7f7f7fff	1.00
+     sidebar-footer	group	sidebar-footer	-	-	-	0,756,232,40	#00000000	-	1.00
+      library-size	group	library-size	-	-	-	8,764,216,24	#00000000	-	1.00
+       #0	icon	-	-	-	-	16,769,14,14	#00000000	#7f7f7fff	1.00
+       #1	group	-	-	-	-	38,764,158,24	#00000000	-	1.00
+        #0	text	-	-	0 bytes of originals	-	38,764,158,12	#00000000	#9a9a9aff	1.00
+        #1	text	-	-	Left where they are, not copied	-	38,776,158,12	#00000000	#7f7f7fff	1.00
+   grid-region	group	grid-region	-	-	-	232,44,968,752	#060606ff	-	1.00
+    empty	group	empty	-	-	-	232,44,968,752	#00000000	-	1.00
+     #0	icon	-	-	-	-	700,353.5,32,32	#00000000	#9a9a9aff	1.00
+     #1	group	-	-	-	-	497,401.5,438,45	#00000000	-	1.00
+      #0	text	-	-	No photos yet	-	669.5,401.5,93,21	#00000000	#edededff	1.00
+      #1	text	-	-	Import JPEGs from folders or from Photos. Originals stay where they are.	-	497,426.5,438,20	#00000000	#9a9a9aff	1.00
+     #2	group	-	-	-	-	584.5,462.5,263,24	#00000000	-	1.00
+      empty-import-files	button	empty-import-files	Import files…	-	-	584.5,462.5,103,24	#131313ff	-	1.00
+       label	text	label	-	Import files…	-	596.5,464.5,79,20	#00000000	#edededff	1.00
+      empty-import-photos	button	empty-import-photos	Import from Photos…	-	-	695.5,462.5,152,24	#131313ff	-	1.00
+       label	text	label	-	Import from Photos…	-	707.5,464.5,128,20	#00000000	#edededff	1.00
+  status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
+   status	text	status	-	0 photos	-	14,800.8,1172,14.4	#00000000	#9a9a9aff	1.00

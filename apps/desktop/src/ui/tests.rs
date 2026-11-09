@@ -1,0 +1,223 @@
+//! The window, driven in `cargo test` on the CPU with no GPU. Press tests press the real view
+//! and check what the person would see. Golden trees build every demo scene, run 1.5 s of
+//! frames, and write one line per element to `goldens/<scene>.txt`: indent for depth, then the
+//! last part of its path, role, key, label, text, help, rect, fill, text colour and opacity. A
+//! change to what any scene shows fails `cargo test`. After a change you meant, rewrite them
+//! with `PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens` and read the
+//! diff.
+
+use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, look, on_key, poll, setup, view::view};
+use rune::{Env, Key, KeyEvent, Runtime, ScrollBars, text::TextSystem};
+use std::{fmt::Write as _, path::PathBuf, sync::Arc};
+
+/// 1.5 s, as `--snap --at 1.5`, in steps long enough to be quick.
+const STEPS: usize = 3;
+const STEP: f64 = 0.5;
+
+fn window(apply: fn(&mut Gallery)) -> Runtime<Gallery> {
+    let mut gallery = Gallery::demo();
+    apply(&mut gallery);
+    let text = TextSystem::new(look::FONTS, look::FAMILIES);
+    let mut rt = Runtime::with_text(gallery, view, WINDOW_SIZE, Env::new(true, 1.0), text);
+    rt.poll = Some(poll);
+    rt.on_key = Some(on_key);
+    rt.set_system_scroll_bars(ScrollBars::Always);
+    setup(&mut rt.state, Arc::new(|| {}));
+    settle(&mut rt);
+    rt
+}
+
+fn press(rt: &mut Runtime<Gallery>, key: &str) {
+    let (x, y) = rt
+        .find(key)
+        .unwrap_or_else(|| panic!("no element keyed {key}"));
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(rt);
+}
+
+fn key(rt: &mut Runtime<Gallery>, key: Key) {
+    rt.key(KeyEvent::from(key));
+    settle(rt);
+}
+
+/// Runs the same 1.5 s as a render, so a sheet that slides in has arrived. One long frame
+/// does not move a slide past its first step.
+fn settle(rt: &mut Runtime<Gallery>) {
+    for _ in 0..STEPS {
+        rt.frame(STEP);
+    }
+    rt.settle_all();
+    rt.frame(0.0);
+}
+
+/// The text shown under the element keyed `key`, joined in reading order.
+fn text_in(rt: &Runtime<Gallery>, key: &str) -> String {
+    let elements = rt.elements();
+    let Some(root) = elements
+        .iter()
+        .find(|e| e.key.as_deref() == Some(key) && !e.exiting)
+    else {
+        return String::new();
+    };
+    let prefix = format!("{}/", root.path);
+    elements
+        .iter()
+        .filter(|e| !e.exiting && (e.path == root.path || e.path.starts_with(&prefix)))
+        .filter_map(|e| e.text.clone())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn shows(rt: &Runtime<Gallery>, key: &str) -> bool {
+    rt.elements()
+        .iter()
+        .any(|e| e.key.as_deref() == Some(key) && !e.exiting)
+}
+
+fn name(rt: &Runtime<Gallery>, index: usize) -> String {
+    rt.state.photos[index].record.file_name()
+}
+
+#[test]
+fn pressing_a_tile_shows_it_in_the_inspector() {
+    let mut rt = window(|_| {});
+    let tile = rt.state.photos[4].key.clone();
+    press(&mut rt, &format!("{tile}/hit"));
+    assert!(text_in(&rt, "inspector").contains(&name(&rt, 4)));
+}
+
+#[test]
+fn keys_step_through_the_viewer() {
+    let mut rt = window(|_| {});
+    key(&mut rt, Key::Right);
+    assert!(
+        text_in(&rt, "inspector").contains(&name(&rt, 1)),
+        "Right selects the next photo"
+    );
+    key(&mut rt, Key::Enter);
+    assert!(shows(&rt, "viewer"), "Return opens the viewer");
+    key(&mut rt, Key::Right);
+    let bar = text_in(&rt, "viewer-bar");
+    assert!(
+        bar.contains(&name(&rt, 2)) && bar.contains("3 of 24"),
+        "Right steps the viewer: {bar}"
+    );
+    key(&mut rt, Key::Escape);
+    assert!(!shows(&rt, "viewer"), "Esc closes the viewer");
+}
+
+#[test]
+fn clearing_the_failures_hides_the_attention_row() {
+    let mut rt = window(|s| s.failures = demo::failures());
+    press(&mut rt, "not-imported");
+    assert!(shows(&rt, "failures-sheet"), "the row opens the list");
+    press(&mut rt, "clear-failures");
+    assert!(rt.state.failures.is_empty(), "the list is cleared");
+    assert!(!shows(&rt, "failures-sheet"), "the list closes");
+    assert!(!shows(&rt, "not-imported"), "the sidebar row leaves");
+}
+
+#[test]
+fn the_title_bar_hides_the_panels_and_zooms_the_grid() {
+    let mut rt = window(|_| {});
+    let columns = rt.state.layout().columns;
+    press(&mut rt, "toggle-sidebar");
+    press(&mut rt, "toggle-info");
+    assert!(!shows(&rt, "sidebar-pane"), "the sidebar hides");
+    assert!(!shows(&rt, "inspector"), "the inspector hides");
+    assert!(
+        rt.state.layout().columns > columns,
+        "the grid takes the room"
+    );
+    let wide = rt.state.layout().columns;
+    rt.state.zoom(2);
+    settle(&mut rt);
+    assert!(
+        rt.state.layout().columns < wide,
+        "Zoom In makes tiles larger"
+    );
+}
+
+/// The settled window's elements, one line each.
+fn tree(apply: fn(&mut Gallery)) -> String {
+    let rt = window(apply);
+    let mut out = String::new();
+    for e in rt.elements().iter().filter(|e| !e.exiting) {
+        let depth = e.path.matches('/').count();
+        let name = e.path.rsplit('/').next().unwrap_or_default();
+        let field = |v: &Option<String>| {
+            v.as_deref()
+                .map_or_else(|| "-".to_owned(), |t| t.replace('\n', "\\n"))
+        };
+        let [x, y, w, h] = e.rect.map(|v| (v * 10.0).round() / 10.0);
+        let color = e.text_color.map_or_else(|| "-".to_owned(), |c| c.hex());
+        let _ = writeln!(
+            out,
+            "{:depth$}{name}\t{}\t{}\t{}\t{}\t{}\t{x},{y},{w},{h}\t{}\t{color}\t{:.2}",
+            "",
+            e.role,
+            field(&e.key),
+            field(&e.label),
+            field(&e.text),
+            field(&e.help),
+            e.fill.hex(),
+            e.opacity,
+        );
+    }
+    out
+}
+
+/// The checkout this run tests, read at run time, so a test binary built in
+/// one worktree and run from another writes only where it was run.
+fn checkout() -> PathBuf {
+    std::env::var_os("CARGO_MANIFEST_DIR")
+        .map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")), PathBuf::from)
+}
+
+fn first_difference(want: &str, got: &str) -> String {
+    let (want, got): (Vec<&str>, Vec<&str>) = (want.lines().collect(), got.lines().collect());
+    let at = want
+        .iter()
+        .zip(&got)
+        .position(|(a, b)| a != b)
+        .unwrap_or(want.len().min(got.len()));
+    let line = |v: &[&str]| {
+        v.get(at)
+            .map_or("(end)", |l| l.trim_start())
+            .chars()
+            .take(160)
+            .collect::<String>()
+    };
+    format!("line {}: was {} | now {}", at + 1, line(&want), line(&got))
+}
+
+#[test]
+fn goldens_every_scene_draws_as_its_golden() {
+    let update = std::env::var_os("PHOTO_PROTOTYPE_UPDATE_GOLDENS").is_some();
+    let folder = checkout().join("goldens");
+    let actual = checkout().join("target/goldens-actual");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::create_dir_all(&actual).unwrap();
+    let mut differ = Vec::new();
+    for (name, apply) in demo::SCENES {
+        let got = tree(*apply);
+        let path = folder.join(format!("{name}.txt"));
+        if update {
+            std::fs::write(&path, &got).unwrap();
+            continue;
+        }
+        let want = std::fs::read_to_string(&path).unwrap_or_default();
+        if want != got {
+            std::fs::write(actual.join(format!("{name}.txt")), &got).unwrap();
+            differ.push(format!("  {name}: {}", first_difference(&want, &got)));
+        }
+    }
+    assert!(
+        differ.is_empty(),
+        "{} of {} scenes differ from goldens/ (now in target/goldens-actual/). If the change is meant, rewrite them with PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens, and read the diff.\n{}",
+        differ.len(),
+        demo::SCENES.len(),
+        differ.join("\n")
+    );
+}

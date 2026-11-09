@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# The gate: what passes before a push. One line per step; on a failure, the end of its output,
+# and exit 1. The shape step covers the window's code (src/ui); src/library.rs is older and
+# over the limit. Usage: scripts/check
+set -uo pipefail
+cd "$(dirname "$0")/.."
+step() {
+  local name=$1 out
+  shift
+  if out=$("$@" 2>&1); then
+    echo "ok    $name"
+  else
+    echo "FAIL  $name: $*"
+    echo "$out" | grep -vE '^\s+(Compiling|Checking|Running|Finished|Fresh|Blocking)' | tail -40
+    exit 1
+  fi
+}
+step format cargo fmt --check
+step shape python3 -I scripts/code-shape.py src/ui
+step clippy cargo clippy --locked --features desktop --all-targets --quiet -- -D warnings
+step test cargo test --locked --features desktop --quiet

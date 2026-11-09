@@ -86,6 +86,14 @@ impl PhotoRecord {
     }
 }
 
+/// The last part of `path`, or the whole path when it has none.
+pub fn file_name(path: &Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceRecord {
     pub photo_id: PhotoId,
@@ -533,18 +541,10 @@ fn path_from_row(row: &Row<'_>, ix: usize) -> rusqlite::Result<PathBuf> {
     )))
 }
 
-fn unix_now() -> i64 {
+pub(crate) fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| {
             i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
         })
-}
-
-/// The last component of `path`, or the whole path when it has none.
-pub fn file_name(path: &Path) -> String {
-    path.file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .into_owned()
 }
