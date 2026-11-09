@@ -7,14 +7,27 @@ publish = false
 [workspace]
 
 [features]
-desktop = ["dep:gpui-kit", "dep:gpui-fps", "dep:smol"]
-visual-check = ["desktop", "gpui-kit/test-support"]
+desktop = [
+    "dep:gpui",
+    "dep:gpui_platform",
+    "dep:gpui-base",
+    "dep:gpui-component",
+    "dep:gpui-component-assets",
+    "dep:gpui-fps",
+    "dep:smol",
+]
+visual-check = ["desktop", "gpui/test-support", "gpui_platform/test-support"]
 
 [dependencies]
 anyhow = "=1.0.102"
 blake3 = "=1.8.3"
-gpui-kit = { version = "=0.6.1", optional = true, default-features = false, features = ["assets", "component", "profiler"] }
-gpui-fps = { version = "=0.6.1", optional = true }
+# ZUI and Zeron's gpui-component fork, pinned to the revisions Zeron ships.
+gpui = { git = "https://github.com/zeronsh/zui", rev = "b564a34413bb7ef1da04121c4a287758f94993d9", optional = true }
+gpui_platform = { git = "https://github.com/zeronsh/zui", rev = "b564a34413bb7ef1da04121c4a287758f94993d9", optional = true, features = ["font-kit", "runtime_shaders"] }
+gpui-base = { git = "https://github.com/zeronsh/gpui-component", rev = "59f89243cea79dd70eb7a619b3930c374ef6958a", optional = true }
+gpui-component = { git = "https://github.com/zeronsh/gpui-component", rev = "59f89243cea79dd70eb7a619b3930c374ef6958a", optional = true }
+gpui-component-assets = { git = "https://github.com/zeronsh/gpui-component", rev = "59f89243cea79dd70eb7a619b3930c374ef6958a", optional = true }
+gpui-fps = { git = "https://github.com/zeronsh/gpui-component", rev = "59f89243cea79dd70eb7a619b3930c374ef6958a", optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 kamadak-exif = "=0.6.1"
 rusqlite = { version = "=0.40.2", features = ["bundled"] }

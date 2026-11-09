@@ -6,7 +6,7 @@
 //! Contrast is always measured on the composited result ([`flatten`]): a
 //! translucent tint over an unknown backdrop is not what the eye receives.
 
-use gpui_kit::{Hsla, hsla};
+use gpui::{Hsla, hsla};
 
 /// Alpha multiplier for **fills** (hover washes, chip and pill backgrounds).
 ///

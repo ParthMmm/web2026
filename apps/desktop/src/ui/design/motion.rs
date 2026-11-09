@@ -17,8 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui_kit::base::Easing;
-use gpui_kit::{
+use gpui::{
     Animation, AnimationElement, AnimationExt as _, App, ElementId, EntityId, Global, IntoElement,
     Styled, px,
 };
@@ -117,13 +116,6 @@ impl Curve {
             return 1.0;
         }
         self.sample_y(self.solve_t_for_x(x)).clamp(0.0, 1.0)
-    }
-
-    /// This curve as the library's easing policy. Allocation is fine here:
-    /// one-shot element helpers build this once per mount, not per frame.
-    pub fn easing(self) -> Easing {
-        Easing::cubic_bezier(self.x1, self.y1, self.x2, self.y2)
-            .expect("catalog curves are valid cubic beziers")
     }
 }
 
@@ -252,6 +244,33 @@ where
             .opacity(0.3 + 0.7 * t)
             .top(px(from * (1.0 - t)))
     })
+}
+
+/// Follow the system's Reduce Motion setting (System Settings ›
+/// Accessibility › Display). gpui does not read it, so every entrance would
+/// otherwise play for people who asked for none.
+pub fn sync_reduce_motion(cx: &mut App) {
+    cx.set_reduce_motion(system_reduces_motion());
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated, unexpected_cfgs)]
+fn system_reduces_motion() -> bool {
+    use cocoa::base::{YES, id};
+    use objc::{class, msg_send, sel, sel_impl};
+    // SAFETY: both selectors exist on every supported macOS release and take
+    // no arguments; the workspace object is a process-wide singleton.
+    unsafe {
+        let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let reduce: cocoa::base::BOOL =
+            msg_send![workspace, accessibilityDisplayShouldReduceMotion];
+        reduce == YES
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_reduces_motion() -> bool {
+    false
 }
 
 /// Overlay or dialog entrance over [`DIALOG_IN`].
@@ -400,21 +419,6 @@ mod tests {
             assert_eq!(curve.eval(0.0), 0.0, "{curve:?}");
             assert_eq!(curve.eval(1.0), 1.0, "{curve:?}");
             assert_eq!(curve.eval(2.0), 1.0, "{curve:?}");
-        }
-    }
-
-    #[test]
-    fn the_local_solver_and_the_library_easing_agree() {
-        // Both handlers solve the same bezier, so they must agree within the
-        // f32 noise the library's own solver leaves.
-        for curve in [EASE_OUT_EXPO, EASE_OUT_QUINT, EASE_TAILWIND] {
-            let library = curve.easing();
-            for step in 0..=10 {
-                #[allow(clippy::cast_precision_loss)]
-                let x = step as f32 / 10.0;
-                let difference = curve.eval(x) - library.sample(x);
-                assert!(difference.abs() < 1e-4, "{curve:?} at {x}: {difference}");
-            }
         }
     }
 

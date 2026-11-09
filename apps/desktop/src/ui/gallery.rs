@@ -2,6 +2,7 @@ use super::{
     benchmark::{self, Benchmark, Totals},
     cache::BoundedCache,
     format,
+    layout::{DEFAULT_TILE_WIDTH, TILE_WIDTH_RANGE, TILE_WIDTH_STEP},
 };
 use crate::{
     DerivativeSize, Event, ImportFailure, ImportOutcome, Library, LibraryOptions, PhotoId,
@@ -9,9 +10,13 @@ use crate::{
     grid::{self, Movement},
     photos,
 };
-use gpui_kit::{
-    Context, Entity, FocusHandle, PathPromptOptions, ScrollStrategy, SharedString, Subscription,
-    UniformListScrollHandle, Window, component::Theme,
+use gpui::{
+    AppContext as _, Context, Entity, FocusHandle, PathPromptOptions, ScrollStrategy, SharedString,
+    Subscription, UniformListScrollHandle, Window,
+};
+use gpui_component::{
+    Theme,
+    slider::{SliderEvent, SliderState},
 };
 use std::{
     path::{Path, PathBuf},
@@ -89,9 +94,11 @@ pub struct Gallery {
     pub(super) selected: Option<PhotoId>,
     pub(super) preview: Option<Preview>,
     pub(super) viewer_open: bool,
-    /// Whether the sidebar is collapsed to icon width. The library's own
-    /// sidebar component owns the 200ms transition; this is only the state.
-    pub(super) sidebar_collapsed: bool,
+    pub(super) sidebar_hidden: bool,
+    pub(super) inspector_hidden: bool,
+    /// The grid's zoom: the smallest width a tile may take.
+    pub(super) min_tile_width: f32,
+    pub(super) zoom_slider: Entity<SliderState>,
     pub(super) progress: Option<(usize, usize)>,
     pub(super) status: SharedString,
     pub(super) picking: bool,
@@ -124,6 +131,22 @@ impl Gallery {
             // the material has to be re-applied here too or the chrome goes
             // permanently opaque the first time macOS flips light and dark.
             super::reapply_window_background(window, cx);
+            // Accessibility display settings change through the same system
+            // pass, so this is a cheap moment to pick up Reduce Motion too.
+            super::design::motion::sync_reduce_motion(cx);
+        });
+        let zoom_slider = cx.new(|_| {
+            // `max` first: `min` clamps against the default maximum of 100.
+            SliderState::new()
+                .max(*TILE_WIDTH_RANGE.end())
+                .min(*TILE_WIDTH_RANGE.start())
+                .step(1.0)
+                .default_value(DEFAULT_TILE_WIDTH)
+        });
+        let zoom = cx.subscribe(&zoom_slider, |view, _, event: &SliderEvent, cx| {
+            let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+            view.min_tile_width = value.start();
+            cx.notify();
         });
         let mut gallery = Self {
             library_root: options.library_root,
@@ -133,7 +156,10 @@ impl Gallery {
             selected: None,
             preview: None,
             viewer_open: false,
-            sidebar_collapsed: false,
+            sidebar_hidden: false,
+            inspector_hidden: false,
+            min_tile_width: DEFAULT_TILE_WIDTH,
+            zoom_slider,
             progress: None,
             status: "Opening library…".into(),
             picking: false,
@@ -150,7 +176,7 @@ impl Gallery {
             benchmark,
             pending_imports: Vec::new(),
             session_failures: 0,
-            _subscriptions: vec![appearance],
+            _subscriptions: vec![appearance, zoom],
         };
         if !options.inputs.is_empty() {
             gallery.import(options.inputs, false, cx);
@@ -400,6 +426,11 @@ impl Gallery {
         self.photos.iter_mut().find(|photo| &photo.record.id == id)
     }
 
+    /// The large-preview state, when it belongs to `photo`.
+    pub(super) fn preview_for(&self, photo: &PhotoId) -> Option<&Preview> {
+        self.preview.as_ref().filter(|preview| &preview.id == photo)
+    }
+
     pub(super) fn selected_index(&self) -> Option<usize> {
         let selected = self.selected.as_ref()?;
         self.photos
@@ -409,6 +440,12 @@ impl Gallery {
 
     pub(super) fn selected_photo(&self) -> Option<&GalleryPhoto> {
         self.selected_index().map(|index| &self.photos[index])
+    }
+
+    pub(super) fn select_id(&mut self, id: &PhotoId, cx: &mut Context<Self>) {
+        if let Some(index) = self.photos.iter().position(|photo| &photo.record.id == id) {
+            self.select_index(index, cx);
+        }
     }
 
     pub(super) fn select_index(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -604,6 +641,47 @@ impl Gallery {
         cx.notify();
     }
 
+    pub(super) fn benchmarking(&self) -> bool {
+        self.benchmark.is_some()
+    }
+
+    pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_hidden = !self.sidebar_hidden;
+        self.refresh_menus(cx);
+        cx.notify();
+    }
+
+    pub(super) fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
+        self.inspector_hidden = !self.inspector_hidden;
+        self.refresh_menus(cx);
+        cx.notify();
+    }
+
+    fn refresh_menus(&self, cx: &mut Context<Self>) {
+        cx.set_menus(super::menus(super::MenuState {
+            sidebar_visible: !self.sidebar_hidden,
+            inspector_visible: !self.inspector_hidden,
+        }));
+    }
+
+    /// One Zoom In (`direction` 1) or Zoom Out (-1) step, kept in step with
+    /// the toolbar slider.
+    pub(super) fn zoom(&mut self, direction: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let width = (self.min_tile_width + direction * TILE_WIDTH_STEP)
+            .clamp(*TILE_WIDTH_RANGE.start(), *TILE_WIDTH_RANGE.end());
+        self.min_tile_width = width;
+        self.zoom_slider
+            .update(cx, |slider, cx| slider.set_value(width, window, cx));
+        cx.notify();
+    }
+
+    /// Show the selected photo's original in Finder.
+    pub(super) fn reveal_selected(&self, cx: &mut Context<Self>) {
+        if let Some(photo) = self.selected_photo() {
+            cx.reveal_path(&photo.record.source);
+        }
+    }
+
     pub(super) fn toggle_performance(&mut self, cx: &mut Context<Self>) {
         self.show_performance = !self.show_performance;
         cx.notify();
@@ -625,7 +703,10 @@ impl Gallery {
                 self.selected = Some(photo.record.id.clone());
                 self.request_preview();
             }
-            window.request_animation_frame();
+            // ZUI caps an inactive window near 30 fps; the benchmark window is
+            // never active, and the gate measures display-rate frames.
+            let gallery = cx.entity_id();
+            window.on_next_display_frame(move |_, cx| cx.notify(gallery));
         }
         let image = self
             .preview
@@ -637,9 +718,9 @@ impl Gallery {
                 .as_ref()
                 .is_some_and(Benchmark::awaiting_decode),
         ) {
-            let resource = gpui_kit::Resource::from(image.to_path_buf());
+            let resource = gpui::Resource::from(image.to_path_buf());
             if let Some(result) = self.preview_cache.update(cx, |cache, cx| {
-                gpui_kit::ImageCache::load(cache, &resource, window, cx)
+                gpui::ImageCache::load(cache, &resource, window, cx)
             }) && let Some(benchmark) = &mut self.benchmark
             {
                 benchmark.preview_decoded(result.is_ok());
@@ -690,11 +771,20 @@ fn capture_snapshots(window: &mut Window, cx: &mut Context<Gallery>) {
     let Some(directory) = std::env::var_os("PHOTO_SNAPSHOT_DIR") else {
         return;
     };
+    // `PHOTO_SNAPSHOT_VIEWER` opens the viewer just before the first frame.
+    let open_viewer = std::env::var_os("PHOTO_SNAPSHOT_VIEWER").is_some();
+    // A background window gets no display frames, so an entrance would be
+    // captured at its first frame. Captures show the settled state.
+    cx.set_reduce_motion(true);
     // Capture only this app's Metal scene; no desktop/screen-recording API.
     cx.spawn_in(window, async move |this, cx| {
         let directory = PathBuf::from(directory);
         for frame in 1..=2 {
             smol::Timer::after(Duration::from_secs(4)).await;
+            if open_viewer && frame == 1 {
+                let _ = this.update_in(cx, |view, window, cx| view.open_viewer(window, cx));
+                smol::Timer::after(Duration::from_millis(600)).await;
+            }
             let _ = this.update_in(cx, |_, window, _| {
                 let result = (|| -> anyhow::Result<()> {
                     std::fs::create_dir_all(&directory)?;

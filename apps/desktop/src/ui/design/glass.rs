@@ -14,7 +14,7 @@
 //! [`frosted`] paints the tint, border and shadow and nothing else; adding the blur
 //! is a one-line change and the sigma to use is 16.
 
-use gpui_kit::{
+use gpui::{
     Background, BoxShadow, Div, Hsla, IntoElement, ParentElement as _, Styled,
     WindowBackgroundAppearance, div, linear_color_stop, linear_gradient, point,
     prelude::FluentBuilder as _, px,
@@ -302,7 +302,7 @@ pub fn selection_ring(
         // Quiet. An unselected tile is a photograph on a plane, not a framed
         // object: giving every tile a visible rim is what made the grid read as
         // a field of outlined boxes.
-        return (gpui_kit::transparent_black(), Vec::new());
+        return (gpui::transparent_black(), Vec::new());
     }
     if !focused {
         return (design.accent_strong.opacity(0.45), Vec::new());

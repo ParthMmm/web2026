@@ -8,7 +8,9 @@ The owner asked to save this as the reference for the intended result. The video
 
 ## Desktop implementation references
 
-- [GPUI Kit](https://github.com/longbridge/gpui-kit)
+- [ZUI](https://github.com/zeronsh/zui), the GPUI fork the desktop app uses
+- [Zeron's gpui-component fork](https://github.com/zeronsh/gpui-component)
+- [GPUI Kit](https://github.com/longbridge/gpui-kit), used before the move to ZUI
 - [Zed GPUI image example](https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/image/image.rs)
 - [GPUI FPS monitor](https://gpui-kit.com/docs/fps/)
 - [Zeron](https://github.com/zeronsh/zeron) — native GPUI desktop app we take design and

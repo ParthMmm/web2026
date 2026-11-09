@@ -1,10 +1,10 @@
 # Photo prototype
 
-Local-only macOS photo library built with GPUI Kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
+Local-only macOS photo library built with [ZUI](https://github.com/zeronsh/zui), Zeron's fork of GPUI. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
 
 ## Run on macOS
 
-Requires Xcode with its Metal toolchain, Rust, and **libvips 8.18.3**. The app checks `vips --version` before any Vips import or preview, rejects other versions, and caches a successful check for the process. GPUI Kit and gpui-fps are pinned to **0.6.1**; `Cargo.lock` selects their matching GPUI pre-release **0.3.4** packages.
+Requires Xcode with its Metal toolchain, Rust, and **libvips 8.18.3**. The app checks `vips --version` before any Vips import or preview, rejects other versions, and caches a successful check for the process. `gpui` and `gpui_platform` come from [ZUI](https://github.com/zeronsh/zui), and `gpui-base`, `gpui-component`, `gpui-component-assets`, and `gpui-fps` come from [Zeron's `gpui-component` fork](https://github.com/zeronsh/gpui-component). Both are pinned to the revisions Zeron ships. To update, copy the new revisions from Zeron's `Cargo.toml`.
 
 If Homebrew still provides 8.18.3, install it with `brew install vips`, then verify and pin it:
 
@@ -32,11 +32,12 @@ cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features 
 Arguments are JPEG files or folders to import on launch. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the toolbar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
 - **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
+- **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, and Show in Finder (also Cmd-Alt-R).
 - **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
-- **Failures:** files that couldn't be imported appear under **N not imported…** in the toolbar (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
-- **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) toggles gpui-fps. Right-click its headline to switch MAX FPS (estimated sustainable redraw rate) to presented FPS; click to collapse it. Its default grading budget is 60 Hz.
+- **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
+- **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) toggles the gpui-fps display: frames per second, a rolling frame-time chart, and the app's CPU and memory use. Its numbers come from the time GPUI spends drawing each frame.
 
-The theme follows the system's light or dark appearance.
+The theme follows the system's light or dark appearance. Both palettes live in `src/ui/design/theme.json`, which is installed over the component library's defaults at startup.
 
 On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. Copies that duplicate a photo already in the library, or that fail to import, are deleted. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
 
@@ -54,7 +55,7 @@ The library lives in `~/Library/Application Support/dev.parth.photo-prototype/li
 
 ## Processing and memory bounds
 
-The grid virtualizes rows. Columns follow the window width (at least 168 px per tile), and the inspector collapses below 760 px. Encoded renditions stay on disk. GPUI caches retain at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Pending loads are settled before eviction, including loads that scroll off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
+The grid virtualizes rows. Columns follow the window width (square tiles, at least 168 px wide, 6 px apart), and the inspector collapses below 760 px. Encoded renditions stay on disk. GPUI caches retain at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Pending loads are settled before eviction, including loads that scroll off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
 
 Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
 
@@ -79,7 +80,7 @@ Library tests (`tests/library.rs`) cover:
 ```sh
 cargo fmt --manifest-path apps/desktop/Cargo.toml --all -- --check
 cargo test --locked --manifest-path apps/desktop/Cargo.toml --features desktop
-cargo test --locked --manifest-path apps/desktop/Cargo.toml --features visual-check --lib failures_sheet
+cargo build --locked --manifest-path apps/desktop/Cargo.toml --features visual-check
 cargo check --locked --manifest-path apps/desktop/Cargo.toml --features desktop
 cargo build --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bins
 python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --output apps/desktop/benchmarks/local/pipeline-run
@@ -95,10 +96,10 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 - **Cold:** empty library, not a flushed OS file cache. Repeated selections within that run can hit derivatives created earlier in the same run.
 - **Warm:** the library already holds every photo, its grid rendition, **and the exact deterministic large-preview request sequence** before a fresh GUI process starts. Every requested large derivative must report a hit. Decoded GPUI images are not preloaded into the new process.
 - **GUI scope:** a fixed 30-second browsing window while imports continue, not a complete cold import. Larger cold libraries show placeholders when scrolling outpaces thumbnail production. The warm workload exercises fully populated rows. Pipeline mode measures complete thumbnail imports.
-- **Window behavior:** GUI benchmarks use a non-activating popup-level window. They set `focus = false`, do not call `cx.activate`, and do not repeatedly force the window to the front. This keeps GPUI 0.3.4's macOS frame source running when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
+- **Window behavior:** GUI benchmarks use a non-activating popup-level window. They set `focus = false`, do not call `cx.activate`, and do not repeatedly force the window to the front. This keeps GPUI's macOS frame source running when another normal window is active, without taking keyboard focus. The popup can appear above normal windows and across Spaces, so use pipeline mode when that visual intrusion is not acceptable. The harness still requires an unlocked, awake display because a hidden or asleep display cannot prove presentation. Passing does not prove that pixels reached the display. `caffeinate` keeps the Mac awake but does not take focus.
 - Benchmark mode uses four columns regardless of width, disables manual selection and web-size preparation, scrolls automatically, requests a preview every three seconds, and sustains frame demand. An independent deadline ends the run even when rendering stops. Failed runs remain failed.
 - File readiness ends when the generated derivative reaches the GUI. Decoded readiness ends when GPUI's image cache resolves it. **Neither proves pixels reached the display.** Draw and present-interval histograms are not GPU execution timings. The maximum gap measures time between Gallery render calls; initial render invocation is reported separately.
-- Frame intervals come from every newly drawn target-window frame submission, including inactive frames. They measure time between `present_end` events, not physical display scanout. Ordered trace accounting includes draws superseded before presentation; a pass requires zero trailing unpresented draws and exact draw coverage. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
+- Frame intervals come from every newly drawn target-window frame submission, including inactive frames. They measure time between `Window::on_present` callbacks, which ZUI runs as it hands each frame to the platform layer, not physical display scanout. Earlier reports, up to the move to ZUI, measured the end of that handoff instead. Ordered trace accounting includes draws superseded before presentation; a pass requires zero trailing unpresented draws and exact draw coverage. Startup, tail, and maximum presentation gaps each have a 250 ms limit. Missing intervals are null and fail the gate.
 - RSS samples sum the app and encoder children every 100 ms. Short-lived peaks can be missed; shared pages can be counted more than once. An unsampled run reports null, not zero memory.
 
 ### Budgets
@@ -117,6 +118,17 @@ Repeat the GUI command with counts 20, 200, and the full authorized library. Out
 A pass also requires more than 100 measured presentation intervals, complete ordered frame coverage, at least three previews, matching attempted/file-ready/decoded counts, no import/preview/decode failures, and all warm requests hitting large derivatives. Decoded latency is reported separately, without a separate pass budget. These are prototype targets for this Mac, not universal guarantees.
 
 ## Measured evidence
+
+On November 6, 2026, the move from GPUI Kit to ZUI was checked with one 30-second run per condition and stack, using 24 photos sampled from `~/Pictures` (median 26 MB) on **Apple M1 Pro, 32 GiB, macOS 27.0, libvips 8.18.3**. Each row is a single run.
+
+| Condition | Stack | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cold | GPUI Kit 0.6.1 | 1.06 | 16.97 / 19.64 | 84.99 | 925.84 | 332.77 |
+| Cold | ZUI | 1.15 | 17.65 / 17.89 | 82.62 | 894.43 | 377.42 |
+| Warm | GPUI Kit 0.6.1 | 1.33 | 17.09 / 17.78 | 90.07 | 18.96 | 235.11 |
+| Warm | ZUI | 1.24 | 17.62 / 17.78 | 73.28 | 24.00 | 212.83 |
+
+Both warm runs passed. Both cold runs failed the same check: 11 preview requests and 10 ready previews, because the last request was still pending when the run ended. ZUI caps an inactive window near 30 fps, which held a first ZUI run at 50.2 ms present intervals. Benchmark mode now requests its frames with `Window::on_next_display_frame`, which keeps the display's rate; normal use keeps the cap.
 
 On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
 
@@ -201,9 +213,10 @@ What it does here:
   inspector on the chrome plane, which sits above it in dark mode and below it in
   light mode. Chrome recedes in both appearances, and the direction is pinned by
   a test.
-- **Tiles.** A card plane, a selection ring with an accent halo that doubles as
-  the keyboard focus indicator and dims when the region is not focused, and a
-  hover plate that fades in over the frame rather than snapping on.
+- **Tiles.** Square crops on a dark plate, a selection ring set 3 px outside
+  the tile that doubles as the keyboard focus indicator and dims when the region
+  is not focused, and a hover plate that fades in over the frame rather than
+  snapping on. A photo whose original is missing turns grey and says so.
 - **Motion.** One shared 33ms clock drives everything animated and parks itself
   when nothing is, so an idle window schedules no frames.
 
@@ -217,6 +230,20 @@ What it cannot do at this GPUI revision, and how it copes instead:
 - **No scale transform for `div`s.** Entrances are fade plus a small relative
   offset, as in Zeron.
 
+## Code layout
+
+- `src/ui/gallery.rs` holds the window's state and the actions that change it.
+- `src/ui/view.rs` computes the layout and assembles the regions.
+- `src/ui/layout.rs` is pure geometry: which panels fit, and the grid's columns
+  and tile size. `uniform_list` needs exact row heights, so this is unit tested
+  rather than left to flex layout.
+- `src/ui/regions/` has one file per window region: toolbar, sidebar,
+  photo grid, inspector, status bar, viewer, and the failures sheet. Each adds
+  methods to `Gallery`.
+- `src/ui/components/` holds presentational pieces that take data and render it
+  (the exposure readout, the film chip, the detail list). They hold no state.
+- `src/ui/design/` holds the theme, planes, glass, motion and hover rules.
+
 ## Pipeline choice and remaining product work
 
 **libvips** was selected, and the Rust `image` pipeline has since been removed. The `image` crate now only reads image headers for dimensions. Tests also use it to write JPEG fixtures with EXIF and ICC data. Complete cold imports of twenty evenly sampled JPEGs measured Rust **2.19 thumbnails/sec / 357 MiB** sampled family RSS versus libvips **3.90/sec / 58 MiB**. Both produce max-480-pixel JPEG thumbnails at quality 85; encoder quality scales and resize filters are not equivalent. The Rust `image`/zune-jpeg baseline applies orientation and a triangle resize, without full ICC conversion. Libvips provides shrink-on-load, orientation handling, and sRGB conversion. This is a workflow comparison, not an equal-quality codec benchmark.
@@ -227,6 +254,7 @@ Remaining product work:
 - Tune the WebP quality with real photos and settle on a final value.
 - Add derivative quota and cleanup of orphaned files.
 - Verify the new grid tile names, selection state, and activation actions with VoiceOver. Native accessibility-tree inspection did not expose the GPUI descendants, so screen-reader behavior is unverified.
+- Label the icon-only buttons (performance, close viewer, previous and next photo) for screen readers. Zeron's `gpui-component` fork labels a `Button` only from its visible text and has no label setter.
 - Add upload and publishing.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No framework switch or budget relaxation was made. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
