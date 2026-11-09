@@ -16,7 +16,6 @@ use crate::{
 };
 use import::PendingImport;
 use rune::{AppHandle, ImageCache, Tx, Waker};
-use rune_kit::shell::PaneState;
 use std::{
     cell::RefCell,
     ops::Range,
@@ -37,13 +36,22 @@ const PERFORMANCE_REFRESH: Duration = Duration::from_millis(250);
 
 /// Grid geometry. The grid is virtualised by row, so tiles have exact sizes
 /// computed here rather than left to flex layout.
-pub(super) const GRID_GAP: f32 = 8.0;
-pub(super) const GRID_PADDING: f32 = 16.0;
-const MIN_TILE_WIDTH: f32 = 168.0;
-const TILE_ASPECT: f32 = 0.75;
-pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
+pub(super) const GRID_GAP: f32 = 6.0;
+/// Padding on each side of the grid. Wider than the gap between tiles,
+/// because the window edge is a separate group from the next tile.
+pub(super) const GRID_GUTTER: f32 = 16.0;
+/// The smallest tile the grid lays out, at the default zoom.
+const DEFAULT_TILE_WIDTH: f32 = 168.0;
+/// The zoom range, as the smallest width a column may take, and one Zoom In
+/// or Zoom Out step.
+pub(super) const TILE_WIDTH_RANGE: std::ops::RangeInclusive<f32> = 112.0..=360.0;
+const TILE_WIDTH_STEP: f32 = 32.0;
+/// Square tiles: every photo gets the same weight in the grid, whatever its
+/// orientation.
+const TILE_ASPECT: f32 = 1.0;
+pub(super) const INSPECTOR_WIDTH: f32 = 300.0;
 const MIN_WIDTH_FOR_INSPECTOR: f32 = 760.0;
-pub(super) const SIDEBAR_WIDTH: f32 = 220.0;
+pub(super) const SIDEBAR_WIDTH: f32 = 232.0;
 pub(super) const WINDOW_SIZE: (f32, f32) = (1200.0, 820.0);
 /// Rows of thumbnails decoded beyond the visible ones, each side.
 const OVERSCAN_ROWS: usize = 1;
@@ -115,6 +123,7 @@ pub(super) struct GridLayout {
     pub(super) tile_width: f32,
     pub(super) tile_height: f32,
     pub(super) page_rows: usize,
+    pub(super) show_sidebar: bool,
     pub(super) show_inspector: bool,
 }
 
@@ -138,7 +147,11 @@ pub struct Gallery {
     pub(super) selected: Option<PhotoId>,
     pub(super) preview: Option<Preview>,
     pub(super) overlay: Overlay,
-    pub(super) sidebar: PaneState,
+    /// The person hid the sidebar or the inspector from the View menu.
+    pub(super) sidebar_hidden: bool,
+    pub(super) inspector_hidden: bool,
+    /// The grid's zoom: the smallest width a tile may take.
+    pub(super) min_tile_width: f32,
     pub(super) progress: Option<(usize, usize)>,
     pub(super) status: String,
     pub(super) picking: bool,
@@ -212,7 +225,9 @@ impl Gallery {
             selected: None,
             preview: None,
             overlay: Overlay::None,
-            sidebar: PaneState::new(SIDEBAR_WIDTH).range(180.0, 360.0),
+            sidebar_hidden: false,
+            inspector_hidden: false,
+            min_tile_width: DEFAULT_TILE_WIDTH,
             progress: None,
             status: String::new(),
             picking: false,
@@ -386,6 +401,55 @@ impl Gallery {
         self.progress.is_some()
     }
 
+    pub(super) fn toggle_sidebar(&mut self) {
+        self.sidebar_hidden = !self.sidebar_hidden;
+        self.layout_changed();
+    }
+
+    pub(super) fn toggle_inspector(&mut self) {
+        self.inspector_hidden = !self.inspector_hidden;
+        self.layout_changed();
+    }
+
+    /// One Zoom In (`steps` 1) or Zoom Out (-1) step, or several.
+    pub(super) fn zoom(&mut self, steps: i32) {
+        #[allow(clippy::cast_precision_loss)]
+        self.set_zoom(self.min_tile_width + steps as f32 * TILE_WIDTH_STEP);
+    }
+
+    pub(super) fn set_zoom(&mut self, min_tile_width: f32) {
+        let width = min_tile_width.clamp(*TILE_WIDTH_RANGE.start(), *TILE_WIDTH_RANGE.end());
+        if width != self.min_tile_width {
+            self.min_tile_width = width;
+            self.layout_changed();
+        }
+    }
+
+    /// The grid's viewport is measured again after the change, and the menu
+    /// bar names what each View toggle will do next.
+    fn layout_changed(&mut self) {
+        self.grid_size = None;
+        if let Some(handle) = &self.handle {
+            let _ = handle.set_menu(super::menus(self.sidebar_hidden, self.inspector_hidden));
+        }
+    }
+
+    /// Shows the selected photo's original in Finder.
+    pub(super) fn reveal_selected(&self) {
+        if self.handle.is_none() {
+            return;
+        }
+        if let Some(photo) = self.selected_photo() {
+            let source = photo.record.source.clone();
+            std::thread::spawn(move || {
+                let _ = std::process::Command::new("open")
+                    .arg("-R")
+                    .arg(source)
+                    .status();
+            });
+        }
+    }
+
     pub(super) fn toggle_performance(&mut self) {
         if self.performance.take().is_none() {
             self.refresh_performance();
@@ -412,22 +476,26 @@ impl Gallery {
     /// geometry stays what `benchmark.py` measured.
     pub(super) fn layout(&self) -> GridLayout {
         let benchmarking = self.benchmark.is_some();
+        let show_sidebar = !benchmarking && !self.sidebar_hidden;
         let show_inspector = benchmarking
-            || (!self.photos.is_empty() && self.window_size[0] >= MIN_WIDTH_FOR_INSPECTOR);
+            || (!self.inspector_hidden
+                && !self.photos.is_empty()
+                && self.window_size[0] >= MIN_WIDTH_FOR_INSPECTOR);
         let [grid_width, grid_height] = self.grid_size.unwrap_or_else(|| {
-            let sidebar = if benchmarking { 0.0 } else { SIDEBAR_WIDTH };
+            let sidebar = if show_sidebar { SIDEBAR_WIDTH } else { 0.0 };
             let inspector = if show_inspector { INSPECTOR_WIDTH } else { 0.0 };
             [
                 self.window_size[0] - sidebar - inspector,
                 self.window_size[1],
             ]
         });
-        let usable = (grid_width - GRID_PADDING * 2.0).max(MIN_TILE_WIDTH);
+        let min_tile = self.min_tile_width;
+        let usable = (grid_width - GRID_GUTTER * 2.0).max(min_tile);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let columns = if benchmarking {
             benchmark::COLUMNS
         } else {
-            (((usable + GRID_GAP) / (MIN_TILE_WIDTH + GRID_GAP)).floor() as usize).max(1)
+            (((usable + GRID_GAP) / (min_tile + GRID_GAP)).floor() as usize).max(1)
         };
         #[allow(clippy::cast_precision_loss)]
         let tile_width = ((usable - GRID_GAP * (columns - 1) as f32) / columns as f32).floor();
@@ -439,6 +507,7 @@ impl Gallery {
             tile_width,
             tile_height,
             page_rows: page_rows.saturating_sub(1).max(1),
+            show_sidebar,
             show_inspector,
         }
     }

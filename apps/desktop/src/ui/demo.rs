@@ -1,7 +1,7 @@
 //! Made-up photos for headless renders and the goldens, and the scenes `--scene` names. A
 //! headless run never opens the library on disk, so a render never shows anyone's photos.
 //! Every state the window can show has a scene: full, empty, opening, failed, importing,
-//! and long names.
+//! long names, each end of the zoom, and the panels hidden.
 
 use super::{
     gallery::{Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail},
@@ -79,6 +79,12 @@ pub(super) static SCENES: &[Scene] = &[
         select(s, 1);
     }),
     ("performance", |s| s.toggle_performance()),
+    ("zoomed-in", |s| s.set_zoom(f32::MAX)),
+    ("zoomed-out", |s| s.set_zoom(0.0)),
+    ("panels-hidden", |s| {
+        s.toggle_sidebar();
+        s.toggle_inspector();
+    }),
 ];
 
 /// The shoots the demo library holds: a folder, a film simulation and a

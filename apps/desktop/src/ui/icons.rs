@@ -45,3 +45,23 @@ pub(super) static NEXT: Icon = lucide(
     "photo-next",
     r#"<path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
 );
+
+pub(super) static MINUS: Icon = lucide(
+    "photo-minus",
+    r#"<path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>"#,
+);
+
+pub(super) static PANEL_LEFT: Icon = lucide(
+    "photo-panel-left",
+    r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></g>"#,
+);
+
+pub(super) static PANEL_RIGHT: Icon = lucide(
+    "photo-panel-right",
+    r#"<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></g>"#,
+);
+
+pub(super) static FOLDER_OPEN: Icon = lucide(
+    "photo-folder-open",
+    r#"<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
+);

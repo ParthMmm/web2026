@@ -29,15 +29,15 @@ The recorded checks used an existing 8.18.3 install; archived-formula installati
 cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features desktop --bin photo-desktop -- "$HOME/Pictures"
 ```
 
-Arguments are JPEG files or folders to import on launch. Rune reads its own flags first (`--help` lists them) and passes the rest to the app. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the toolbar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
+Arguments are JPEG files or folders to import on launch. Rune reads its own flags first (`--help` lists them) and passes the rest to the app. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the title bar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
 - **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
+- **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, and Show in Finder (also Cmd-Alt-R).
 - **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
-- **Failures:** files that couldn't be imported appear under **Not imported** in the sidebar, with their count (also File › Files not imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
-- **Performance:** the chip button (Cmd-Alt-P, or View › Show or hide performance) shows the frames drawn in the last second and the slowest frame's CPU time, from Rune's per-frame reports. An idle window draws no frames, so the panel then says it is idle.
-- **Sidebar:** Shift-Cmd-B shows or hides it.
+- **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar, with their count (also File › Files Not Imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
+- **Performance:** the chip button in the title bar (Cmd-Alt-P, or View › Show or Hide Performance) shows the frames drawn in the last second and the slowest frame's CPU time, from Rune's per-frame reports. An idle window draws no frames, so the panel then says it is idle.
 
-The theme follows the system's light or dark appearance.
+The theme follows the system's light or dark appearance. Both palettes live in `src/ui/design/theme.json`, which is installed over the component library's defaults at startup.
 
 On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. Copies that duplicate a photo already in the library, or that fail to import, are deleted. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
 
@@ -55,7 +55,7 @@ The library lives in `~/Library/Application Support/dev.parth.photo-prototype/li
 
 ## Processing and memory bounds
 
-The grid virtualizes rows. Columns follow the window width (at least 168 px per tile), and the inspector collapses below 760 px. Encoded renditions stay on disk. Decoded images go through `rune::ImageCache`, held in two bounded slot lists (`src/ui/images.rs`): at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Only visible rows, plus one row each side, request thumbnails. A pending decode is never evicted, including one for a row that scrolled off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
+The grid virtualizes rows. Columns follow the window width (square tiles, at least the zoom's width, 6 px apart), and the inspector collapses below 760 px. Encoded renditions stay on disk. Decoded images go through `rune::ImageCache`, held in two bounded slot lists (`src/ui/images.rs`): at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Only visible rows, plus one row each side, request thumbnails. A pending decode is never evicted, including one for a row that scrolled off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
 
 Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
 
@@ -118,7 +118,18 @@ A pass also requires more than 100 measured presentation intervals, complete ord
 
 ## Measured evidence
 
-**Every measurement in this section was taken on the earlier GPUI build.** The Rune port changes what the frame keys measure (see above), so none of these numbers carries over. The Rune build has not yet passed the GUI gate; rerun the matrix with an unlocked, awake display before relying on it.
+**Every measurement in this section was taken on the earlier GPUI and ZUI builds.** The Rune port changes what the frame keys measure (see above), so none of these numbers carries over. The Rune build has not yet passed the GUI gate; rerun the matrix with an unlocked, awake display before relying on it.
+
+On November 6, 2026, the move from GPUI Kit to ZUI was checked with one 30-second run per condition and stack, using 24 photos sampled from `~/Pictures` (median 26 MB) on **Apple M1 Pro, 32 GiB, macOS 27.0, libvips 8.18.3**. Each row is a single run.
+
+| Condition | Stack | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Cold | GPUI Kit 0.6.1 | 1.06 | 16.97 / 19.64 | 84.99 | 925.84 | 332.77 |
+| Cold | ZUI | 1.15 | 17.65 / 17.89 | 82.62 | 894.43 | 377.42 |
+| Warm | GPUI Kit 0.6.1 | 1.33 | 17.09 / 17.78 | 90.07 | 18.96 | 235.11 |
+| Warm | ZUI | 1.24 | 17.62 / 17.78 | 73.28 | 24.00 | 212.83 |
+
+Both warm runs passed. Both cold runs failed the same check: 11 preview requests and 10 ready previews, because the last request was still pending when the run ended. ZUI caps an inactive window near 30 fps, which held a first ZUI run at 50.2 ms present intervals. The ZUI build's benchmark mode then requested its frames with `Window::on_next_display_frame`, which keeps the display's rate.
 
 On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
 
@@ -177,15 +188,23 @@ A headless run moves the wall clock and the animation clock together, so anythin
 
 ## Design system
 
-The window uses rune-kit's app shell and its neutral theme (`Kit::neutral`), which follows the system appearance:
+The window keeps the Library design from the ZUI build (#21), drawn with Rune and rune-kit. `src/ui/look.rs` holds its palette for each appearance (`docs/photo-gallery` has the references) and lays it over rune-kit's tokens, so kit controls and the app's own parts agree:
 
-- **Shell.** `SplitView` with a resizable, collapsible sidebar, and the toolbar inside the framed main pane, so the traffic lights sit on the toolbar's centre line. The sidebar has one destination per collection the library keeps, with its count, and the weight of the originals in its footer. The status bar owns transient import state and is empty when idle, so no datum appears twice. Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed column count.
-- **Grid.** Virtual rows inside a scroll viewport whose edges fade while content is hidden under them. Tiles have a selection ring, and Rune paints hover and press itself, so the pointer crossing tiles never re-runs the view.
-- **Viewer and sheet.** The viewer is always dark and modal: Escape closes it, and focus returns to the window. The failures sheet is rune-kit's `Dialog`.
-- **Icons.** Lucide, the set gpui-kit drew, as SVG bodies (`src/ui/icons.rs`).
-- **Numbers from the kit.** Radii come from `k.radius`, and bar controls (the toolbar, the viewer bar) are 28 pt (`ControlSize::Large`), as OpenCode Desktop, the reference rune-kit was ported from, draws them. Counts use tabular figures. The failures sheet is one list with a rule between rows. Status words appear only for transient import state or when something went wrong.
+- **Shell.** One 44 pt title bar across the window: the sidebar toggle past the traffic lights, the grid's title where the grid starts, and the zoom slider, the Info and performance toggles, and **Import** at the trailing edge. Below it, the sidebar, the grid and the inspector. The sidebar has one destination per collection the library keeps, with its count, and the weight of the originals in its footer. The status bar is mono, shows what is in view and selected at rest, and owns transient import state, so no datum appears twice. Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed column count.
+- **Planes.** The grid and the viewer sit on the opaque content plane (`#060606` dark, white light). The title bar, sidebar, inspector and status bar sit on the chrome plane, with a hairline between planes. The accent is red (`#E5483A` dark, `#C8372A` light) and marks only the primary action and progress.
+- **Tiles.** Square crops on a plate, 6 pt apart, with a selection ring set 3 pt outside the photo. Rune paints hover and press itself, so the pointer crossing tiles never re-runs the view. A photo whose original is missing turns grey and says so. The grid's scroll edges fade while content is hidden under them.
+- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, and a detail list that leaves out values the camera never wrote.
+- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheet slides in at the trailing edge and lists each file with its reason and path.
+- **Type and icons.** Geist and Geist Mono (OFL, `fonts/`), with tabular figures for counts, sizes and camera settings. Icons are Lucide, as SVG bodies (`src/ui/icons.rs`).
+- **Numbers from the kit.** Radii come from `k.radius`. Status words appear only for transient import state or when something went wrong.
 
-The GPUI build's design system was ported from [Zeron](https://github.com/zeronsh/zeron) ([reference](../../docs/photo-gallery/zeron-reference.md)). Most of it worked around GPUI 0.3.4: hover fades, a shared motion clock, gradient scrims in place of edge fades, and a tint in place of in-app blur. Rune provides those natively, so that code was removed rather than ported. Window glass (a translucent chrome over the blurred desktop) was not carried over. Rune can do it with `El::system_material` in a transparent window.
+## Code layout
+
+- `src/ui/gallery/` holds the window's state and the actions that change it. `layout()` computes the grid's columns and tile size, because the grid is virtualised by row and needs exact row heights.
+- `src/ui/look.rs` holds the palette, the fonts and the text styles.
+- `src/ui/view/` has one file per window region: title bar, grid, inspector, viewer, and the failures sheet. `view/mod.rs` assembles them with the sidebar and the status bar.
+- `src/ui/view/parts.rs` holds pieces that take data and draw it (the exposure readout and pill, the film chip, the detail list). They hold no state.
+- `src/ui/demo.rs` holds the demo library and the scenes, and `goldens/` each scene's element tree.
 
 ## Pipeline choice and remaining product work
 

@@ -1,0 +1,113 @@
+kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
+ window	group	window	-	-	-	0,0,1200,820	#060606ff	-	1.00
+  title-bar	toolbar	title-bar	-	-	-	0,0,1200,44	#0d0d0dff	-	1.00
+   toggle-sidebar	button	toggle-sidebar	Show sidebar (⌃⌘S)	-	Show sidebar (⌃⌘S)	12,10,24,24	#00000000	-	1.00
+    icon	icon	icon	-	-	-	16,14,16,16	#00000000	#9a9a9aff	1.00
+   title	group	title	-	-	-	52,12.6,97,18.8	#00000000	-	1.00
+    #0	text	-	-	All photos	-	52,12.6,74,18.8	#00000000	#edededff	1.00
+    photo-count	text	photo-count	-	24	-	134,14.5,15,15	#00000000	#7f7f7fff	1.00
+   #2	group	-	-	-	-	149,22,725,0	#00000000	-	1.00
+   title-bar-commands	group	title-bar-commands	-	-	-	874,10,316,24	#00000000	-	1.00
+    zoom	group	zoom	-	-	-	874,10,132,24	#00000000	-	1.00
+     zoom-out	button	zoom-out	Smaller photos (⌘−)	-	Smaller photos (⌘−)	874,12,20,20	#00000000	-	1.00
+      icon	icon	icon	-	-	-	876,14,16,16	#00000000	#9a9a9aff	1.00
+     zoom-slider	slider	zoom-slider	Photo size	-	Photo size (⌘+ and ⌘−)	896,10,88,24	#00000000	-	1.00
+      #0	group	-	-	-	-	896,20,88,4	#ffffff24	-	1.00
+      #1	group	-	-	-	-	896,20,23.2,4	#9a9a9aff	-	1.00
+      zoom-knob	group	zoom-knob	-	-	-	913.2,16,12,12	#f2f2f2ff	-	1.00
+     zoom-in	button	zoom-in	Larger photos (⌘+)	-	Larger photos (⌘+)	986,12,20,20	#00000000	-	1.00
+      icon	icon	icon	-	-	-	988,14,16,16	#00000000	#9a9a9aff	1.00
+    toggle-info	button	toggle-info	Show info (⌘I)	-	Show info (⌘I)	1018,10,24,24	#00000000	-	1.00
+     icon	icon	icon	-	-	-	1022,14,16,16	#00000000	#9a9a9aff	1.00
+    performance-toggle	button	performance-toggle	Show performance (⌥⌘P)	-	Show performance (⌥⌘P)	1048,10,24,24	#00000000	-	1.00
+     icon	icon	icon	-	-	-	1052,14,16,16	#00000000	#9a9a9aff	1.00
+    #3	group	-	-	-	-	1082,14,1,16	#ffffff14	-	1.00
+    import	group	import	-	-	-	1093,10,97,24	#e5483aff	-	1.00
+     import-files	button	import-files	Import	-	Import files or folders (⌘O)	1093,10,75,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1101,15,14,14	#00000000	#ffffffff	1.00
+      #1	text	-	-	Import	-	1119,12,41,20	#00000000	#ffffffff	1.00
+     import-more	button	import-more	More import sources	-	-	1168,10,22,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1173,16,12,12	#00000000	#ffffffff	1.00
+  panes	group	panes	-	-	-	0,44,1200,752	#00000000	-	1.00
+   grid-region	group	grid-region	-	-	-	0,44,1200,752	#060606ff	-	1.00
+    photo-grid	group	photo-grid	-	-	-	0,44,1200,752	#00000000	-	1.00
+     grid-rows	group	grid-rows	-	-	-	0,44,1200,780	#00000000	-	1.00
+      row-photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	group	row-photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	-	-	-	0,44,1200,195	#00000000	-	1.00
+       photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	group	photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	-	-	-	16,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	16,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4700.JPG	-	-	16,50,189,189	#00000000	-	1.00
+        ring	group	ring	-	-	-	13,47,195,195	#00000000	-	1.00
+       photo-a5a467e209ddbf76a53ba3c3e6da6818cf4f2b52db7f7ec691cc3d9f6da0e4b4	group	photo-a5a467e209ddbf76a53ba3c3e6da6818cf4f2b52db7f7ec691cc3d9f6da0e4b4	-	-	-	211,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	211,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4707.JPG	-	-	211,50,189,189	#00000000	-	1.00
+       photo-5bac7601870b32b3f0b4395ebe0f8d5f7362a863d50aeb32c7c80ecaf8284b90	group	photo-5bac7601870b32b3f0b4395ebe0f8d5f7362a863d50aeb32c7c80ecaf8284b90	-	-	-	406,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	406,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4714.JPG	-	-	406,50,189,189	#00000000	-	1.00
+       photo-cc7bc7ebcc9fbc15e3c312db1bc0cabdbd5b4ce7e468f5fb9c2efcb22b1fd839	group	photo-cc7bc7ebcc9fbc15e3c312db1bc0cabdbd5b4ce7e468f5fb9c2efcb22b1fd839	-	-	-	601,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	601,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4721.JPG	-	-	601,50,189,189	#00000000	-	1.00
+       photo-4be184cbb7db42eb33e735fc86b1d60c1a9d961a485780c4ef2d82f8cab7e03a	group	photo-4be184cbb7db42eb33e735fc86b1d60c1a9d961a485780c4ef2d82f8cab7e03a	-	-	-	796,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	796,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4728.JPG	-	-	796,50,189,189	#00000000	-	1.00
+       photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	group	photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	-	-	-	991,50,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	991,50,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4735.JPG	-	-	991,50,189,189	#00000000	-	1.00
+      row-photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	group	row-photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	-	-	-	0,239,1200,195	#00000000	-	1.00
+       photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	group	photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	-	-	-	16,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	16,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4742.JPG	-	-	16,245,189,189	#00000000	-	1.00
+       photo-1a3ca80b9f41c697ff853e5875b79db9b0c4cc5374c0c2a08325165cf6f888c2	group	photo-1a3ca80b9f41c697ff853e5875b79db9b0c4cc5374c0c2a08325165cf6f888c2	-	-	-	211,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	211,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4749.JPG	-	-	211,245,189,189	#00000000	-	1.00
+       photo-0dbea4b4a04d5770f8de4bd57c075163e50330357e00880ddb98daed7f4a1662	group	photo-0dbea4b4a04d5770f8de4bd57c075163e50330357e00880ddb98daed7f4a1662	-	-	-	406,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	406,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4400.JPG	-	-	406,245,189,189	#00000000	-	1.00
+       photo-79b0f0acb1a46060858aa313a676a770e5447c3cb60a8cca2f3f6da80da6b972	group	photo-79b0f0acb1a46060858aa313a676a770e5447c3cb60a8cca2f3f6da80da6b972	-	-	-	601,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	601,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4407.JPG	-	-	601,245,189,189	#00000000	-	1.00
+       photo-ed4aeb365f7ec4b941f6a8acf54e24eca3d22b1b6e95f5f1f4edfd57ca42b93c	group	photo-ed4aeb365f7ec4b941f6a8acf54e24eca3d22b1b6e95f5f1f4edfd57ca42b93c	-	-	-	796,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	796,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4414.JPG	-	-	796,245,189,189	#00000000	-	1.00
+       photo-e467cc177c97112a085def3270d70fa935f5adab07d4b998c11789f020ce6be8	group	photo-e467cc177c97112a085def3270d70fa935f5adab07d4b998c11789f020ce6be8	-	-	-	991,245,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	991,245,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4421.JPG	-	-	991,245,189,189	#00000000	-	1.00
+      row-photo-627d8bf07abac95a81b6a70f4bc75a8888fa8cbbe7eaf90ba7af00085acbae2c	group	row-photo-627d8bf07abac95a81b6a70f4bc75a8888fa8cbbe7eaf90ba7af00085acbae2c	-	-	-	0,434,1200,195	#00000000	-	1.00
+       photo-627d8bf07abac95a81b6a70f4bc75a8888fa8cbbe7eaf90ba7af00085acbae2c	group	photo-627d8bf07abac95a81b6a70f4bc75a8888fa8cbbe7eaf90ba7af00085acbae2c	-	-	-	16,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	16,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4428.JPG	-	-	16,440,189,189	#00000000	-	1.00
+       photo-01894d16afc24d20b18772928f939235adfcb388ac696f2c63118053db8c35fe	group	photo-01894d16afc24d20b18772928f939235adfcb388ac696f2c63118053db8c35fe	-	-	-	211,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	211,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4435.JPG	-	-	211,440,189,189	#00000000	-	1.00
+       photo-24b3ad2b524f10b118509ad2b2d4c05e11a142323cda160b73a2f3be1805c036	group	photo-24b3ad2b524f10b118509ad2b2d4c05e11a142323cda160b73a2f3be1805c036	-	-	-	406,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	406,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4442.JPG	-	-	406,440,189,189	#00000000	-	1.00
+       photo-d9cfe0d50f07bb4e66c8e1515b890b02e34086e6c9753c34503965aeaa3b0c34	group	photo-d9cfe0d50f07bb4e66c8e1515b890b02e34086e6c9753c34503965aeaa3b0c34	-	-	-	601,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	601,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4449.JPG	-	-	601,440,189,189	#00000000	-	1.00
+       photo-7be9603215193406786c2a28a431d63f3e1f9700290dbe37d2f814317c39599f	group	photo-7be9603215193406786c2a28a431d63f3e1f9700290dbe37d2f814317c39599f	-	-	-	796,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	796,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4100.JPG	-	-	796,440,189,189	#00000000	-	1.00
+       photo-39773b159b87bcf923bd32f278cf1f72352efaa032faeb6b08322d36c84c9105	group	photo-39773b159b87bcf923bd32f278cf1f72352efaa032faeb6b08322d36c84c9105	-	-	-	991,440,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	991,440,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4107.JPG	-	-	991,440,189,189	#00000000	-	1.00
+      row-photo-1fbf88b0f481168ecddb60b2e655b4bfd62c42f5865fd3a0d266382a10d75277	group	row-photo-1fbf88b0f481168ecddb60b2e655b4bfd62c42f5865fd3a0d266382a10d75277	-	-	-	0,629,1200,195	#00000000	-	1.00
+       photo-1fbf88b0f481168ecddb60b2e655b4bfd62c42f5865fd3a0d266382a10d75277	group	photo-1fbf88b0f481168ecddb60b2e655b4bfd62c42f5865fd3a0d266382a10d75277	-	-	-	16,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	16,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4114.JPG	-	-	16,635,189,189	#00000000	-	1.00
+       photo-25bbd632a00001f17c19d39366e3af5a564ebd65f25d27b62686b694ddbca82d	group	photo-25bbd632a00001f17c19d39366e3af5a564ebd65f25d27b62686b694ddbca82d	-	-	-	211,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	211,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4121.JPG	-	-	211,635,189,189	#00000000	-	1.00
+       photo-50d9802018d32544498599a2a178126bb84822c8b9bb406409e921e7c95c3d6f	group	photo-50d9802018d32544498599a2a178126bb84822c8b9bb406409e921e7c95c3d6f	-	-	-	406,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	406,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4128.JPG	-	-	406,635,189,189	#00000000	-	1.00
+       photo-e03825fd1f5dea3f5a89e4edbfda02e74ccab26421c4166a86ed676f0a43924d	group	photo-e03825fd1f5dea3f5a89e4edbfda02e74ccab26421c4166a86ed676f0a43924d	-	-	-	601,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	601,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4135.JPG	-	-	601,635,189,189	#00000000	-	1.00
+       photo-71237f5e5fead9dca3e33ae972c721e78f5b037a2c55866d77cd4ecab0dd9d2a	group	photo-71237f5e5fead9dca3e33ae972c721e78f5b037a2c55866d77cd4ecab0dd9d2a	-	-	-	796,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	796,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4142.JPG	-	-	796,635,189,189	#00000000	-	1.00
+       photo-2adce763f3ba0a7e88bb1c26b4e0a1e097c4165ffb8406c2c93a238ada804e5b	group	photo-2adce763f3ba0a7e88bb1c26b4e0a1e097c4165ffb8406c2c93a238ada804e5b	-	-	-	991,635,189,189	#141414ff	-	1.00
+        #0	group	-	-	-	-	991,635,189,189	#00000000	-	1.00
+        hit	button	hit	DSCF4149.JPG	-	-	991,635,189,189	#00000000	-	1.00
+  status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
+   status	text	status	-	24 photos · 1 selected	-	14,800.8,1172,14.4	#00000000	#9a9a9aff	1.00

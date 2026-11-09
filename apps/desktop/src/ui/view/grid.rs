@@ -3,38 +3,46 @@
 
 use super::super::{
     gallery::{
-        GRID_GAP, GRID_PADDING, Gallery, GalleryPhoto, GridLayout, LibraryState, Thumbnail, row_key,
+        GRID_GAP, GRID_GUTTER, Gallery, GalleryPhoto, GridLayout, LibraryState, Thumbnail, row_key,
     },
     icons,
+    look::Look,
 };
 use super::GRID_KEY;
-use rune::{Color, El, GrowthSpec, ScrollSpec, SurfaceFit, Tx, col, el, icon, row, text};
-use rune_kit::{Button, Kit};
+use rune::{
+    Color, El, GrowthSpec, PopupItem, PopupMenu, ScrollSpec, SurfaceFit, TextStyle, Tx, col, el,
+    icon, row, text,
+};
+use rune_kit::Button;
 use std::borrow::Cow;
 
 const EDGE_FADE: f32 = 24.0;
+const TILE_RADIUS: f32 = 4.0;
+/// The gap between a tile and its selection ring.
+const RING_OFFSET: f32 = 3.0;
 
-pub(super) fn grid_region(s: &Gallery, k: &Kit, layout: GridLayout) -> El {
+pub(super) fn grid_region(s: &Gallery, look: &Look, layout: GridLayout) -> El {
     let region = col()
         .key("grid-region")
         .grow(1.0)
         .min_w(0.0)
         .h_full()
-        .min_h(0.0);
+        .min_h(0.0)
+        .fill(look.plane);
     let content = match &s.library {
-        LibraryState::Opening => note("Opening library…", k),
-        LibraryState::Unavailable(message) => unavailable(message, k),
-        _ if s.photos.is_empty() && s.is_importing() => note("Looking for JPEGs…", k),
-        _ if s.photos.is_empty() => empty_state(s, k),
-        LibraryState::Open(_) | LibraryState::Demo => grid(s, k, layout),
+        LibraryState::Opening => note("Opening library…", look),
+        LibraryState::Unavailable(message) => unavailable(message, look),
+        _ if s.photos.is_empty() && s.is_importing() => note("Looking for JPEGs…", look),
+        _ if s.photos.is_empty() => empty_state(s, look),
+        LibraryState::Open(_) | LibraryState::Demo => grid(s, look, layout),
     };
     region.child(content)
 }
 
-fn grid(s: &Gallery, k: &Kit, layout: GridLayout) -> El {
+fn grid(s: &Gallery, look: &Look, layout: GridLayout) -> El {
     let columns = layout.columns;
     let rows = s.photos.len().div_ceil(columns);
-    let kit = k.clone();
+    let look = look.clone();
     col()
         .key(GRID_KEY)
         .w_full()
@@ -61,7 +69,7 @@ fn grid(s: &Gallery, k: &Kit, layout: GridLayout) -> El {
                     rows,
                     layout.row_height(),
                     move |s: &Gallery, row| Cow::Owned(row_key(&s.photos, row * columns, columns)),
-                    move |s: &Gallery, row| grid_row(s, row, &kit, layout),
+                    move |s: &Gallery, row| grid_row(s, row, &look, layout),
                 )
                 .on_visible_rows(|s: &mut Gallery, rows| {
                     s.set_visible_rows(rows);
@@ -70,37 +78,37 @@ fn grid(s: &Gallery, k: &Kit, layout: GridLayout) -> El {
         )
 }
 
-fn grid_row(s: &Gallery, row_index: usize, k: &Kit, layout: GridLayout) -> El {
+fn grid_row(s: &Gallery, row_index: usize, look: &Look, layout: GridLayout) -> El {
     let start = row_index * layout.columns;
     let end = (start + layout.columns).min(s.photos.len());
     row()
         .w_full()
         .h(layout.row_height())
         .pt(GRID_GAP)
-        .px(GRID_PADDING)
+        .px(GRID_GUTTER)
         .gap(GRID_GAP)
         .children(
             s.photos[start..end]
                 .iter()
-                .map(|photo| tile(s, photo, k, layout)),
+                .map(|photo| tile(s, photo, look, layout)),
         )
 }
 
-fn tile(s: &Gallery, photo: &GalleryPhoto, k: &Kit, layout: GridLayout) -> El {
+/// A square crop of the photo on a plate. The selected tile's ring stands off the photo
+/// instead of covering its edge.
+fn tile(s: &Gallery, photo: &GalleryPhoto, look: &Look, layout: GridLayout) -> El {
     let selected = s.selected.as_ref() == Some(&photo.record.id);
-    let ring = if selected {
-        k.c.border_focus
-    } else {
-        Color::TRANSPARENT
-    };
+    let missing = photo.record.source_missing;
     let content = match &photo.thumbnail {
         Thumbnail::Ready(path) => s.thumbnails.pixels(path).map(|pixels| {
             el().absolute(0.0, 0.0)
                 .w_full()
                 .h_full()
-                .radius(k.radius.xl)
-                .pixels_fit(pixels, SurfaceFit::Fit)
+                .radius(TILE_RADIUS)
+                .opacity(if missing { 0.4 } else { 1.0 })
+                .pixels_fit(pixels, SurfaceFit::Fill)
         }),
+        // The plate alone: a pending preview draws nothing that moves.
         Thumbnail::Pending => None,
         Thumbnail::Failed => Some(
             col()
@@ -109,33 +117,53 @@ fn tile(s: &Gallery, photo: &GalleryPhoto, k: &Kit, layout: GridLayout) -> El {
                 .h_full()
                 .center()
                 .gap(4.0)
-                .child(icon(&icons::ALERT, 14.0).color(k.c.icon_muted))
+                .child(icon(&icons::ALERT, 14.0).color(look.muted))
                 .child(
                     text("Preview unavailable")
-                        .font(k.ty.small)
-                        .color(k.c.text_muted),
+                        .font(look.ty.small)
+                        .color(look.muted),
                 ),
         ),
     };
-    let missing = photo.record.source_missing.then(|| {
-        el().absolute(layout.tile_width - 28.0, 6.0)
-            .size(22.0, 22.0)
-            .radius(11.0)
-            .center()
-            .fill(k.c.surface_raised)
-            .child(icon(&icons::ALERT, 12.0).color(k.c.warning.icon))
+    let badge = missing.then(|| {
+        row()
+            .key("missing")
+            .absolute(6.0, layout.tile_height - 26.0)
+            .h(20.0)
+            .px(6.0)
+            .gap(4.0)
+            .center_y()
+            .radius(5.0)
+            .fill(Color::BLACK.mix(Color::WHITE, 0.04).alpha(0.62))
+            .child(icon(&icons::ALERT, 12.0).color(look.warning))
+            .child(
+                text("Original missing")
+                    .font(TextStyle::new(10.5, 400.0))
+                    .color(Color::WHITE.mix(Color::BLACK, 0.07)),
+            )
+    });
+    let ring = selected.then(|| {
+        el().key("ring")
+            .absolute(-RING_OFFSET, -RING_OFFSET)
+            .size(
+                layout.tile_width + RING_OFFSET * 2.0,
+                layout.tile_height + RING_OFFSET * 2.0,
+            )
+            .radius(TILE_RADIUS + RING_OFFSET)
+            .border(2.0, look.selection)
+            .inert()
     });
     let id = photo.record.id.clone();
     let open = photo.record.id.clone();
+    let menu = photo.record.id.clone();
     let hit = el()
         .key("hit")
         .absolute(0.0, 0.0)
         .w_full()
         .h_full()
-        .radius(k.radius.xl)
-        .border(2.0, ring)
-        .hover(k.c.hover)
-        .press(k.c.pressed)
+        .radius(TILE_RADIUS)
+        .hover(look.c.hover)
+        .press(look.c.pressed)
         .role("button")
         .label(photo.record.file_name())
         .checked(selected)
@@ -147,17 +175,42 @@ fn tile(s: &Gallery, photo: &GalleryPhoto, k: &Kit, layout: GridLayout) -> El {
         .on_double_press_tx(move |s: &mut Gallery, tx: &mut Tx| {
             s.select_id(&open, tx);
             s.open_viewer();
+        })
+        // A right click selects first, so the menu acts on the photo under the pointer, as in
+        // Finder and Photos.
+        .on_secondary_press(move |s: &mut Gallery, press, tx: &mut Tx| {
+            if s.benchmark.is_some() {
+                return;
+            }
+            s.select_id(&menu, tx);
+            let info = if s.inspector_hidden {
+                "Show Info"
+            } else {
+                "Hide Info"
+            };
+            let items = PopupMenu::new()
+                .item(PopupItem::new("open", "Open"))
+                .item(PopupItem::new("info", info))
+                .separator()
+                .item(PopupItem::new("reveal", "Show in Finder"));
+            tx.popup_menu(items, press, |s: &mut Gallery, picked, _| match picked {
+                Some("open") => s.open_viewer(),
+                Some("info") => s.toggle_inspector(),
+                Some("reveal") => s.reveal_selected(),
+                _ => {}
+            });
         });
     el().key(photo.key.clone())
         .size(layout.tile_width, layout.tile_height)
-        .radius(k.radius.xl)
-        .fill(k.c.layer_02)
+        .radius(TILE_RADIUS)
+        .fill(look.plate)
         .children(content)
-        .children(missing)
+        .children(badge)
         .child(hit)
+        .children(ring)
 }
 
-fn empty_state(s: &Gallery, k: &Kit) -> El {
+fn empty_state(s: &Gallery, look: &Look) -> El {
     col()
         .key("empty")
         .w_full()
@@ -165,22 +218,22 @@ fn empty_state(s: &Gallery, k: &Kit) -> El {
         .center()
         .gap(16.0)
         .padding(32.0)
-        .child(icon(&icons::PHOTOS, 32.0).color(k.c.icon_muted))
+        .child(icon(&icons::PHOTOS, 32.0).color(look.c.icon_muted))
         .child(
             col()
                 .center()
                 .gap(4.0)
                 .child(
                     text("No photos yet")
-                        .font(k.ty.body_medium)
-                        .color(k.c.text_base),
+                        .font(look.ty.body_medium)
+                        .color(look.c.text_base),
                 )
                 .child(
                     text(
                         "Import JPEGs from folders or from Photos. Originals stay where they are.",
                     )
-                    .font(k.ty.ui)
-                    .color(k.c.text_muted),
+                    .font(look.ty.ui)
+                    .color(look.c.text_muted),
                 ),
         )
         .child(
@@ -190,20 +243,20 @@ fn empty_state(s: &Gallery, k: &Kit) -> El {
                     Button::new("Import files…")
                         .disabled(s.picking)
                         .on_press(|s: &mut Gallery| s.choose_files())
-                        .build(k)
+                        .build(look)
                         .key("empty-import-files"),
                 )
                 .child(
                     Button::new("Import from Photos…")
                         .disabled(s.picking)
                         .on_press(|s: &mut Gallery| s.choose_from_photos())
-                        .build(k)
+                        .build(look)
                         .key("empty-import-photos"),
                 ),
         )
 }
 
-fn unavailable(message: &str, k: &Kit) -> El {
+fn unavailable(message: &str, look: &Look) -> El {
     col().w_full().h_full().center().padding(32.0).child(
         col()
             .key("library-unavailable")
@@ -211,27 +264,27 @@ fn unavailable(message: &str, k: &Kit) -> El {
             .max_w(480.0)
             .gap(4.0)
             .padding(16.0)
-            .radius(k.radius.lg)
-            .fill(k.c.layer_01)
-            .border(1.0, k.c.danger.border)
+            .radius(look.radius.lg)
+            .fill(look.c.layer_01)
+            .border(1.0, look.c.danger.border)
             .child(
                 text("The library couldn't be opened")
-                    .font(k.ty.ui_medium)
-                    .color(k.c.text_base),
+                    .font(look.ty.ui_medium)
+                    .color(look.c.text_base),
             )
             .child(
                 text(message.to_owned())
-                    .font(k.ty.ui)
-                    .color(k.c.text_muted)
+                    .font(look.ty.ui)
+                    .color(look.c.text_muted)
                     .wrap(),
             ),
     )
 }
 
-fn note(message: &'static str, k: &Kit) -> El {
+fn note(message: &'static str, look: &Look) -> El {
     col()
         .w_full()
         .h_full()
         .center()
-        .child(text(message).font(k.ty.ui).color(k.c.text_muted))
+        .child(text(message).font(look.ty.ui).color(look.c.text_muted))
 }

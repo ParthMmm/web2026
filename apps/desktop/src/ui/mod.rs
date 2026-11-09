@@ -7,6 +7,7 @@ mod frames;
 mod gallery;
 mod icons;
 mod images;
+mod look;
 mod open_panel;
 #[cfg(test)]
 mod tests;
@@ -47,6 +48,8 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
         poll: Some(poll),
         on_key: Some(on_key),
         scenes: demo::SCENES,
+        fonts: look::FONTS,
+        families: look::FAMILIES,
         ..AppSpec::new(APP_NAME, gallery::WINDOW_SIZE, Gallery::demo, view::view)
     };
     let app = rune::App::new(spec);
@@ -65,15 +68,15 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
                 Gallery::new(options, frames, handle)
             }
         })
-        // One chrome band: the toolbar sits in the framed main pane, and the
-        // traffic lights sit on its centre line.
+        // One chrome band: the title bar spans the window, and the traffic
+        // lights sit on its centre line.
         .chrome(Chrome {
             full_size_content: true,
-            traffic_lights: Some((16.0, 25.0)),
+            traffic_lights: Some((16.0, (view::TITLE_BAR_HEIGHT - 14.0) / 2.0)),
             drag_regions: true,
         })
         .on_frame_encoded(move |frame| recorder.borrow_mut().record(frame));
-    for item in menus() {
+    for item in menus(false, false) {
         app = app.menu_item(item);
     }
     if benchmarking {
@@ -103,8 +106,18 @@ fn poll(gallery: &mut Gallery, _clock: f64, tx: &mut Tx) -> bool {
     gallery.poll(tx)
 }
 
-fn menus() -> Vec<MenuItem<Gallery>> {
+/// The menu bar's own items, in the order the macOS Human Interface Guidelines
+/// give. A View toggle names what it will do, so the bar is rebuilt when one
+/// flips.
+pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuItem<Gallery>> {
     let shortcut = |chord: &str| chord.parse().expect("menu shortcut parses");
+    let show_hide = |hidden: bool, noun: &str| {
+        if hidden {
+            format!("Show {noun}")
+        } else {
+            format!("Hide {noun}")
+        }
+    };
     vec![
         MenuItem::new("Import…", |gallery: &mut Gallery, _| {
             gallery.choose_files()
@@ -119,18 +132,51 @@ fn menus() -> Vec<MenuItem<Gallery>> {
         .menu("File")
         .key_equivalent(shortcut("cmd+shift+o")),
         MenuItem::separator().menu("File"),
-        MenuItem::new("Files not imported…", |gallery: &mut Gallery, _| {
+        MenuItem::new("Show in Finder", |gallery: &mut Gallery, _| {
+            gallery.reveal_selected();
+        })
+        .id("reveal")
+        .menu("File")
+        .key_equivalent(shortcut("cmd+alt+r")),
+        MenuItem::new("Files Not Imported…", |gallery: &mut Gallery, _| {
             gallery.open_failures();
         })
         .id("failures")
         .menu("File"),
-        MenuItem::new("Open photo", |gallery: &mut Gallery, _| {
+        MenuItem::new(
+            show_hide(sidebar_hidden, "Sidebar"),
+            |gallery: &mut Gallery, _| {
+                gallery.toggle_sidebar();
+            },
+        )
+        .id("toggle-sidebar")
+        .menu("View")
+        .key_equivalent(shortcut("ctrl+cmd+s")),
+        MenuItem::new(
+            show_hide(inspector_hidden, "Info"),
+            |gallery: &mut Gallery, _| {
+                gallery.toggle_inspector();
+            },
+        )
+        .id("toggle-info")
+        .menu("View")
+        .key_equivalent(shortcut("cmd+i")),
+        MenuItem::separator().menu("View"),
+        MenuItem::new("Open Photo", |gallery: &mut Gallery, _| {
             gallery.open_viewer()
         })
         .id("open-photo")
         .menu("View"),
+        MenuItem::new("Zoom In", |gallery: &mut Gallery, _| gallery.zoom(1))
+            .id("zoom-in")
+            .menu("View")
+            .key_equivalent(shortcut("cmd+equal")),
+        MenuItem::new("Zoom Out", |gallery: &mut Gallery, _| gallery.zoom(-1))
+            .id("zoom-out")
+            .menu("View")
+            .key_equivalent(shortcut("cmd+minus")),
         MenuItem::separator().menu("View"),
-        MenuItem::new("Show or hide performance", |gallery: &mut Gallery, _| {
+        MenuItem::new("Show or Hide Performance", |gallery: &mut Gallery, _| {
             gallery.toggle_performance();
         })
         .id("performance")
@@ -141,7 +187,7 @@ fn menus() -> Vec<MenuItem<Gallery>> {
 
 fn on_key(gallery: &mut Gallery, event: &KeyEvent, tx: &mut Tx) -> bool {
     if rune_kit::shell::is_sidebar_toggle(event) {
-        gallery.sidebar.toggle();
+        gallery.toggle_sidebar();
         return true;
     }
     let space = matches!(&event.key, Key::Text(typed) if typed == " ") && !event.mods.cmd;

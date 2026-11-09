@@ -6,8 +6,8 @@
 //! with `PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens` and read the
 //! diff.
 
-use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, on_key, poll, setup, view::view};
-use rune::{Env, Key, KeyEvent, Runtime, ScrollBars};
+use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, look, on_key, poll, setup, view::view};
+use rune::{Env, Key, KeyEvent, Runtime, ScrollBars, text::TextSystem};
 use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 
 /// 1.5 s, as `--snap --at 1.5`, in steps long enough to be quick.
@@ -17,16 +17,13 @@ const STEP: f64 = 0.5;
 fn window(apply: fn(&mut Gallery)) -> Runtime<Gallery> {
     let mut gallery = Gallery::demo();
     apply(&mut gallery);
-    let mut rt = Runtime::new(gallery, view, WINDOW_SIZE, Env::new(true, 1.0));
+    let text = TextSystem::new(look::FONTS, look::FAMILIES);
+    let mut rt = Runtime::with_text(gallery, view, WINDOW_SIZE, Env::new(true, 1.0), text);
     rt.poll = Some(poll);
     rt.on_key = Some(on_key);
     rt.set_system_scroll_bars(ScrollBars::Always);
     setup(&mut rt.state, Arc::new(|| {}));
-    for _ in 0..STEPS {
-        rt.frame(STEP);
-    }
-    rt.settle_all();
-    rt.frame(0.0);
+    settle(&mut rt);
     rt
 }
 
@@ -44,8 +41,12 @@ fn key(rt: &mut Runtime<Gallery>, key: Key) {
     settle(rt);
 }
 
+/// Runs the same 1.5 s as a render, so a sheet that slides in has arrived. One long frame
+/// does not move a slide past its first step.
 fn settle(rt: &mut Runtime<Gallery>) {
-    rt.frame(STEP);
+    for _ in 0..STEPS {
+        rt.frame(STEP);
+    }
     rt.settle_all();
     rt.frame(0.0);
 }
@@ -110,11 +111,32 @@ fn keys_step_through_the_viewer() {
 fn clearing_the_failures_hides_the_attention_row() {
     let mut rt = window(|s| s.failures = demo::failures());
     press(&mut rt, "not-imported");
-    assert!(shows(&rt, "failures-dialog"), "the row opens the list");
+    assert!(shows(&rt, "failures-sheet"), "the row opens the list");
     press(&mut rt, "clear-failures");
     assert!(rt.state.failures.is_empty(), "the list is cleared");
-    assert!(!shows(&rt, "failures-dialog"), "the list closes");
+    assert!(!shows(&rt, "failures-sheet"), "the list closes");
     assert!(!shows(&rt, "not-imported"), "the sidebar row leaves");
+}
+
+#[test]
+fn the_title_bar_hides_the_panels_and_zooms_the_grid() {
+    let mut rt = window(|_| {});
+    let columns = rt.state.layout().columns;
+    press(&mut rt, "toggle-sidebar");
+    press(&mut rt, "toggle-info");
+    assert!(!shows(&rt, "sidebar-pane"), "the sidebar hides");
+    assert!(!shows(&rt, "inspector"), "the inspector hides");
+    assert!(
+        rt.state.layout().columns > columns,
+        "the grid takes the room"
+    );
+    let wide = rt.state.layout().columns;
+    rt.state.zoom(2);
+    settle(&mut rt);
+    assert!(
+        rt.state.layout().columns < wide,
+        "Zoom In makes tiles larger"
+    );
 }
 
 /// The settled window's elements, one line each.
