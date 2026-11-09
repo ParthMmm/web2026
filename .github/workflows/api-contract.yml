@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: "24.15.0"
       - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.4"

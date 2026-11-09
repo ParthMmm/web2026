@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Layer, Path, Redacted } from "effect";
-import { Etag, HttpPlatform, HttpRouter } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { Etag, HttpPlatform, HttpRouter } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 
 import { Api, InvalidCursor, ProbeAuth, Unauthorized } from "./contract.ts";
 

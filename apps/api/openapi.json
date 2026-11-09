@@ -110,6 +110,66 @@
   },
   "components": {
     "schemas": {
+      "UnauthorizedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "Unauthorized"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "InvalidCursorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "InvalidCursor"
+            ]
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "cursor"
+        ],
+        "additionalProperties": false
+      },
+      "PhotoPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProbePhoto"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
       "ProbePhoto": {
         "type": "object",
         "properties": {
@@ -176,66 +236,6 @@
           "capturedAt",
           "id",
           "state"
-        ],
-        "additionalProperties": false
-      },
-      "UnauthorizedEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "Unauthorized"
-            ]
-          }
-        },
-        "required": [
-          "_tag"
-        ],
-        "additionalProperties": false
-      },
-      "PhotoPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProbePhoto"
-            }
-          },
-          "nextCursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "InvalidCursorEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "InvalidCursor"
-            ]
-          },
-          "cursor": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "cursor"
         ],
         "additionalProperties": false
       }

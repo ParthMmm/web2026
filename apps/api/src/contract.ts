@@ -9,7 +9,7 @@ import {
   HttpApiSecurity,
   HttpApiError,
   OpenApi,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
   "Unauthorized",
