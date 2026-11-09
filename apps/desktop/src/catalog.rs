@@ -82,12 +82,16 @@ pub struct PhotoRecord {
 
 impl PhotoRecord {
     pub fn file_name(&self) -> String {
-        self.source
-            .file_name()
-            .unwrap_or(self.source.as_os_str())
-            .to_string_lossy()
-            .into_owned()
+        file_name(&self.source)
     }
+}
+
+/// The last part of `path`, or the whole path when it has none.
+pub fn file_name(path: &Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -537,7 +541,7 @@ fn path_from_row(row: &Row<'_>, ix: usize) -> rusqlite::Result<PathBuf> {
     )))
 }
 
-fn unix_now() -> i64 {
+pub(crate) fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| {

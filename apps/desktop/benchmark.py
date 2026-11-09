@@ -85,7 +85,7 @@ metadata = {
     "ram_bytes": int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True)),
     "os": subprocess.check_output(["sw_vers", "-productVersion"], text=True).strip(),
     "window_activation": "disabled for GUI benchmarks",
-    "window_behavior": "non-activating popup-level window keeps GPUI frame delivery alive without focus",
+    "window_behavior": "non-activating pop-up-level Rune panel keeps frames coming without focus",
     "presentation_visibility": "not measured; minimization or display restrictions can still stop delivery",
     "vips": subprocess.check_output(["vips", "--version"], text=True).strip(),
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),

@@ -1,180 +1,187 @@
 //! The desktop photo library window.
 
 mod benchmark;
-mod cache;
-pub mod design;
+mod demo;
 mod format;
+mod frames;
 mod gallery;
+mod icons;
+mod images;
+mod open_panel;
+#[cfg(test)]
+mod tests;
 mod view;
 
-pub use gallery::{Gallery, GalleryOptions};
+use gallery::{Gallery, GalleryOptions};
 
-use design::{ActiveDesign as _, glass};
-use gpui_kit::{
-    App, AppContext as _, Bounds, KeyBinding, Menu, MenuItem, Styled as _, WindowBounds,
-    WindowOptions,
-    component::{Root, Theme, TitleBar},
-    px, size, transparent_black,
-};
-use std::path::PathBuf;
+use crate::grid::Movement;
+use frames::FrameLog;
+use gallery::Overlay;
+use rune::{AppSpec, Chrome, Key, KeyEvent, MacWindowOptions, MenuItem, Tx, WindowOptions};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-const GRID_CONTEXT: &str = "PhotoGrid";
-const VIEWER_CONTEXT: &str = "PhotoViewer";
-/// The window's object, shown in the title strip.
+/// The window's object, shown in the toolbar.
 pub(super) const APP_NAME: &str = "Photo prototype";
+const MIN_WINDOW_SIZE: (f32, f32) = (560.0, 420.0);
 
-gpui_kit::actions!(
-    photo_library,
-    [
-        Import,
-        ImportFromPhotos,
-        ShowImportFailures,
-        TogglePerformance,
-        SelectLeft,
-        SelectRight,
-        SelectUp,
-        SelectDown,
-        SelectPageUp,
-        SelectPageDown,
-        SelectFirst,
-        SelectLast,
-        OpenViewer,
-        CloseViewer,
-        PreviousPhoto,
-        NextPhoto,
-        Quit,
-    ]
-);
+/// JPEG files or folders named on the command line, after Rune's own flags.
+pub fn inputs() -> Vec<PathBuf> {
+    rune::extra_args().iter().map(PathBuf::from).collect()
+}
 
 /// Opens the library window and runs until the app quits. `inputs` are JPEG
 /// files or folders to import on launch.
 pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
-    let benchmark_seconds = benchmark::seconds_from_env();
-    let benchmark_mode = benchmark_seconds.is_some();
-    gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
-        .run(move |cx| {
-            gpui_kit::init(cx);
-            // The material is read imperatively at paint time, so the surface
-            // preference has to be resolved before the first paint.
-            design::init(cx);
-            bind_keys(cx);
-            cx.on_action(|_: &Quit, cx| cx.quit());
-            cx.set_menus(menus());
-            let mut window_options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(1200.), px(820.)),
-                    cx,
-                ))),
-                window_min_size: Some(size(px(560.), px(420.))),
-                // One chrome band, not two. A native titlebar above the toolbar
-                // stacks two surfaces of the same material, which is what made
-                // the top of the window read as a flat slab. The library's
-                // `TitleBar` owns the strip instead: it hides the system
-                // titlebar, places the traffic lights itself, and moves the
-                // window itself.
-                ..TitleBar::window_options()
-            };
-            if benchmark_mode {
-                benchmark::configure_window(&mut window_options);
+    rune::prewarm_gpu();
+    // Any flag but `--native` asks for a headless run (a render, a tree, a
+    // script). It shows the demo gallery, so no render holds real photos.
+    let headless = std::env::args()
+        .skip(1)
+        .any(|arg| arg.starts_with("--") && arg != "--native");
+    let benchmark_seconds = benchmark::seconds_from_env().filter(|_| !headless);
+    let benchmarking = benchmark_seconds.is_some();
+    let frames = Rc::new(RefCell::new(FrameLog::default()));
+    let spec = AppSpec {
+        min_size: Some(MIN_WINDOW_SIZE),
+        setup: Some(setup),
+        poll: Some(poll),
+        on_key: Some(on_key),
+        scenes: demo::SCENES,
+        ..AppSpec::new(APP_NAME, gallery::WINDOW_SIZE, Gallery::demo, view::view)
+    };
+    let app = rune::App::new(spec);
+    let handle = app.handle();
+    let recorder = frames.clone();
+    let options = GalleryOptions {
+        library_root,
+        inputs,
+        benchmark_seconds,
+    };
+    let mut app = app
+        .init(move || {
+            if headless {
+                Gallery::demo()
+            } else {
+                Gallery::new(options, frames, handle)
             }
-            let options = GalleryOptions {
-                library_root,
-                inputs,
-                benchmark_seconds,
-            };
-            cx.open_window(window_options, |window, cx| {
-                Theme::sync_system_appearance(Some(window), cx);
-                reapply_window_background(window, cx);
-                let gallery = cx.new(|cx| Gallery::new(options, window, cx));
-                cx.new(|cx| {
-                    // `Root` paints the theme background across the whole
-                    // window, which would cover the blurred desktop and turn
-                    // window glass into an invisible feature. The design system
-                    // owns the planes; the chrome carries the glass, the root
-                    // must not.
-                    Root::new(gallery, window, cx).bg(transparent_black())
-                })
-            })
-            .expect("open photo window");
-            if !benchmark_mode {
-                cx.activate(true);
-            }
-        });
-}
-
-/// Re-apply the window's background material.
-///
-/// This must run again after every appearance change, never once at window
-/// creation only: gpui's macOS backend tears the visual-effect view out of the
-/// hierarchy whenever the value is anything but `Blurred`, so a window whose
-/// material was only ever set once goes permanently opaque the first time the
-/// system switches between light and dark.
-fn reapply_window_background(window: &mut gpui_kit::Window, cx: &mut App) {
-    let design = cx.design();
-    let material = glass::window_background(design);
-    if std::env::var_os("PHOTO_GLASS_DEBUG").is_some() {
-        eprintln!(
-            "glass: material={material:?} tint_alpha={:.3}",
-            design.glass().a
-        );
+        })
+        // One chrome band: the toolbar sits in the framed main pane, and the
+        // traffic lights sit on its centre line.
+        .chrome(Chrome {
+            full_size_content: true,
+            traffic_lights: Some((16.0, 25.0)),
+            drag_regions: true,
+        })
+        .on_frame_encoded(move |frame| recorder.borrow_mut().record(frame));
+    for item in menus() {
+        app = app.menu_item(item);
     }
-    window.set_background_appearance(material);
+    if benchmarking {
+        // A non-activating panel at the pop-up level stays visible to the
+        // compositor without taking focus, so a covered window doesn't stop
+        // drawing mid-run.
+        app = app
+            .open_inactive()
+            .window_options(WindowOptions {
+                always_on_top: true,
+                ..WindowOptions::default()
+            })
+            .macos_window(
+                MacWindowOptions::default()
+                    .nonactivating_panel(true)
+                    .level(benchmark::WINDOW_LEVEL),
+            );
+    }
+    app.run();
 }
 
-fn bind_keys(cx: &mut gpui_kit::App) {
-    let grid = Some(GRID_CONTEXT);
-    let viewer = Some(VIEWER_CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-o", Import, None),
-        KeyBinding::new("cmd-shift-o", ImportFromPhotos, None),
-        KeyBinding::new("cmd-alt-p", TogglePerformance, None),
-        KeyBinding::new("left", SelectLeft, grid),
-        KeyBinding::new("right", SelectRight, grid),
-        KeyBinding::new("up", SelectUp, grid),
-        KeyBinding::new("down", SelectDown, grid),
-        KeyBinding::new("pageup", SelectPageUp, grid),
-        KeyBinding::new("pagedown", SelectPageDown, grid),
-        KeyBinding::new("home", SelectFirst, grid),
-        KeyBinding::new("end", SelectLast, grid),
-        KeyBinding::new("cmd-up", SelectFirst, grid),
-        KeyBinding::new("cmd-down", SelectLast, grid),
-        KeyBinding::new("space", OpenViewer, grid),
-        KeyBinding::new("enter", OpenViewer, grid),
-        KeyBinding::new("escape", CloseViewer, viewer),
-        KeyBinding::new("space", CloseViewer, viewer),
-        KeyBinding::new("left", PreviousPhoto, viewer),
-        KeyBinding::new("right", NextPhoto, viewer),
-    ]);
+fn setup(gallery: &mut Gallery, waker: rune::Waker) {
+    gallery.setup(waker);
 }
 
-fn menus() -> Vec<Menu> {
+fn poll(gallery: &mut Gallery, _clock: f64, tx: &mut Tx) -> bool {
+    gallery.poll(tx)
+}
+
+fn menus() -> Vec<MenuItem<Gallery>> {
+    let shortcut = |chord: &str| chord.parse().expect("menu shortcut parses");
     vec![
-        Menu {
-            name: APP_NAME.into(),
-            items: vec![MenuItem::action(format!("Quit {APP_NAME}"), Quit)],
-            disabled: false,
-        },
-        Menu {
-            name: "File".into(),
-            items: vec![
-                MenuItem::action("Import…", Import),
-                MenuItem::action("Import from Photos…", ImportFromPhotos),
-                MenuItem::separator(),
-                MenuItem::action("Files not imported…", ShowImportFailures),
-            ],
-            disabled: false,
-        },
-        Menu {
-            name: "View".into(),
-            items: vec![
-                MenuItem::action("Open photo", OpenViewer),
-                MenuItem::separator(),
-                MenuItem::action("Show or hide performance", TogglePerformance),
-            ],
-            disabled: false,
-        },
+        MenuItem::new("Import…", |gallery: &mut Gallery, _| {
+            gallery.choose_files()
+        })
+        .id("import")
+        .menu("File")
+        .key_equivalent(shortcut("cmd+o")),
+        MenuItem::new("Import from Photos…", |gallery: &mut Gallery, _| {
+            gallery.choose_from_photos();
+        })
+        .id("import-photos")
+        .menu("File")
+        .key_equivalent(shortcut("cmd+shift+o")),
+        MenuItem::separator().menu("File"),
+        MenuItem::new("Files not imported…", |gallery: &mut Gallery, _| {
+            gallery.open_failures();
+        })
+        .id("failures")
+        .menu("File"),
+        MenuItem::new("Open photo", |gallery: &mut Gallery, _| {
+            gallery.open_viewer()
+        })
+        .id("open-photo")
+        .menu("View"),
+        MenuItem::separator().menu("View"),
+        MenuItem::new("Show or hide performance", |gallery: &mut Gallery, _| {
+            gallery.toggle_performance();
+        })
+        .id("performance")
+        .menu("View")
+        .key_equivalent(shortcut("cmd+alt+p")),
     ]
+}
+
+fn on_key(gallery: &mut Gallery, event: &KeyEvent, tx: &mut Tx) -> bool {
+    if rune_kit::shell::is_sidebar_toggle(event) {
+        gallery.sidebar.toggle();
+        return true;
+    }
+    let space = matches!(&event.key, Key::Text(typed) if typed == " ") && !event.mods.cmd;
+    match gallery.overlay {
+        Overlay::Viewer => {
+            match event.key {
+                Key::Escape => gallery.close_overlay(),
+                Key::Left => gallery.move_selection(Movement::Left, tx),
+                Key::Right => gallery.move_selection(Movement::Right, tx),
+                _ if space => gallery.close_overlay(),
+                _ => return false,
+            }
+            true
+        }
+        Overlay::Failures => false,
+        Overlay::None if gallery.benchmark.is_some() => false,
+        Overlay::None => {
+            if space || event.key == Key::Enter {
+                gallery.open_viewer();
+                return true;
+            }
+            let Some(movement) = grid_movement(event) else {
+                return false;
+            };
+            gallery.move_selection(movement, tx);
+            true
+        }
+    }
+}
+
+fn grid_movement(event: &KeyEvent) -> Option<Movement> {
+    Some(match (&event.key, event.mods.cmd) {
+        (Key::Left, false) => Movement::Left,
+        (Key::Right, false) => Movement::Right,
+        (Key::Up, false) => Movement::Up,
+        (Key::Down, false) => Movement::Down,
+        (Key::Up, true) | (Key::Home, _) => Movement::First,
+        (Key::Down, true) | (Key::End, _) => Movement::Last,
+        (Key::PageUp, _) => Movement::PageUp,
+        (Key::PageDown, _) => Movement::PageDown,
+        _ => return None,
+    })
 }

@@ -7,20 +7,18 @@ publish = false
 [workspace]
 
 [features]
-desktop = ["dep:gpui-kit", "dep:gpui-fps", "dep:smol"]
-visual-check = ["desktop", "gpui-kit/test-support"]
+desktop = ["dep:rune", "dep:rune-kit"]
 
 [dependencies]
 anyhow = "=1.0.102"
 blake3 = "=1.8.3"
-gpui-kit = { version = "=0.6.1", optional = true, default-features = false, features = ["assets", "component", "profiler"] }
-gpui-fps = { version = "=0.6.1", optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 kamadak-exif = "=0.6.1"
+rune = { git = "https://github.com/anomalyco/rune", rev = "3e0cf8fe58d592cdda1ec5533461192edcfcdb47", optional = true }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "3e0cf8fe58d592cdda1ec5533461192edcfcdb47", optional = true }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
-smol = { version = "=2.0.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block = "=0.1.6"

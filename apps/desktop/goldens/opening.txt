@@ -1,0 +1,47 @@
+kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
+ window	group	window	-	-	-	0,0,1200,820	#121314ff	-	1.00
+  shell	group	shell	-	-	-	0,0,1200,796	#121314ff	-	1.00
+   split	group	split	-	-	-	0,0,1200,796	#00000000	-	1.00
+    sidebar-pane	region	sidebar-pane	Sidebar	-	-	0,0,220,796	#00000000	-	1.00
+     pane-content	group	pane-content	-	-	-	0,0,220,796	#00000000	-	1.00
+      sidebar-titlebar	group	sidebar-titlebar	-	-	-	0,0,220,56	#00000000	-	1.00
+       sidebar-titlebar-clear	group	sidebar-titlebar-clear	-	-	-	0,32,44,0	#00000000	-	1.00
+      pane-body	group	pane-body	-	-	-	0,56,220,740	#00000000	-	1.00
+       sidebar	group	sidebar	-	-	-	0,56,220,740	#00000000	-	1.00
+        sidebar-scroll	group	sidebar-scroll	-	-	-	0,56,220,710	#00000000	-	1.00
+         sidebar-list	list	sidebar-list	Library	-	-	0,56,220,36	#00000000	-	1.00
+          all-photos	listitem	all-photos	All photos	-	-	8,56,204,28	#ffffff08	-	1.00
+           icon	icon	icon	-	-	-	16,62,16,16	#00000000	#eff0f2ff	1.00
+           label	text	label	-	All photos	-	38,60,153,20	#00000000	#eff0f2ff	1.00
+           detail	text	detail	-	0	-	197,64,7,12	#00000000	#a2a5aacc	1.00
+        sidebar-footer	group	sidebar-footer	-	-	-	0,766,220,30	#00000000	-	1.00
+         library-size	group	library-size	-	-	-	8,774,204,14	#00000000	-	1.00
+          #0	icon	-	-	-	-	16,774,14,14	#00000000	#a2a5aaff	1.00
+          #1	text	-	-	0 bytes of originals	-	38,775,100,12	#00000000	#a2a5aaff	1.00
+     pane-open-main	group	pane-open-main	-	-	-	0,0,0,0	#00000000	-	1.00
+     pane-open	group	pane-open	-	-	-	0,0,0,0	#00000000	-	1.00
+     sidebar-grip	separator	sidebar-grip	Resize sidebar	-	-	214,0,6,796	#00000000	-	0.02
+    main-column	group	main-column	-	-	-	220,0,980,796	#00000000	-	1.00
+     titlebar-strip	group	titlebar-strip	-	-	-	220,0,980,8	#00000000	-	1.00
+     main-row	group	main-row	-	-	-	220,8,980,788	#00000000	-	1.00
+      main-pane	main	main-pane	-	-	-	220,8,972,780	#1c1d20ff	-	1.00
+       toolbar	toolbar	toolbar	Photo prototype	-	-	220,8,972,48	#00000000	-	1.00
+        center	group	center	-	-	-	220,8,972,48	#00000000	-	1.00
+         title	text	title	-	Photo prototype	-	655.5,22,101,20	#00000000	#eff0f2ff	1.00
+        leading	group	leading	-	-	-	232,32,0,0	#00000000	-	1.00
+        spacer	group	spacer	-	-	-	240,32,797,0	#00000000	-	1.00
+        trailing	group	trailing	-	-	-	1045,18,135,28	#00000000	-	1.00
+         #0	group	-	-	-	-	1045,18,135,28	#00000000	-	1.00
+          import	button	import	Import…	-	-	1045,18,103,28	#1c1d20ff	-	1.00
+           icon	icon	icon	-	-	-	1059,24,16,16	#00000000	#eff0f2ff	1.00
+           label	text	label	-	Import…	-	1081,22,53,20	#00000000	#eff0f2ff	1.00
+          performance-toggle	button	performance-toggle	Show performance	-	Show performance	1152,18,28,28	#00000000	-	1.00
+           icon	icon	icon	-	-	-	1158,24,16,16	#00000000	#a2a5aaff	1.00
+       main	group	main	-	-	-	220,56,972,732	#00000000	-	1.00
+        grid-region	group	grid-region	-	-	-	220,56,972,732	#00000000	-	1.00
+         #0	group	-	-	-	-	220,56,972,732	#00000000	-	1.00
+          #0	text	-	-	Opening library…	-	653.5,412,105,20	#00000000	#a2a5aaff	1.00
+   sidebar-toggle	button	sidebar-toggle	Hide sidebar	-	Hide sidebar  ⇧⌘B	12,20,24,24	#00000000	-	1.00
+    icon	icon	icon	-	-	-	16,24,16,16	#00000000	#a2a5aaff	1.00
+  status-bar	group	status-bar	-	-	-	0,796,1200,24	#00000000	-	1.00
+   status	text	status	-		-	12,802,1176,12	#00000000	#a2a5aaff	1.00
