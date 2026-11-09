@@ -6,7 +6,7 @@ const table = standings([]);
 
 /* Each player's familiar takes its own hue, like a realm colour. */
 const hue = (name: string): number =>
-	[...name].reduce((sum, char) => sum + char.charCodeAt(0) * 37, 0) % 360;
+	[...name].reduce((sum, char) => sum + (char.codePointAt(0) ?? 0) * 37, 0) % 360;
 ---
 
 <figure class="panel" data-mote>
@@ -92,7 +92,8 @@ const hue = (name: string): number =>
 
 <script>
   import { flip, onVisibility } from "../../lib/figure";
-  import { type Player, pairings, percent, standings } from "./mote-event";
+  import type { Player } from "./mote-event";
+  import { percent, players, standings } from "./mote-event";
 
   for (const root of document.querySelectorAll<HTMLElement>("[data-mote]")) {
     const body = root.querySelector<HTMLElement>("[data-standings]");
@@ -103,7 +104,7 @@ const hue = (name: string): number =>
       continue;
     }
 
-    const winners: (Player | undefined)[] = pairings.map(() => undefined);
+    const winners: (Player | undefined)[] = [];
 
     const render = () => {
       for (const button of buttons) {
@@ -146,7 +147,7 @@ const hue = (name: string): number =>
     for (const button of buttons) {
       button.addEventListener("click", () => {
         const table = Number(button.dataset.table);
-        const player = button.dataset.player as Player;
+        const player = players.find((name) => name === button.dataset.player);
         winners[table] = winners[table] === player ? undefined : player;
         render();
       });

@@ -2,18 +2,18 @@
 import type { render } from "astro:content";
 import ContentWrapper from "./ContentWrapper.astro";
 
-export type Version = {
+export interface Version {
 	version: string;
 	title: string;
 	description: string;
 	period?: string;
 	Content: Awaited<ReturnType<typeof render>>["Content"];
-};
+}
 
-type Props = {
+interface Props {
 	/** Oldest first. The last one is shown until the reader picks another. */
 	versions: Version[];
-};
+}
 
 const { versions } = Astro.props;
 const current = versions.at(-1)?.version;

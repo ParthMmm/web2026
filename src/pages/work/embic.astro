@@ -9,7 +9,10 @@ const description =
 	"Healthcare platform with an admin dashboard for medical organizations and patient records. Fixed production bugs affecting 125+ users.";
 
 const entry = await getEntry("work", "embic");
-const { Content } = await render(entry!);
+if (!entry) {
+	throw new Error("Missing work entry: embic");
+}
+const { Content } = await render(entry);
 ---
 
 <Layout title={`${title} — Parth Mangrola`} {description}>

@@ -1,129 +1,321 @@
 {
-  "validPhotos": [
-    {
-      "id": "photo-1",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
-      }
-    },
-    {
-      "id": "photo-2",
-      "caption": "Evening",
-      "capturedAt": "2025-03-23T18:30:00.000Z",
-      "state": {
-        "_tag": "Published",
-        "url": "https://images.example.test/photo-2.webp"
-      }
-    },
-    {
-      "id": "photo-film",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
+  "begin": {
+    "manifest": {
+      "original": {
+        "bytes": 2048,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
-      "filmSimulation": "Classic Chrome"
-    },
-    {
-      "id": "photo-mono",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
+      "w480": {
+        "bytes": 64,
+        "height": 320,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "width": 480
       },
-      "filmSimulation": "Acros + Red Filter"
-    }
-  ],
-  "invalidPhotos": [
-    {
-      "id": "photo-1",
-      "state": {
-        "_tag": "Draft"
-      }
-    },
-    {
-      "id": "photo-1",
-      "caption": null,
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
-      }
-    },
-    {
-      "id": "photo-1",
-      "capturedAt": "not-a-date",
-      "state": {
-        "_tag": "Draft"
-      }
-    },
-    {
-      "id": "photo-1",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Unknown"
-      }
-    },
-    {
-      "id": "photo-1",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Published"
-      }
-    },
-    {
-      "id": 123,
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
-      }
-    },
-    {
-      "id": "photo-film",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
+      "w1200": {
+        "bytes": 64,
+        "height": 800,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "width": 1200
       },
-      "filmSimulation": null
-    },
-    {
-      "id": "photo-film",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
-      },
-      "filmSimulation": 123
-    },
-    {
-      "id": "photo-film",
-      "capturedAt": null,
-      "state": {
-        "_tag": "Draft"
-      },
-      "filmSimulation": {
-        "name": "Classic Chrome"
+      "w2400": {
+        "bytes": 64,
+        "height": 1600,
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "width": 2400
       }
-    }
-  ],
-  "firstPage": {
-    "items": [
-      {
-        "id": "fixture-1",
-        "capturedAt": null,
-        "state": {
-          "_tag": "Draft"
+    },
+    "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "views": [
+    {
+      "_tag": "Uploading",
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
         }
+      },
+      "missing": ["original", "w480", "w1200", "w2400"],
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "_tag": "Uploading",
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "missing": [],
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "_tag": "Draft",
+      "finalizedAt": "2026-11-06T12:00:00.000Z",
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "errors": [
+    {
+      "status": 401,
+      "body": {
+        "_tag": "Unauthorized"
       }
-    ],
-    "nextCursor": "page-2"
-  },
-  "lastPage": {
-    "items": [],
-    "nextCursor": null
-  },
-  "unauthorized": {
-    "_tag": "Unauthorized"
-  },
-  "invalidCursor": {
-    "_tag": "InvalidCursor",
-    "cursor": "missing"
-  }
+    },
+    {
+      "status": 404,
+      "body": {
+        "_tag": "PhotoNotFound",
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "status": 409,
+      "body": {
+        "_tag": "PhotoManifestConflict",
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "status": 409,
+      "body": {
+        "_tag": "PhotoAlreadyDraft",
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "status": 422,
+      "body": {
+        "_tag": "LengthMismatch",
+        "expected": 64,
+        "kind": "w480",
+        "received": 63
+      }
+    },
+    {
+      "status": 422,
+      "body": {
+        "_tag": "HashMismatch",
+        "kind": "w480"
+      }
+    },
+    {
+      "status": 422,
+      "body": {
+        "_tag": "FinalizeRejected",
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "problems": [
+          {
+            "_tag": "Missing",
+            "kind": "original"
+          },
+          {
+            "_tag": "Corrupt",
+            "kind": "w480"
+          },
+          {
+            "_tag": "NotWebp",
+            "kind": "w480"
+          },
+          {
+            "_tag": "HasMetadata",
+            "kind": "w1200"
+          },
+          {
+            "_tag": "Animated",
+            "kind": "w1200"
+          },
+          {
+            "_tag": "DimensionsMismatch",
+            "expected": {
+              "height": 1600,
+              "width": 2400
+            },
+            "found": {
+              "height": 1599,
+              "width": 2400
+            },
+            "kind": "w2400"
+          }
+        ]
+      }
+    },
+    {
+      "status": 503,
+      "body": {
+        "_tag": "StorageUnavailable",
+        "operation": "put"
+      }
+    }
+  ],
+  "invalidBegins": [
+    {
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 481
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "manifest": {
+        "original": {
+          "bytes": 0,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  ]
 }

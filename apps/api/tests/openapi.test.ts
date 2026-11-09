@@ -1,17 +1,27 @@
 import { expect, it } from "@effect/vitest";
-import { OpenApi } from "effect/unstable/httpapi";
+import { OpenApi } from "effect/http-api";
 
-import { Api } from "../src/contract.ts";
+import { Api } from "../src/http/contract.ts";
 
-it("exports stable operations, bearer security and the real OpenAPI dialect", () => {
-  const spec = OpenApi.fromApi(Api);
+const spec = OpenApi.fromApi(Api);
+
+const operations = [
+  spec.paths["/v1/photos"]?.post,
+  spec.paths["/v1/photos/{photoId}"]?.get,
+  spec.paths["/v1/photos/{photoId}/{kind}"]?.put,
+  spec.paths["/v1/photos/{photoId}/finalize"]?.post,
+];
+
+it("exports four stable operations behind bearer security in the real OpenAPI dialect", () => {
   expect(spec.openapi).toBe("3.1.0");
-  const operations = spec.paths["/v1/probe/photos"];
-  expect(operations?.post?.operationId).toBe("probe.echoPhoto");
-  expect(operations?.get?.operationId).toBe("probe.listPhotos");
-  for (const operation of [operations?.post, operations?.get]) {
+  expect(operations.map((operation) => operation?.operationId)).toEqual([
+    "photos.begin",
+    "photos.get",
+    "photos.put",
+    "photos.finalize",
+  ]);
+  for (const operation of operations) {
     expect(operation?.security).toEqual([{ bearer: [] }]);
-    expect(operation?.responses).toHaveProperty("400");
     expect(operation?.responses).toHaveProperty("401");
   }
   expect(spec.components.securitySchemes.bearer).toEqual({
@@ -20,10 +30,11 @@ it("exports stable operations, bearer security and the real OpenAPI dialect", ()
   });
 });
 
-it("adds film simulation without changing the v1 required fields", () => {
-  const photo = OpenApi.fromApi(Api).components.schemas.ProbePhoto;
-  expect(photo).toMatchObject({
-    properties: { filmSimulation: { type: "string" } },
-    required: ["capturedAt", "id", "state"],
-  });
+it("takes each object as a raw octet-stream body", () => {
+  const put = spec.paths["/v1/photos/{photoId}/{kind}"]?.put;
+  expect(Object.keys(put?.requestBody?.content ?? {})).toEqual([
+    "application/octet-stream",
+  ]);
+  expect(put?.responses).toHaveProperty("204");
+  expect(put?.responses).toHaveProperty("422");
 });

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2023",
     "module": "preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
@@ -18,6 +18,8 @@
     "src/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
-    "alchemy.run.ts"
+    "alchemy.run.ts",
+    "vitest.config.ts",
+    "vitest.workerd.config.ts"
   ]
 }

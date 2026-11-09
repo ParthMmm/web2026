@@ -22,20 +22,20 @@ const absolute = (url: string): string => new URL(url, profile.site).toString();
 const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "ProfilePage",
-	url: profile.site,
+	hasPart: [...projects, ...work]
+		.filter((item) => item.url)
+		.map((item) => ({
+			"@type": "CreativeWork",
+			author: { "@type": "Person", name: profile.name },
+			description: item.description,
+			name: item.title,
+			url: absolute(item.url ?? ""),
+		})),
 	mainEntity: {
 		"@type": "Person",
-		name: profile.name,
-		jobTitle: profile.role,
 		description,
-		url: profile.site,
 		image: absolute("/og/index.png"),
-		sameAs: [
-			"https://github.com/ParthMmm",
-			"https://www.linkedin.com/in/parthmangrola",
-			"https://twitter.com/parthmangrola",
-		],
-		worksFor: { "@type": "Organization", name: "Pallas", url: "https://pallas.so" },
+		jobTitle: profile.role,
 		knowsAbout: [
 			"TypeScript",
 			"React",
@@ -48,16 +48,16 @@ const jsonLd = {
 			"Cloudflare",
 			"AWS",
 		],
+		name: profile.name,
+		sameAs: [
+			"https://github.com/ParthMmm",
+			"https://www.linkedin.com/in/parthmangrola",
+			"https://twitter.com/parthmangrola",
+		],
+		url: profile.site,
+		worksFor: { "@type": "Organization", name: "Pallas", url: "https://pallas.so" },
 	},
-	hasPart: [...projects, ...work]
-		.filter((item) => item.url)
-		.map((item) => ({
-			"@type": "CreativeWork",
-			name: item.title,
-			description: item.description,
-			url: absolute(item.url ?? ""),
-			author: { "@type": "Person", name: profile.name },
-		})),
+	url: profile.site,
 };
 ---
 

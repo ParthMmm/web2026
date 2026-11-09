@@ -1,95 +1,123 @@
-use photo_contract_client::{ApiError, Client, ClientError, Photo};
-use serde_json::{Value, from_value, to_value};
+use std::{collections::HashMap, path::Path};
+
+use photo_upload_client::{ApiError, Client, ClientError, Kind, Manifest, PhotoView, Problem};
 
 fn main() -> anyhow::Result<()> {
-    let base_url = std::env::args().nth(1).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Usage: photo-contract-client <base-url> [film-metadata.json]; set PROBE_TOKEN"
-        )
-    })?;
-    let token = std::env::var("PROBE_TOKEN")?;
+    let mut args = std::env::args_os().skip(1);
+    let (Some(base_url), Some(dir)) = (args.next(), args.next()) else {
+        anyhow::bail!("Usage: photo-upload-client <base-url> <photo-dir>; set OWNER_TOKEN");
+    };
+    let base_url = base_url
+        .into_string()
+        .map_err(|_| anyhow::anyhow!("The base URL is not UTF-8"))?;
+    let token = std::env::var("OWNER_TOKEN")?;
     let client = Client::new(&base_url, &token)?;
-    if let Some(path) = std::env::args_os().nth(2) {
-        let manifest: FilmMetadataExport = serde_json::from_slice(&std::fs::read(path)?)?;
-        anyhow::ensure!(
-            manifest.version == 1,
-            "Unsupported film metadata export version"
-        );
-        for photo in &manifest.photos {
-            anyhow::ensure!(
-                photo.caption.is_none()
-                    && photo.captured_at.is_none()
-                    && matches!(photo.state, photo_contract_client::PhotoState::Draft),
-                "Expected privacy-safe Draft export records"
-            );
-            anyhow::ensure!(
-                client.echo_photo(photo)? == *photo,
-                "Exported photo round-trip mismatch"
-            );
-        }
-        println!(
-            "PASS: {} exported catalog photo round-trips",
-            manifest.photos.len()
-        );
-    }
-    let fixtures: Value = serde_json::from_str(include_str!("../../fixtures/contract.json"))?;
+    let dir = Path::new(&dir);
+    let manifest: Manifest = serde_json::from_slice(&std::fs::read(dir.join("manifest.json"))?)?;
+    let bodies = Kind::ALL
+        .iter()
+        .map(|&kind| Ok((kind, std::fs::read(dir.join(kind.as_str()))?)))
+        .collect::<anyhow::Result<HashMap<_, _>>>()?;
+    let photo_id = manifest.original.sha256.clone();
 
-    for value in fixtures["validPhotos"].as_array().unwrap() {
-        let photo: Photo = from_value(value.clone())?;
-        anyhow::ensure!(
-            to_value(client.echo_photo(&photo)?)? == *value,
-            "Photo round-trip mismatch"
-        );
+    let stranger = Client::new(&base_url, "deliberately-wrong-test-token")?;
+    expect_error(stranger.get(&photo_id), 401, &ApiError::Unauthorized)?;
+    expect_error(
+        client.get(&photo_id),
+        404,
+        &ApiError::PhotoNotFound {
+            photo_id: photo_id.clone(),
+        },
+    )?;
+
+    let begun = client.begin(&manifest)?;
+    anyhow::ensure!(
+        matches!(&begun, PhotoView::Uploading { missing, .. } if *missing == Kind::ALL),
+        "Expected every object missing after begin, got {begun:?}"
+    );
+    anyhow::ensure!(client.begin(&manifest)? == begun, "begin is not idempotent");
+
+    let mut tampered = bodies[&Kind::W480].clone();
+    if let Some(last) = tampered.last_mut() {
+        *last ^= 0xff;
     }
-    let first = client.list_photos(None)?;
+    expect_error(
+        client.put(&photo_id, Kind::W480, &tampered),
+        422,
+        &ApiError::HashMismatch { kind: Kind::W480 },
+    )?;
+    let short = &bodies[&Kind::W480][1..];
+    expect_error(
+        client.put(&photo_id, Kind::W480, short),
+        422,
+        &ApiError::LengthMismatch {
+            expected: manifest.w480.bytes,
+            kind: Kind::W480,
+            received: manifest.w480.bytes - 1,
+        },
+    )?;
     anyhow::ensure!(
-        to_value(&first)? == fixtures["firstPage"],
-        "First page mismatch"
+        client.get(&photo_id)? == begun,
+        "A rejected upload changed the photo"
     );
-    let last = client.list_photos(first.next_cursor.as_deref())?;
-    anyhow::ensure!(
-        to_value(last)? == fixtures["lastPage"],
-        "Last page mismatch"
-    );
-    anyhow::ensure!(
-        matches!(client.list_photos(Some("missing")), Err(ClientError::Http { status: 400, error: Some(ApiError::InvalidCursor { cursor }) }) if cursor == "missing"),
-        "Expected a structured cursor error"
-    );
-    let unauthorized = Client::new(&base_url, "deliberately-wrong-test-token")?;
-    anyhow::ensure!(
-        matches!(
-            unauthorized.list_photos(None),
-            Err(ClientError::Http {
-                status: 401,
-                error: Some(ApiError::Unauthorized)
-            })
-        ),
-        "Expected a structured authorization error"
-    );
-    for value in fixtures["invalidPhotos"].as_array().unwrap() {
-        anyhow::ensure!(
-            matches!(
-                client.echo_json(value),
-                Err(ClientError::Http { status: 400, .. })
-            ),
-            "Expected validation failure"
-        );
+    expect_error(
+        client.finalize(&photo_id),
+        422,
+        &ApiError::FinalizeRejected {
+            photo_id: photo_id.clone(),
+            problems: Kind::ALL
+                .iter()
+                .map(|&kind| Problem::Missing { kind })
+                .collect(),
+        },
+    )?;
+
+    for kind in Kind::ALL {
+        client.put(&photo_id, kind, &bodies[&kind])?;
     }
-    // Repeated requests also exercise Worker request-scoped runtimes in one isolate.
+    client.put(&photo_id, Kind::Original, &bodies[&Kind::Original])?;
+    anyhow::ensure!(
+        matches!(client.get(&photo_id)?, PhotoView::Uploading { missing, .. } if missing.is_empty()),
+        "Expected nothing missing after every upload"
+    );
+
+    let draft = client.finalize(&photo_id)?;
+    anyhow::ensure!(
+        matches!(&draft, PhotoView::Draft { manifest: stored, .. } if *stored == manifest),
+        "Expected a draft of the declared manifest, got {draft:?}"
+    );
+    anyhow::ensure!(
+        client.finalize(&photo_id)? == draft,
+        "A duplicate finalize changed the draft"
+    );
+    expect_error(
+        client.put(&photo_id, Kind::W480, &bodies[&Kind::W480]),
+        409,
+        &ApiError::PhotoAlreadyDraft {
+            photo_id: photo_id.clone(),
+        },
+    )?;
     for _ in 0..10 {
-        client.list_photos(None)?;
+        anyhow::ensure!(client.get(&photo_id)? == draft, "A read changed the draft");
     }
     println!(
-        "PASS: {} fixture photo round-trips, 2 pages, 2 structured errors, {} validation errors, 10 repeated requests",
-        fixtures["validPhotos"].as_array().unwrap().len(),
-        fixtures["invalidPhotos"].as_array().unwrap().len()
+        "PASS: 401, 404, idempotent begin, wrong-hash and short uploads rejected, \
+         finalize refused while missing, 4 uploads, draft, duplicate finalize, 409 after draft, \
+         10 repeated reads"
     );
     Ok(())
 }
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct FilmMetadataExport {
-    version: u32,
-    photos: Vec<Photo>,
+fn expect_error<T: std::fmt::Debug>(
+    result: Result<T, ClientError>,
+    status: u16,
+    error: &ApiError,
+) -> anyhow::Result<()> {
+    match result {
+        Err(ClientError::Http {
+            status: got,
+            error: Some(got_error),
+        }) if got == status && got_error == *error => Ok(()),
+        other => anyhow::bail!("Expected HTTP {status} {error:?}, got {other:?}"),
+    }
 }

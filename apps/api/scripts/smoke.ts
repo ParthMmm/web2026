@@ -1,16 +1,34 @@
-const token = crypto.randomUUID();
-const env = { ...process.env, PORT: "0", PROBE_TOKEN: token };
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { writePhotoFixture } from "./photo-fixture.ts";
+
+const dir = mkdtempSync(path.join(tmpdir(), "photo-smoke-"));
+await writePhotoFixture(dir);
+
+const env = {
+  ...process.env,
+  OWNER_TOKEN: crypto.randomUUID().repeat(2),
+  PORT: "0",
+};
 const server = Bun.spawn(["bun", "scripts/serve.ts"], {
   env,
   stderr: "inherit",
   stdout: "pipe",
 });
-const timeout = setTimeout(() => server.kill(), 180_000);
+const timeout = setTimeout(() => server.kill(), 300_000);
 try {
   const reader = server.stdout.getReader();
   const first = await reader.read();
-  reader.releaseLock();
   const output = new TextDecoder().decode(first.value);
+  process.stdout.write(output);
+  reader.releaseLock();
+  void (async () => {
+    for await (const chunk of server.stdout) {
+      process.stdout.write(chunk);
+    }
+  })();
   const url = output.match(/http:\/\/127\.0\.0\.1:\d+\//u)?.[0];
   if (!url) {
     throw new Error(`Server did not start: ${output}`);
@@ -24,13 +42,9 @@ try {
       "client/Cargo.toml",
       "--",
       url,
-      ...process.argv.slice(2),
+      dir,
     ],
-    {
-      env,
-      stderr: "inherit",
-      stdout: "inherit",
-    },
+    { env, stderr: "inherit", stdout: "inherit" }
   );
   if ((await client.exited) !== 0) {
     throw new Error("Rust HTTP smoke failed");
@@ -39,4 +53,5 @@ try {
   clearTimeout(timeout);
   server.kill();
   await server.exited;
+  rmSync(dir, { force: true, recursive: true });
 }

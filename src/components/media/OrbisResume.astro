@@ -151,14 +151,16 @@ const current = cues.findLast((cue) => cue.at <= set.position);
       tick();
     });
 
+    const playFrom = (at: number) => {
+      position = at;
+      playing = true;
+      say(`Playing from ${clock(position)}`);
+      render();
+      tick();
+    };
+
     for (const cue of cues) {
-      cue.addEventListener("click", () => {
-        position = Number(cue.dataset.cue);
-        playing = true;
-        say(`Playing from ${clock(position)}`);
-        render();
-        tick();
-      });
+      cue.addEventListener("click", () => playFrom(Number(cue.dataset.cue)));
     }
 
     render(false);

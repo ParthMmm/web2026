@@ -178,6 +178,7 @@ const align = (x: number): string => {
         [3, 1000],
         [4, 700],
       ] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- each step starts after the one before it
         if (!(await wait(delay))) {
           return;
         }
@@ -185,8 +186,8 @@ const align = (x: number): string => {
       }
     };
 
-    read?.addEventListener("click", () => void play());
-    playOnce("beacon", root, () => void play());
+    read?.addEventListener("click", play);
+    playOnce("beacon", root, play);
 
     /* A place and its pin light up together, from either side. */
     const show = (index: string | undefined) => {

@@ -7,13 +7,13 @@ import Footer from "../components/Footer.astro";
 import Masthead from "../components/Masthead.astro";
 import { ogImageAlt as cardAlt, ogImagePath } from "../data/og";
 
-type Props = {
+interface Props {
 	title: string;
 	description: string;
 	image?: string;
 	/** Short description of the share image for screen readers and link previews. */
 	imageAlt?: string;
-};
+}
 
 const { title, description, image, imageAlt } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
