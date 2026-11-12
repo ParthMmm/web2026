@@ -1,7 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", ".alchemy", "apps/api", "workers"],
+  "exclude": ["dist", ".alchemy", "apps/api", "tests", "workers"],
   "compilerOptions": {
     "module": "preserve",
     "moduleResolution": "bundler",

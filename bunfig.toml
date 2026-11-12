@@ -1,0 +1,3 @@
+[test]
+# `bun test` with no root also picks up the Vitest suites in apps/api.
+root = "tests"
