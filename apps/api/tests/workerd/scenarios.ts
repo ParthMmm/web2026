@@ -3,6 +3,7 @@ import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { Effect, Stream } from "effect";
 import { Digest } from "effect/crypto";
 
+import { Blobs } from "../../src/photos/blobs.ts";
 import { variantKinds } from "../../src/photos/domain.ts";
 import type {
   Manifest,
@@ -15,7 +16,7 @@ import { declare, EDGES, validBodies, webp } from "../support/fixture.ts";
 
 export interface PhotosScenario {
   readonly name: string;
-  readonly run: Effect.Effect<void, unknown, Photos>;
+  readonly run: Effect.Effect<void, unknown, Photos | Blobs>;
 }
 
 const declared = (seed: number) =>
@@ -59,7 +60,7 @@ export const photosScenarios: readonly PhotosScenario[] = [
     }),
   },
   {
-    name: "begin replaces the manifest while uploading and refuses another manifest for a draft",
+    name: "begin replaces the manifest while uploading, and reopens a draft whose finalize then lists and removes the superseded objects",
     run: Effect.gen(function* run() {
       const photos = yield* Photos;
       const { bodies, manifest, photoId } = yield* declared(2);
@@ -75,8 +76,21 @@ export const photosScenarios: readonly PhotosScenario[] = [
       );
       yield* upload(photoId, rerendered.bodies);
       yield* photos.finalize(photoId);
-      const conflict = yield* Effect.flip(photos.begin(manifest));
-      strictEqual(conflict._tag, "PhotoManifestConflict");
+
+      const reopened = yield* photos.begin(manifest);
+      deepStrictEqual(reopened._tag === "Uploading" && reopened.missing, [
+        "w480",
+      ]);
+      yield* upload(photoId, bodies, ["w480"]);
+      const draft = yield* photos.finalize(photoId);
+      deepStrictEqual(draft.manifest, manifest);
+      const blobs = yield* Blobs;
+      deepStrictEqual(
+        yield* blobs.list(`photos/${photoId}/`),
+        variantKinds
+          .map((kind) => `photos/${photoId}/${kind}-${manifest[kind].sha256}`)
+          .toSorted()
+      );
     }),
   },
   {

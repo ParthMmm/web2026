@@ -33,7 +33,7 @@ import type {
   Problem,
   VariantKind,
 } from "./domain.ts";
-import { finalKey, stagingKey } from "./internal/keys.ts";
+import { finalKey, finalPrefix, stagingKey } from "./internal/keys.ts";
 import { makeLedger } from "./internal/ledger.ts";
 import type {
   Draft,
@@ -385,11 +385,31 @@ export class Photos extends Context.Service<
           Effect.annotateLogs({ kind, photoId })
         );
 
+      // A reopened draft leaves the objects of its earlier manifest under its final prefix.
+      const removeSuperseded = ({ manifest, photoId }: Draft) =>
+        blobs.list(finalPrefix(photoId)).pipe(
+          Effect.flatMap((keys) => {
+            const current = new Set(
+              variantKinds.map((kind) =>
+                finalKey(photoId, kind, manifest[kind].sha256)
+              )
+            );
+            return blobs.remove(keys.filter((key) => !current.has(key)));
+          }),
+          Effect.catchTag("BlobUnavailable", ({ cause, operation }) =>
+            Effect.logWarning(
+              "superseded cleanup skipped; the next finalize retries it",
+              { cause, operation }
+            )
+          )
+        );
+
       const finalize = Effect.fn("Photos.finalize")(function* finalizePhoto(
         photoId: PhotoId
       ) {
         const stored = yield* requirePhoto(photoId);
         if (stored._tag === "Draft") {
+          yield* removeSuperseded(stored);
           return draftView(stored);
         }
         const locations = yield* locateAll(stored).pipe(storage);
@@ -435,6 +455,7 @@ export class Photos extends Context.Service<
               )
             )
           );
+        yield* removeSuperseded(draft);
         return draftView(draft);
       });
 

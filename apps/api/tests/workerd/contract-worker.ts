@@ -46,7 +46,8 @@ export default {
     const scenario = photosScenarios.find((entry) => entry.name === name);
     if (url.pathname === "/photos" && scenario !== undefined) {
       const photos = Photos.layer.pipe(
-        Layer.provide([blobs, D1Client.layer({ db: env.Db })]),
+        Layer.provideMerge(blobs),
+        Layer.provide(D1Client.layer({ db: env.Db })),
         Layer.provideMerge(Digest.layerWebCrypto)
       );
       return run(scenario.run.pipe(Effect.provide(photos)));
