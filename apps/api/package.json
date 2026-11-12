@@ -9,7 +9,7 @@
     "dev": "bun scripts/serve.ts",
     "openapi": "bun scripts/openapi.ts",
     "smoke": "bun scripts/smoke.ts",
-    "deploy": "alchemy deploy --yes",
+    "deploy": "alchemy deploy --stage prod",
     "prepare": "effect-language-service patch"
   },
   "dependencies": {
