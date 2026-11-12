@@ -63,3 +63,11 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Fix.** Links, redirect targets and JSON-LD URLs now end in a slash. `trailingSlash: "always"` makes the dev server answer a slashless link with 404, so the mistake shows up before a deploy. The public URLs do not change.
 - **Test.** `tests/site/links.test.ts`: every `<a href>`, meta refresh target and absolute site URL in the built pages must be the exact path of a built file. It failed with 37 links.
 - **Left.** The two old URLs still redirect with a meta refresh, because Astro's static output has no HTTP redirect. A `public/_redirects` file would make them one real 301. I left it: two files would then describe the same redirect.
+
+#### S4. The browser re-asks for every hashed file on every page view (fixed, needs a deploy to confirm)
+
+- **Evidence.** Production: `curl -I https://www.parthm.dev/_astro/inter-latin-wght-normal.Dx4kXJAl.woff2` returns `cache-control: public, max-age=0, must-revalidate`. The stylesheets and scripts return the same. Each page view therefore sends a conditional request for the stylesheet, the 48 kB font and each script before it can use its cached copy.
+- **Cause.** That header is Cloudflare's default for static assets. The repo had no `_headers` file.
+- **Fix.** `public/_headers` gives `/_astro/*` `Cache-Control: public, max-age=31536000, immutable`. Pages keep the default, so a deploy still shows up at once. Alchemy reads `_headers` from the asset directory (`@alchemy.run/cloudflare/src/Workers/Assets.ts`).
+- **Tests.** `tests/site/caching.test.ts`: the built `_headers` marks `/_astro/*` immutable for a year, and every file under `/_astro/` has a content hash in its name. The second test is what makes the first safe.
+- **To confirm after the next deploy.** `curl -I https://www.parthm.dev/_astro/<any file>` must show `immutable`. I did not deploy.
