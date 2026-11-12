@@ -81,9 +81,25 @@ pub(super) fn import_summary(summary: &ImportSummary) -> String {
     parts.join(" · ")
 }
 
+/// Photos assets the picker selected but could not hand over, with the first reason.
+pub(super) fn photos_not_loaded(failed: usize, reason: &str) -> String {
+    format!(
+        "{} from Photos couldn't be loaded ({reason})",
+        count(failed, "photo", "photos")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn photos_that_did_not_load_are_counted_with_the_first_reason() {
+        assert_eq!(
+            photos_not_loaded(2, "The network connection was lost."),
+            "2 photos from Photos couldn't be loaded (The network connection was lost.)"
+        );
+    }
 
     #[test]
     fn import_summaries_name_each_outcome_once() {

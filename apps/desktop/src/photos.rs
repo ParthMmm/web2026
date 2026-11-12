@@ -12,6 +12,18 @@ const IMAGE_TYPE_IDENTIFIER: &str = "public.image";
 const COMPATIBLE_REPRESENTATION_MODE: isize = 2;
 const STATE_IVAR: &str = "photoImportState";
 
+/// What one use of the Photos picker brought back.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Picked {
+    /// JPEG copies in the import session, in the order they were selected.
+    pub copies: Vec<PathBuf>,
+    /// Why each selected asset that has no copy could not be loaded.
+    pub failures: Vec<String>,
+}
+
+/// The picker's result. An error means the picker itself failed and nothing was copied.
+pub type PickResult = Result<Picked, String>;
+
 /// Return the app-managed root used for copied Photos assets. Imported copies
 /// become the photos' originals, so they live beside the library catalog.
 pub fn import_root(library_root: &Path) -> PathBuf {
@@ -92,12 +104,12 @@ mod macos {
         pending: usize,
         picker_finished: bool,
         outputs: Vec<Option<PathBuf>>,
-        failure: Option<String>,
-        sender: Option<SyncSender<Result<Vec<PathBuf>, String>>>,
+        failures: Vec<String>,
+        sender: Option<SyncSender<PickResult>>,
     }
 
     /// Present the native Photos picker and return its copied JPEG paths.
-    pub fn open(root: PathBuf) -> Result<Receiver<Result<Vec<PathBuf>, String>>> {
+    pub fn open(root: PathBuf) -> Result<Receiver<PickResult>> {
         let destination = create_import_session(&root)?;
         let (sender, receiver) = mpsc::sync_channel(1);
         let state = Arc::new(Mutex::new(ImportState {
@@ -105,7 +117,7 @@ mod macos {
             pending: 0,
             picker_finished: false,
             outputs: Vec::new(),
-            failure: None,
+            failures: Vec::new(),
             sender: Some(sender),
         }));
 
@@ -276,7 +288,7 @@ mod macos {
                 }
             };
             if count == 0 {
-                complete_import(&state, Ok(Vec::new()));
+                complete_import(&state, Ok(Picked::default()));
                 return;
             }
 
@@ -450,32 +462,24 @@ mod macos {
             }
             match result {
                 Ok(path) => import.outputs[index] = Some(path),
-                Err(error) => {
-                    import.failure.get_or_insert(error);
-                }
+                Err(error) => import.failures.push(error),
             }
             import.pending = import.pending.saturating_sub(1);
             if import.pending != 0 {
                 return;
             }
-            let result = if let Some(error) = import.failure.take() {
-                Err(error)
-            } else {
-                Ok(import
-                    .outputs
-                    .iter_mut()
-                    .map(Option::take)
-                    .collect::<Option<Vec<_>>>()
-                    .unwrap_or_default())
+            let picked = Picked {
+                copies: import.outputs.iter_mut().filter_map(Option::take).collect(),
+                failures: std::mem::take(&mut import.failures),
             };
-            import.sender.take().map(|sender| (sender, result))
+            import.sender.take().map(|sender| (sender, Ok(picked)))
         };
         if let Some((sender, result)) = completion {
             complete_import_with_sender(state, sender, result);
         }
     }
 
-    fn complete_import(state: &Arc<Mutex<ImportState>>, result: Result<Vec<PathBuf>, String>) {
+    fn complete_import(state: &Arc<Mutex<ImportState>>, result: PickResult) {
         let sender = state
             .lock()
             .expect("Photos import state is not poisoned")
@@ -488,10 +492,13 @@ mod macos {
 
     fn complete_import_with_sender(
         state: &Arc<Mutex<ImportState>>,
-        sender: SyncSender<Result<Vec<PathBuf>, String>>,
-        result: Result<Vec<PathBuf>, String>,
+        sender: SyncSender<PickResult>,
+        result: PickResult,
     ) {
-        if result.as_ref().is_err() || result.as_ref().is_ok_and(Vec::is_empty) {
+        if result
+            .as_ref()
+            .map_or(true, |picked| picked.copies.is_empty())
+        {
             cleanup_state(state);
         }
         if sender.send(result).is_err() {
@@ -540,7 +547,7 @@ mod macos {
                 pending: 0,
                 picker_finished: true,
                 outputs: vec![Some(output.clone())],
-                failure: None,
+                failures: Vec::new(),
                 sender: Some(sender),
             }));
             let sender = state
@@ -551,9 +558,42 @@ mod macos {
                 .expect("test state has a sender");
             drop(receiver);
 
-            complete_import_with_sender(&state, sender, Ok(vec![output]));
+            complete_import_with_sender(
+                &state,
+                sender,
+                Ok(Picked {
+                    copies: vec![output],
+                    failures: Vec::new(),
+                }),
+            );
 
             assert!(!destination.exists());
+        }
+
+        #[test]
+        fn one_asset_that_fails_to_load_does_not_discard_the_others() {
+            let temporary = tempfile::tempdir().unwrap();
+            let destination = temporary.path().join("session");
+            fs::create_dir(&destination).unwrap();
+            let kept = destination.join("photo-000000.jpg");
+            fs::write(&kept, b"jpeg representation").unwrap();
+            let (sender, receiver) = mpsc::sync_channel(1);
+            let state = Arc::new(Mutex::new(ImportState {
+                destination: destination.clone(),
+                pending: 2,
+                picker_finished: true,
+                outputs: vec![None; 2],
+                failures: Vec::new(),
+                sender: Some(sender),
+            }));
+
+            record_file_result(&state, 0, Ok(kept.clone()));
+            record_file_result(&state, 1, Err("iCloud could not download it".into()));
+
+            let picked = receiver.try_recv().unwrap().unwrap();
+            assert_eq!(picked.copies, vec![kept.clone()]);
+            assert_eq!(picked.failures, vec!["iCloud could not download it"]);
+            assert!(kept.exists());
         }
 
         #[test]
@@ -567,7 +607,7 @@ mod macos {
                 pending: 0,
                 picker_finished: false,
                 outputs: Vec::new(),
-                failure: None,
+                failures: Vec::new(),
                 sender: Some(sender),
             }));
 
@@ -583,7 +623,7 @@ mod macos {
 pub use macos::open;
 
 #[cfg(not(target_os = "macos"))]
-pub fn open(_destination: PathBuf) -> Result<Receiver<Result<Vec<PathBuf>, String>>> {
+pub fn open(_destination: PathBuf) -> Result<Receiver<PickResult>> {
     bail!("Photos import is available only on macOS 13 or later")
 }
 
