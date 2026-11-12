@@ -174,8 +174,11 @@ const { base } = Astro.props;
     color: var(--color-ink-1);
   }
 
+  /* Fixed tracks, so the photo's width cap resolves against the screen and
+     not against the photo, and a tall one cannot push the bar off it. */
   .viewer[open] {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 1rem;
   }
@@ -202,6 +205,7 @@ const { base } = Astro.props;
 
   .stage {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     place-items: center;
     min-height: 0;
     margin: 0;
@@ -232,12 +236,10 @@ const { base } = Astro.props;
   .caption {
     min-width: 0;
     margin: 0;
-    overflow: hidden;
     font-size: 0.875rem;
+    line-height: 1.4;
     color: var(--color-ink-3);
     font-variant-numeric: tabular-nums;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .count {
@@ -245,16 +247,26 @@ const { base } = Astro.props;
     font-weight: 500;
   }
 
-  .meta:not(:empty)::before {
-    content: "·";
-    margin-inline: 0.5rem;
+  /* On a phone the date and film take a second line instead of being cut. */
+  .meta {
+    display: block;
+  }
+
+  @media (min-width: 30rem) {
+    .meta {
+      display: inline;
+    }
+
+    .meta:not(:empty)::before {
+      content: "·";
+      margin-inline: 0.5rem;
+    }
   }
 
   .controls {
     display: flex;
     flex-shrink: 0;
     gap: 0.25rem;
-    margin-inline-end: -0.5rem;
   }
 
   .controls button {
