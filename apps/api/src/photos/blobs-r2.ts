@@ -2,8 +2,14 @@ import * as Cloudflare from "@alchemy.run/cloudflare";
 import { RuntimeContext } from "alchemy/RuntimeContext";
 import { Effect, Layer } from "effect";
 
-import { BlobMissing, BlobRejected, Blobs, BlobUnavailable } from "./blobs.ts";
-import type { BlobKey, Expected } from "./blobs.ts";
+import {
+  BlobKey,
+  BlobMissing,
+  BlobRejected,
+  Blobs,
+  BlobUnavailable,
+} from "./blobs.ts";
+import type { Expected } from "./blobs.ts";
 
 const R2_BAD_DIGEST = /\(10037\)/u;
 
@@ -65,6 +71,21 @@ export const r2Blobs = (
           ),
           Effect.mapError(unavailable("head"))
         ),
+      list: (prefix) =>
+        Effect.gen(function* list() {
+          const keys: BlobKey[] = [];
+          let cursor: string | undefined;
+          do {
+            const page = yield* bucket
+              .list(cursor === undefined ? { prefix } : { cursor, prefix })
+              .pipe(runtime, Effect.mapError(unavailable("list")));
+            for (const object of page.objects) {
+              keys.push(BlobKey.make(object.key));
+            }
+            cursor = page.truncated ? page.cursor : undefined;
+          } while (cursor !== undefined);
+          return keys;
+        }),
       put: (key, body, expect) =>
         write(key, body, expect).pipe(
           Effect.asVoid,
@@ -77,6 +98,14 @@ export const r2Blobs = (
             object === null ? Effect.succeed(null) : object.bytes()
           ),
           Effect.mapError(unavailable("range"))
+        ),
+      read: (key) =>
+        bucket.get(key).pipe(
+          runtime,
+          Effect.map((object) =>
+            object === null ? null : { body: object.body, size: object.size }
+          ),
+          Effect.mapError(unavailable("read"))
         ),
       remove: (keys) =>
         keys.length === 0
