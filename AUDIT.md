@@ -78,3 +78,10 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Fix.** `Chapter` takes `heading="h1"`; the two index pages pass it. `Record`, which only those pages use, moves from `h3` to `h2` so the outline stays unbroken. The heading is styled by class, not by tag.
 - **No visual change, proven.** The computed-style dump of both pages shows 0 differences at both widths and in both themes.
 - **Tests.** `tests/site/headings.test.ts`: every page has exactly one `h1`, and no page skips a heading level.
+
+#### S6. Keyboard focus disappears on the version panels (fixed)
+
+- **Evidence.** On `/projects/versos/`, focus the selected tab and press Tab. `document.activeElement` is `section#panel-v6`, `matches(":focus-visible")` is `true`, and its computed outline is `none`. The panel is a tab stop (`tabindex="0"`) with no focus indicator, on all five project pages. That fails WCAG 2.4.7.
+- **Cause.** `Versions.astro` had `[role="tabpanel"]:focus-visible { outline: none; }`, which cancelled the site's own global focus ring.
+- **Fix.** Deleted the rule. The panel now gets the same 2px green ring as every other control, on keyboard focus only. A pointer user never sees it.
+- **Test.** `tests/site/focus.test.ts`: no rule in any built stylesheet removes the outline from a `:focus` or `:focus-visible` selector.
