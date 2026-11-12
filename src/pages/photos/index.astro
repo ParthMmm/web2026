@@ -1,0 +1,20 @@
+---
+import Chapter from "../../components/Chapter.astro";
+import PhotoGallery from "../../components/PhotoGallery.astro";
+import Layout from "../../layouts/Layout.astro";
+import { galleryBase } from "../../lib/gallery";
+
+/* The shell is static; the photos come from the gallery manifest in the
+   browser, so a publish shows without a rebuild. */
+const base = galleryBase(import.meta.env.PUBLIC_GALLERY_URL);
+---
+
+<Layout
+  title="Photos — Parth Mangrola"
+  description="Photographs by Parth Mangrola, newest first."
+  noindex={base === null}
+>
+  <Chapter label="Photos" heading="h1">
+    <PhotoGallery base={base} />
+  </Chapter>
+</Layout>

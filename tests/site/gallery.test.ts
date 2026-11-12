@@ -9,6 +9,7 @@ import {
   sizesFor,
   srcset,
   step,
+  tileSizes,
 } from "../../src/lib/gallery";
 import { parseManifest } from "../../src/lib/gallery-manifest";
 
@@ -179,6 +180,12 @@ test("the larger view sizes the image to whichever of the viewport's width or he
   expect(sizesFor(photo())).toBe("min(100vw - 2rem, (100dvh - 7rem) * 1.5)");
 });
 
+test("a grid tile asks for about one and a half rows of its own width, and never more than the column", () => {
+  expect(tileSizes(photo())).toBe(
+    "(min-width: 48rem) min(60rem, 1.5 * 22.5rem), min(100vw - 3rem, 1.5 * 16.5rem)"
+  );
+});
+
 test("alt text is the photo's own description when it has one", () => {
   expect(altText(photo({ alt: "  Fog over the Golden Gate  " }))).toBe(
     "Fog over the Golden Gate"
@@ -211,11 +218,13 @@ test("the caption names the date and film when the photo has them", () => {
   expect(caption(photo())).toBe("");
 });
 
-test("next and previous stop at the ends instead of wrapping", () => {
+test("next and previous stop at the ends instead of wrapping, and Home and End go to them", () => {
   expect(step(0, 1, 3)).toBe(1);
   expect(step(2, 1, 3)).toBe(2);
   expect(step(0, -1, 3)).toBe(0);
   expect(step(2, -1, 3)).toBe(1);
+  expect(step(1, Number.POSITIVE_INFINITY, 3)).toBe(2);
+  expect(step(1, Number.NEGATIVE_INFINITY, 3)).toBe(0);
 });
 
 test("a shared link opens the photo it names, and other hashes open nothing", () => {
