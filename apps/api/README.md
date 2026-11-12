@@ -84,7 +84,7 @@ A failure at any step leaves a state that is safe for visitors, and the same cal
 - `src/photos/infra.ts`: the private R2 bucket, with a 7-day expiry on `staging/`, the public R2 bucket and the D1 database. All three are retained in the `prod` stage.
 - `src/http/`: the HttpApi contract, the handlers, owner auth, the request log and the public gallery routes.
 - `src/worker.ts` and `alchemy.run.ts`: the `PhotosApi` Worker in the `web2026-photos` stack.
-- `client/`: the hand-written Rust client and the smoke binary.
+- `client/`: the hand-written Rust client, its `Gallery` reader for the public routes, and the smoke binary.
 
 ## Local checks
 
@@ -102,7 +102,7 @@ bun run smoke
 
 - `test` runs on Node. It covers `Photos` and `Publishing` on in-memory blobs and the real migrations on SQLite, with faults injected between every step of publish and unpublish. It also covers the HTTP routes, including the public ones without a token, the OpenAPI export, the shared fixtures, the stack's removal policies and the import boundaries.
 - `test:workerd` runs in workerd through Miniflare. It runs the same blob contract on the R2 adapter with a real R2 binding, and upload, publish, unpublish and list on real R2 and D1. It also bundles the Worker the way Alchemy does, checks that runtime init answers with 401, not a crash, and reads the public gallery from the bundled Worker.
-- `smoke` bundles the Worker into workerd with local R2 and D1, then runs the Rust client over HTTP. The client sends a wrong-hash upload, a short upload, all four objects, and two finalize calls.
+- `smoke` bundles the Worker into workerd with local R2 and D1, then runs the Rust client over HTTP. The client sends a wrong-hash upload, a short upload, all four objects, and two finalize calls. It then publishes twice, lists, reads the manifest and all three derivatives without a token, checks that the draft's derivatives and the original were never public, unpublishes twice, and checks that the public copies are gone.
 - `bun run dev` serves the same local Worker. Set `OWNER_TOKEN` first.
 
 No check deploys or needs Cloudflare credentials.

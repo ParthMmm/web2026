@@ -9,8 +9,11 @@ import {
   HashMismatch,
   LengthMismatch,
   PhotoAlreadyDraft,
+  PhotoDetails,
   PhotoManifestConflict,
+  PhotoNotDraft,
   PhotoNotFound,
+  PhotoPage,
   PhotoView,
   StorageUnavailable,
 } from "../src/photos/domain.ts";
@@ -21,6 +24,7 @@ const errors = [
   PhotoNotFound,
   PhotoManifestConflict,
   PhotoAlreadyDraft,
+  PhotoNotDraft,
   LengthMismatch,
   HashMismatch,
   FinalizeRejected,
@@ -32,6 +36,8 @@ type FixtureDocument =
   | (typeof fixtures)["begin"]
   | (typeof fixtures)["views"][number]
   | (typeof fixtures)["errors"][number]["body"]
+  | (typeof fixtures)["publish"]
+  | (typeof fixtures)["page"]
   | typeof gallery;
 
 const roundTrip = <S extends Schema.Codec<unknown, unknown>>(
@@ -44,6 +50,15 @@ it("every shared view fixture decodes and re-encodes to the same JSON", () => {
     expect(roundTrip(PhotoView, view)).toEqual(view);
   }
   expect(roundTrip(BeginRequest, fixtures.begin)).toEqual(fixtures.begin);
+  expect(roundTrip(PhotoDetails, fixtures.publish)).toEqual(fixtures.publish);
+  expect(roundTrip(PhotoPage, fixtures.page)).toEqual(fixtures.page);
+  expect(fixtures.views.map((view) => view._tag)).toEqual([
+    "Uploading",
+    "Uploading",
+    "Draft",
+    "Published",
+    "Unpublishing",
+  ]);
 });
 
 it("every shared error fixture carries its error's tag and status and round-trips", () => {

@@ -64,6 +64,19 @@ pub struct BeginRequest {
     pub photo_id: String,
 }
 
+/// What a visitor sees beside a published photo. `captured_at` is the camera's local date-time as
+/// text, with no zone. The API limits `alt` to 300 characters, `captured_at` to 40 and `film` to 64.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub captured_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub film: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "_tag", rename_all_fields = "camelCase")]
 pub enum PhotoView {
@@ -77,6 +90,76 @@ pub enum PhotoView {
         manifest: Manifest,
         photo_id: String,
     },
+    Published {
+        details: PhotoDetails,
+        finalized_at: String,
+        manifest: Manifest,
+        photo_id: String,
+        published_at: String,
+    },
+    /// Public removal started and has not finished. Another `unpublish` finishes it.
+    Unpublishing {
+        details: PhotoDetails,
+        finalized_at: String,
+        manifest: Manifest,
+        photo_id: String,
+    },
+}
+
+impl PhotoView {
+    pub fn photo_id(&self) -> &str {
+        match self {
+            PhotoView::Uploading { photo_id, .. }
+            | PhotoView::Draft { photo_id, .. }
+            | PhotoView::Published { photo_id, .. }
+            | PhotoView::Unpublishing { photo_id, .. } => photo_id,
+        }
+    }
+}
+
+/// One page of `list`. Pass `next` as `after` to read the following page; it is `None` on the last.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhotoPage {
+    pub next: Option<String>,
+    pub photos: Vec<PhotoView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GallerySize {
+    pub height: u32,
+    /// Relative to the gallery base, such as `https://host/gallery/`.
+    pub path: String,
+    pub width: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GallerySizes {
+    pub w480: GallerySize,
+    pub w1200: GallerySize,
+    pub w2400: GallerySize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryPhoto {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub captured_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub film: Option<String>,
+    pub id: String,
+    pub published_at: String,
+    pub sizes: GallerySizes,
+}
+
+/// The public gallery manifest, version 1.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryManifest {
+    pub generated_at: String,
+    pub photos: Vec<GalleryPhoto>,
+    pub version: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +206,9 @@ pub enum ApiError {
     PhotoAlreadyDraft {
         photo_id: String,
     },
+    PhotoNotDraft {
+        photo_id: String,
+    },
     LengthMismatch {
         expected: u64,
         kind: Kind,
@@ -144,6 +230,7 @@ pub enum ApiError {
 pub enum ClientError {
     #[error(transparent)]
     Transport(#[from] reqwest::Error),
+
     #[error("HTTP {status}: {error:?}")]
     Http {
         status: u16,
@@ -227,6 +314,75 @@ impl Client {
                 .post(self.url(&format!("/v1/photos/{photo_id}/finalize")))
                 .send()?,
         )
+    }
+
+    /// Publishes a draft, or replaces the details of a published photo.
+    pub fn publish(
+        &self,
+        photo_id: &str,
+        details: &PhotoDetails,
+    ) -> Result<PhotoView, ClientError> {
+        decode(
+            self.http
+                .post(self.url(&format!("/v1/photos/{photo_id}/publish")))
+                .json(details)
+                .send()?,
+        )
+    }
+
+    pub fn unpublish(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        decode(
+            self.http
+                .post(self.url(&format!("/v1/photos/{photo_id}/unpublish")))
+                .send()?,
+        )
+    }
+
+    /// One page of every photo in photo ID order. `limit` is 1 to 200; the API defaults to 100.
+    pub fn list(&self, after: Option<&str>, limit: Option<u32>) -> Result<PhotoPage, ClientError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(after) = after {
+            query.push(("after", after.to_owned()));
+        }
+        if let Some(limit) = limit {
+            query.push(("limit", limit.to_string()));
+        }
+        decode(self.http.get(self.url("/v1/photos")).query(&query).send()?)
+    }
+}
+
+/// Reads the public gallery the way a visitor does: no token.
+pub struct Gallery {
+    http: blocking::Client,
+    base: String,
+}
+
+impl Gallery {
+    /// `base_url` is the gallery base, such as `https://host/gallery/`.
+    pub fn new(base_url: &str) -> anyhow::Result<Self> {
+        reqwest::Url::parse(base_url)?;
+        let base = base_url.trim_end_matches('/').to_owned();
+        Ok(Self {
+            http: blocking::Client::builder()
+                .redirect(Policy::none())
+                .timeout(Duration::from_secs(60))
+                .build()?,
+            base,
+        })
+    }
+
+    pub fn manifest(&self) -> Result<GalleryManifest, ClientError> {
+        decode(self.http.get(format!("{}/v1.json", self.base)).send()?)
+    }
+
+    /// The bytes at a manifest `path`, or the HTTP status when there are none.
+    pub fn fetch(&self, path: &str) -> Result<Vec<u8>, ClientError> {
+        let response = self.http.get(format!("{}/{path}", self.base)).send()?;
+        if response.status().is_success() {
+            Ok(response.bytes()?.to_vec())
+        } else {
+            Err(failure(response))
+        }
     }
 }
 

@@ -113,6 +113,73 @@
         }
       },
       "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "_tag": "Published",
+      "details": {
+        "alt": "Fog over the bay at dawn",
+        "capturedAt": "2026-10-03T07:12:00",
+        "film": "Portra 400"
+      },
+      "finalizedAt": "2026-11-06T12:00:00.000Z",
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "publishedAt": "2026-11-11T09:30:00.000Z"
+    },
+    {
+      "_tag": "Unpublishing",
+      "details": {
+        "alt": "Fog over the bay at dawn"
+      },
+      "finalizedAt": "2026-11-06T12:00:00.000Z",
+      "manifest": {
+        "original": {
+          "bytes": 2048,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "w480": {
+          "bytes": 64,
+          "height": 320,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "width": 480
+        },
+        "w1200": {
+          "bytes": 64,
+          "height": 800,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "width": 1200
+        },
+        "w2400": {
+          "bytes": 64,
+          "height": 1600,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "width": 2400
+        }
+      },
+      "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
   ],
   "errors": [
@@ -140,6 +207,13 @@
       "status": 409,
       "body": {
         "_tag": "PhotoAlreadyDraft",
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "status": 409,
+      "body": {
+        "_tag": "PhotoNotDraft",
         "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     },
@@ -317,5 +391,108 @@
       },
       "photoId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     }
-  ]
+  ],
+  "publish": {
+    "alt": "Fog over the bay at dawn",
+    "capturedAt": "2026-10-03T07:12:00",
+    "film": "Portra 400"
+  },
+  "page": {
+    "next": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "photos": [
+      {
+        "_tag": "Uploading",
+        "manifest": {
+          "original": {
+            "bytes": 2048,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "w480": {
+            "bytes": 64,
+            "height": 320,
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "width": 480
+          },
+          "w1200": {
+            "bytes": 64,
+            "height": 800,
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "width": 1200
+          },
+          "w2400": {
+            "bytes": 64,
+            "height": 1600,
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "width": 2400
+          }
+        },
+        "missing": ["original", "w480", "w1200", "w2400"],
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "_tag": "Draft",
+        "finalizedAt": "2026-11-06T12:00:00.000Z",
+        "manifest": {
+          "original": {
+            "bytes": 2048,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "w480": {
+            "bytes": 64,
+            "height": 320,
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "width": 480
+          },
+          "w1200": {
+            "bytes": 64,
+            "height": 800,
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "width": 1200
+          },
+          "w2400": {
+            "bytes": 64,
+            "height": 1600,
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "width": 2400
+          }
+        },
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "_tag": "Published",
+        "details": {
+          "alt": "Fog over the bay at dawn",
+          "capturedAt": "2026-10-03T07:12:00",
+          "film": "Portra 400"
+        },
+        "finalizedAt": "2026-11-06T12:00:00.000Z",
+        "manifest": {
+          "original": {
+            "bytes": 2048,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "w480": {
+            "bytes": 64,
+            "height": 320,
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "width": 480
+          },
+          "w1200": {
+            "bytes": 64,
+            "height": 800,
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "width": 1200
+          },
+          "w2400": {
+            "bytes": 64,
+            "height": 1600,
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "width": 2400
+          }
+        },
+        "photoId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "publishedAt": "2026-11-11T09:30:00.000Z"
+      }
+    ]
+  }
 }
