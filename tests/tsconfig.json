@@ -5,7 +5,7 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "types": ["bun"],
+    "types": ["bun", "@cloudflare/workers-types"],
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,

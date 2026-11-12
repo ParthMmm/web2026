@@ -102,3 +102,17 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Tests.** `tests/site/theme.test.ts` takes the inline script out of the built home page and runs it in a `node:vm` context that has only what the script touches. "with site data blocked…" failed before the fix. "a stored choice wins over the system theme…" covers the override rule, which had no test.
 - **Checked in Chrome** after the fix, storage still blocked: dark theme applied, one click switches to light.
 - **State machine.** The theme is two facts: the visitor's choice (`dark`, `light` or none) and the system theme. The resolved theme is the choice, else the system. Toggling to the system's theme clears the choice. That was already explicit enough in three small functions, so I did not restructure it.
+
+### Worker: `now.parthm.dev`
+
+The Worker is deployed and polls three sources every minute, and every 15 seconds while a socket is open. No page on `main` reads it yet (`wip/now-playing-masthead` does). It had no tests, and CI did not typecheck it.
+
+#### W1. A source that fails is silent, and one bad secret stops all three (fixed)
+
+- **Evidence, part 1.** `tests/now-playing/worker.test.ts`, "a malformed Apple Music key does not hide what Last.fm reports": with `APPLE_MUSIC_PRIVATE_KEY` set to a PEM that has a literal `\n` in it (what a one-line `.env` value gives), `refresh()` rejected with `InvalidCharacterError` from `atob`. `poll` awaited the three sources with `Promise.all`, so the Orbis and Last.fm answers were thrown away too. The cron then failed every minute, and an alarm that throws is not rescheduled.
+- **Evidence, part 2.** Each reader ended in `catch { return null }` and turned `!response.ok` into `null`. `null` also meant "nothing is playing". A 401 from Apple, which is what an expired Music User Token returns, was therefore the same as silence, and nothing was logged. The README says that token expires about every six months. `observability` is on, but the Worker wrote no log line at all.
+- **Cause.** A source's answer was `Track | null`. The type had no way to say "I failed", so failure was either thrown or hidden.
+- **Fix.** `sources.ts` has `Answer<Value>`: `Found`, `Nothing` or `Unavailable` with a reason. One function, `attempt`, turns a throw into `Unavailable`. `poll` logs each `Unavailable` as a structured `console.warn` with the source and the reason, then reports the first `Found`. Signing the developer token goes through `attempt` too. The Last.fm reason has the API key removed, because that request carries the key in its URL.
+- **Tests.** The test above, plus "an upstream that refuses the request is named in the logs, with the reason". Both failed before. A third, "Orbis is reported ahead of Last.fm when both have a track", pins the order the README promises; it passed before and after.
+- **How the tests run.** `tests/now-playing/harness.ts` stubs `cloudflare:workers` with a base class that keeps `ctx` and `env`, gives the object in-memory storage, scripts `fetch` per upstream host, and sets the clock with `setSystemTime`. The object under test is the real `NowPlaying` class. Reads go through `parseNowPlayingMessage`, the parser the masthead will use.
+- **Left.** A transient failure of the source that supplied the current track still blanks the line until the next poll. Holding the last track through a failure needs a rule for how long, which is a product choice.

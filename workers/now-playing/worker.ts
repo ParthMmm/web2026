@@ -2,7 +2,16 @@ import { DurableObject } from "cloudflare:workers";
 
 import { signDeveloperToken } from "./apple-music-token";
 import type { NowPlayingMessage, Track } from "./message";
-import { readAppleMusicRecent, readLastfm, readOrbis } from "./sources";
+import type { Answer } from "./sources";
+import {
+  attempt,
+  found,
+  nothing,
+  readAppleMusicRecent,
+  readLastfm,
+  readOrbis,
+  unavailable,
+} from "./sources";
 
 /** Every source is optional: an empty value turns it off. */
 export interface Env {
@@ -74,14 +83,31 @@ export class NowPlaying extends DurableObject<Env> {
   }
 
   private async poll(): Promise<void> {
-    const [orbis, lastfm, appleMusic] = await Promise.all([
-      this.orbis(),
-      this.lastfm(),
-      this.appleMusic(),
-    ]);
-    const message: NowPlayingMessage = {
-      playing: orbis ?? lastfm ?? appleMusic,
-    };
+    // In order of trust: the first source with a track is the one reported.
+    const answers = await Promise.all(
+      (
+        [
+          ["orbis", this.orbis()],
+          ["lastfm", this.lastfm()],
+          ["apple-music", this.appleMusic()],
+        ] as const
+      ).map(async ([source, answer]) => ({ answer: await answer, source }))
+    );
+    let playing: Track | null = null;
+    for (const { answer, source } of answers) {
+      if (answer._tag === "Unavailable") {
+        // One line per failed poll. A source that stays down, such as an
+        // expired Music User Token, then shows as a steady rate in the logs.
+        console.warn({
+          message: "A now-playing source is unavailable.",
+          reason: answer.reason,
+          source,
+        });
+      } else if (answer._tag === "Found") {
+        playing ??= answer.value;
+      }
+    }
+    const message: NowPlayingMessage = { playing };
     const next = JSON.stringify(message);
     if (next === JSON.stringify(await this.message())) {
       return;
@@ -96,10 +122,10 @@ export class NowPlaying extends DurableObject<Env> {
     }
   }
 
-  private orbis(): Promise<Track | null> {
+  private orbis(): Promise<Answer<Track>> {
     const { ORBIS_API_KEY, ORBIS_API_URL, ORBIS_USERNAME } = this.env;
     if (!(ORBIS_API_KEY && ORBIS_API_URL && ORBIS_USERNAME)) {
-      return Promise.resolve(null);
+      return Promise.resolve(nothing);
     }
     return readOrbis({
       apiKey: ORBIS_API_KEY,
@@ -108,10 +134,10 @@ export class NowPlaying extends DurableObject<Env> {
     });
   }
 
-  private lastfm(): Promise<Track | null> {
+  private lastfm(): Promise<Answer<Track>> {
     const { LASTFM_API_KEY, LASTFM_USER } = this.env;
     if (!(LASTFM_API_KEY && LASTFM_USER)) {
-      return Promise.resolve(null);
+      return Promise.resolve(nothing);
     }
     return readLastfm({ apiKey: LASTFM_API_KEY, user: LASTFM_USER });
   }
@@ -120,7 +146,7 @@ export class NowPlaying extends DurableObject<Env> {
    * Apple Music's history has no play times, so a song counts as playing for its
    * own length after it first reaches the top of the list.
    */
-  private async appleMusic(): Promise<Track | null> {
+  private async appleMusic(): Promise<Answer<Track>> {
     const {
       APPLE_MUSIC_KEY_ID: keyId,
       APPLE_MUSIC_PRIVATE_KEY: privateKey,
@@ -128,36 +154,47 @@ export class NowPlaying extends DurableObject<Env> {
       APPLE_MUSIC_USER_TOKEN: userToken,
     } = this.env;
     if (!(keyId && privateKey && teamId && userToken)) {
-      return null;
+      return nothing;
     }
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (
       !this.developerToken ||
       this.developerToken.expiresAt - TOKEN_REFRESH_MARGIN_SECONDS < nowSeconds
     ) {
-      this.developerToken = await signDeveloperToken(
-        { keyId, privateKey, teamId },
-        nowSeconds
+      const signed = await attempt(async () =>
+        found(
+          await signDeveloperToken({ keyId, privateKey, teamId }, nowSeconds)
+        )
       );
+      if (signed._tag !== "Found") {
+        // A key that is not valid PEM lands here. The other sources still answer.
+        return signed._tag === "Unavailable"
+          ? unavailable(
+              `APPLE_MUSIC_PRIVATE_KEY cannot sign a developer token. ${signed.reason}`
+            )
+          : signed;
+      }
+      this.developerToken = signed.value;
     }
-    const song = await readAppleMusicRecent(
+    const recent = await readAppleMusicRecent(
       this.developerToken.token,
       userToken
     );
-    if (!song) {
-      return null;
+    if (recent._tag !== "Found") {
+      return recent;
     }
+    const song = recent.value;
     const now = Date.now();
     const latest = await this.ctx.storage.get<LatestSong>(LATEST_SONG_KEY);
     if (latest?.id !== song.id) {
       // The first song this object ever sees may be from yesterday, so it starts undated.
       const since = latest === undefined ? 0 : now;
       await this.ctx.storage.put(LATEST_SONG_KEY, { id: song.id, since });
-      return since === 0 ? null : toTrack(song);
+      return since === 0 ? nothing : found(toTrack(song));
     }
     return now - latest.since > song.durationMs + APPLE_MUSIC_GRACE_MS
-      ? null
-      : toTrack(song);
+      ? nothing
+      : found(toTrack(song));
   }
 }
 
