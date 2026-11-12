@@ -2,6 +2,7 @@
 //! it, the status bar, and what covers them (the viewer, the failures sheet, the performance
 //! panel). Each part draws the gallery's state and nothing else.
 
+mod cloud;
 mod failures;
 mod grid;
 mod inspector;
@@ -15,7 +16,8 @@ use super::{
     icons,
     look::{Look, MONO, MONO_SMALL},
 };
-use failures::failures;
+use cloud::progress_kit;
+use failures::{failures, upload_failures};
 use grid::grid_region;
 use inspector::inspector;
 use rune::{Cx, El, TextStyle, col, icon, row, text};
@@ -62,6 +64,7 @@ pub(super) fn view(s: &Gallery, cx: &mut Cx<Gallery>) -> El {
     match s.overlay {
         Overlay::Viewer => layer.extend(viewer(s, &look)),
         Overlay::Failures => failures(s, &look, &mut layer),
+        Overlay::UploadFailures => upload_failures(s, &look, &mut layer),
         Overlay::None => {}
     }
     if let Some(line) = &s.performance {
@@ -106,17 +109,30 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
                 .key("all-photos"),
         ),
     );
-    if !s.failures.is_empty() {
-        sidebar = sidebar.section(
-            SidebarSection::new("Needs attention").key("attention").row(
+    let not_uploaded = s.upload_failures().count();
+    if !s.failures.is_empty() || not_uploaded > 0 {
+        let mut attention = SidebarSection::new("Needs attention").key("attention");
+        if !s.failures.is_empty() {
+            attention = attention.row(
                 SidebarRow::new("Not imported")
                     .icon(&icons::ALERT)
                     .detail(format::number(s.failures.len()))
                     .on_select(|s: &mut Gallery, _| s.open_failures())
                     .build(look)
                     .key("not-imported"),
-            ),
-        );
+            );
+        }
+        if not_uploaded > 0 {
+            attention = attention.row(
+                SidebarRow::new("Not uploaded")
+                    .icon(&icons::CLOUD_OFF)
+                    .detail(format::number(not_uploaded))
+                    .on_select(|s: &mut Gallery, _| s.open_upload_failures())
+                    .build(look)
+                    .key("not-uploaded"),
+            );
+        }
+        sidebar = sidebar.section(attention);
     }
     col()
         .key("sidebar-pane")
@@ -130,43 +146,36 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
 }
 
 /// What is in view and selected at rest, a transient message when there is one, and import
-/// progress.
+/// and upload progress.
 fn status_bar(s: &Gallery, look: &Look) -> El {
-    // The kit fills a progress bar with its active border; the design fills it with the accent.
-    let mut bar = look.k.clone();
-    bar.c.border_active = look.primary;
     let progress = s.progress.map(|(processed, total)| {
         let scanning = total == 0;
-        #[allow(clippy::cast_precision_loss)]
-        let value = (!scanning).then(|| processed as f32 / total as f32);
-        row()
-            .key("import-progress")
-            .label("Import progress")
-            .gap(10.0)
-            .center_y()
-            .child(
-                text(if scanning {
-                    "Looking for JPEGs…"
-                } else {
-                    "Importing"
-                })
-                .font(STATUS)
-                .color(look.muted),
-            )
-            .children((!scanning).then(|| {
-                text(format!(
-                    "{} of {}",
-                    format::number(processed),
-                    format::number(total)
-                ))
-                .font(MONO_SMALL)
-                .color(look.muted)
-            }))
-            .child(
-                col()
-                    .w(PROGRESS_WIDTH)
-                    .child(Progress::new(value).build(&bar)),
-            )
+        let words = if scanning {
+            "Looking for JPEGs…"
+        } else {
+            "Importing"
+        };
+        progress_line(
+            look,
+            "import-progress",
+            "Import progress",
+            words,
+            (!scanning).then_some((processed, total)),
+        )
+    });
+    let uploads = s.uploads.filter(|run| run.total > 0).map(|run| {
+        let words = if s.is_connected() {
+            "Uploading"
+        } else {
+            "Waiting to upload · not connected"
+        };
+        progress_line(
+            look,
+            "upload-progress",
+            "Upload progress",
+            words,
+            Some((run.finished(), run.total)),
+        )
     });
     let left = if s.status.is_empty() {
         text(selection_summary(s)).font(MONO_SMALL)
@@ -184,6 +193,39 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
         .border_sides([1.0, 0.0, 0.0, 0.0], look.rule)
         .child(left.key("status").color(look.muted).truncate().grow(1.0))
         .children(progress)
+        .children(uploads)
+}
+
+/// Words, a count when there is one, and a bar that is indeterminate without it.
+fn progress_line(
+    look: &Look,
+    key: &'static str,
+    label: &'static str,
+    words: &'static str,
+    count: Option<(usize, usize)>,
+) -> El {
+    #[allow(clippy::cast_precision_loss)]
+    let value = count.map(|(done, total)| done as f32 / total as f32);
+    row()
+        .key(key)
+        .label(label)
+        .gap(10.0)
+        .center_y()
+        .child(text(words).font(STATUS).color(look.muted))
+        .children(count.map(|(done, total)| {
+            text(format!(
+                "{} of {}",
+                format::number(done),
+                format::number(total)
+            ))
+            .font(MONO_SMALL)
+            .color(look.muted)
+        }))
+        .child(
+            col()
+                .w(PROGRESS_WIDTH)
+                .child(Progress::new(value).build(&progress_kit(look))),
+        )
 }
 
 const STATUS: TextStyle = TextStyle::new(11.5, 400.0);

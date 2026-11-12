@@ -1,6 +1,10 @@
 //! Interface text for counts and sizes.
 
-use crate::ImportSummary;
+use super::gallery::UploadRun;
+use crate::{
+    ImportSummary,
+    cloud::{CloudState, ObjectKind},
+};
 
 const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
 const DECIMAL_UNIT: f64 = 1000.0;
@@ -50,6 +54,38 @@ pub(super) fn count(value: usize, singular: &str, plural: &str) -> String {
 /// repeated the photo count would only restate the title strip.
 pub(super) fn library_size(total_bytes: u64) -> String {
     format!("{} of originals", bytes(total_bytes))
+}
+
+/// One sentence describing a finished upload run.
+pub(super) fn upload_summary(run: &UploadRun) -> String {
+    let mut summary = if run.drafts == 1 {
+        "Uploaded 1 photo as a private draft".to_owned()
+    } else if run.drafts > 1 {
+        format!("Uploaded {} photos as private drafts", number(run.drafts))
+    } else {
+        "Nothing uploaded".to_owned()
+    };
+    if run.failed > 0 {
+        summary.push_str(&format!(" · {} failed", number(run.failed)));
+    }
+    summary
+}
+
+/// A cloud state in a few words, for the inspector and for a tile's label.
+pub(super) fn cloud_state(state: &CloudState) -> String {
+    match state {
+        CloudState::Local => "Only in this library".into(),
+        CloudState::Queued => "Waiting to upload".into(),
+        CloudState::Uploading { missing, .. } => {
+            let sent = ObjectKind::ALL.len() - missing.len();
+            format!("Uploading · {sent} of {} files", ObjectKind::ALL.len())
+        }
+        CloudState::Draft { .. } => "Private draft".into(),
+        CloudState::Publishing { .. } => "Publishing…".into(),
+        CloudState::Published { .. } => "Published".into(),
+        CloudState::Unpublishing { .. } => "Unpublishing…".into(),
+        CloudState::Failed { .. } => "Upload failed".into(),
+    }
 }
 
 /// One sentence describing a finished import run.

@@ -143,6 +143,24 @@ pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuIte
         })
         .id("failures")
         .menu("File"),
+        MenuItem::separator().menu("File"),
+        MenuItem::new("Upload Photo", |gallery: &mut Gallery, _| {
+            gallery.upload_selected();
+        })
+        .id("upload")
+        .menu("File")
+        .key_equivalent(shortcut("cmd+u")),
+        MenuItem::new("Upload All Photos", |gallery: &mut Gallery, _| {
+            gallery.upload_all();
+        })
+        .id("upload-all")
+        .menu("File")
+        .key_equivalent(shortcut("cmd+shift+u")),
+        MenuItem::new("Photos Not Uploaded…", |gallery: &mut Gallery, _| {
+            gallery.open_upload_failures();
+        })
+        .id("upload-failures")
+        .menu("File"),
         MenuItem::new(
             show_hide(sidebar_hidden, "Sidebar"),
             |gallery: &mut Gallery, _| {
@@ -202,7 +220,7 @@ fn on_key(gallery: &mut Gallery, event: &KeyEvent, tx: &mut Tx) -> bool {
             }
             true
         }
-        Overlay::Failures => false,
+        Overlay::Failures | Overlay::UploadFailures => false,
         Overlay::None if gallery.benchmark.is_some() => false,
         Overlay::None => {
             if space || event.key == Key::Enter {

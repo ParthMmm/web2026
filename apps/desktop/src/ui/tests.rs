@@ -7,6 +7,7 @@
 //! diff.
 
 use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, look, on_key, poll, setup, view::view};
+use crate::cloud::{CloudId, CloudState, UploadFailure};
 use rune::{Env, Key, KeyEvent, Runtime, ScrollBars, text::TextSystem};
 use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 
@@ -136,6 +137,92 @@ fn the_title_bar_hides_the_panels_and_zooms_the_grid() {
     assert!(
         rt.state.layout().columns < wide,
         "Zoom In makes tiles larger"
+    );
+}
+
+fn scene(name: &str) -> fn(&mut Gallery) {
+    demo::SCENES
+        .iter()
+        .find(|(scene, _)| *scene == name)
+        .unwrap_or_else(|| panic!("no scene {name}"))
+        .1
+}
+
+#[test]
+fn the_not_uploaded_row_lists_each_reason() {
+    let mut rt = window(scene("upload-failed"));
+    press(&mut rt, "not-uploaded");
+    assert!(
+        shows(&rt, "upload-failures-sheet"),
+        "the row opens the list"
+    );
+    let list = text_in(&rt, "upload-failures-sheet");
+    assert!(
+        list.contains("didn't answer") && list.contains("w1200 carries metadata"),
+        "{list}"
+    );
+    press(&mut rt, "close-upload-failures");
+    assert!(!shows(&rt, "upload-failures-sheet"), "the list closes");
+}
+
+#[test]
+fn upload_in_the_demo_library_starts_nothing() {
+    let mut rt = window(|_| {});
+    assert!(text_in(&rt, "cloud").contains("Only in this library"));
+    press(&mut rt, "upload-photo");
+    assert!(
+        rt.state
+            .photos
+            .iter()
+            .all(|photo| photo.record.cloud == CloudState::Local),
+        "the demo library makes no calls and queues nothing"
+    );
+}
+
+#[test]
+fn the_status_bar_counts_an_upload_run_and_then_sums_it_up() {
+    let mut rt = window(|_| {});
+    let ids: Vec<_> = rt.state.photos[..3]
+        .iter()
+        .map(|photo| photo.record.id.clone())
+        .collect();
+    for id in &ids {
+        rt.state.cloud_changed(id, CloudState::Queued);
+    }
+    settle(&mut rt);
+    assert!(
+        text_in(&rt, "upload-progress").contains("0 of 3"),
+        "{}",
+        text_in(&rt, "status-bar")
+    );
+    let cloud_id = CloudId::from_hex("ab");
+    rt.state.cloud_changed(
+        &ids[0],
+        CloudState::Draft {
+            cloud_id: cloud_id.clone(),
+        },
+    );
+    rt.state.cloud_changed(
+        &ids[1],
+        CloudState::Draft {
+            cloud_id: cloud_id.clone(),
+        },
+    );
+    rt.state.cloud_changed(
+        &ids[2],
+        CloudState::Failed {
+            cloud_id: None,
+            failure: UploadFailure::OriginalMissing,
+        },
+    );
+    settle(&mut rt);
+    assert!(
+        !shows(&rt, "upload-progress"),
+        "the bar leaves when nothing is left"
+    );
+    assert_eq!(
+        text_in(&rt, "status"),
+        "Uploaded 2 photos as private drafts · 1 failed"
     );
 }
 

@@ -29,7 +29,9 @@ impl Gallery {
         match opened {
             Ok((library, photos)) => {
                 self.failures = library.failures().to_vec();
+                self.connection = library.connection().clone();
                 self.photos = photos;
+                self.resume_uploads();
                 self.library = LibraryState::Open(library);
                 // A photo is selected on open, so the inspector carries content
                 // and the first arrow key moves somewhere.
@@ -137,11 +139,7 @@ impl Gallery {
                     photo.record = record;
                 }
             }
-            Event::CloudChanged { id, state } => {
-                if let Some(photo) = self.photo_mut(&id) {
-                    photo.record.cloud = state;
-                }
-            }
+            Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
             Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),
         }

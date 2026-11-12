@@ -146,7 +146,9 @@ impl UploadFailure {
             Self::Conflict => {
                 "The cloud holds different files for this photo. Nothing was replaced.".into()
             }
-            Self::Rejected { message } => format!("The photo API refused the files: {message}."),
+            Self::Rejected { message } => format!(
+                "The photo API refused the files: {message}. A retry would send the same files, so report it."
+            ),
         }
     }
 

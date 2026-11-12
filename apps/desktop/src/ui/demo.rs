@@ -1,15 +1,18 @@
 //! Made-up photos for headless renders and the goldens, and the scenes `--scene` names. A
 //! headless run never opens the library on disk, so a render never shows anyone's photos.
 //! Every state the window can show has a scene: full, empty, opening, failed, importing,
-//! long names, each end of the zoom, and the panels hidden.
+//! long names, each end of the zoom, the panels hidden, and each upload state.
+//! Demo uploads are made up too: the demo library makes no calls.
 
 use super::{
-    gallery::{Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail},
+    format,
+    gallery::{Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail, UploadRun},
     images::ImageSlots,
 };
 use crate::{
     ImportFailure, PhotoId, PhotoRecord,
-    cloud::CloudState,
+    api::Connection,
+    cloud::{CloudId, CloudState, ObjectKind, UploadFailure},
     metadata::{CaptureTime, ExposureTime, FilmSimulation, PhotoMetadata},
 };
 use rune::ImageCache;
@@ -86,7 +89,95 @@ pub(super) static SCENES: &[Scene] = &[
         s.toggle_sidebar();
         s.toggle_inspector();
     }),
+    ("uploading", |s| {
+        uploads_in_flight(s);
+        select(s, 1);
+    }),
+    ("upload-draft", |s| {
+        for index in 0..6 {
+            set_cloud(s, index, |cloud_id| CloudState::Draft { cloud_id });
+        }
+        s.status = format::upload_summary(&UploadRun {
+            total: 6,
+            drafts: 6,
+            failed: 0,
+        });
+        select(s, 0);
+    }),
+    ("upload-failed", |s| {
+        uploads_finished(s);
+        select(s, 5);
+    }),
+    ("upload-failures", |s| {
+        uploads_finished(s);
+        s.overlay = Overlay::UploadFailures;
+    }),
+    ("not-connected", |s| {
+        s.connection = Connection::NotConnected {
+            reason: "Set PHOTO_API_URL to the photo API's address".into(),
+        };
+    }),
 ];
+
+/// What the demo library says about its connection: made up, and never called.
+pub(super) fn connection() -> Connection {
+    Connection::Connected {
+        address: "https://photos.example.dev".into(),
+    }
+}
+
+/// Three drafts, one photo halfway, two waiting, and one that stopped.
+fn uploads_in_flight(s: &mut Gallery) {
+    for index in [0, 4, 6] {
+        set_cloud(s, index, |cloud_id| CloudState::Draft { cloud_id });
+    }
+    set_cloud(s, 1, |cloud_id| CloudState::Uploading {
+        cloud_id,
+        missing: vec![ObjectKind::W1200, ObjectKind::W2400],
+    });
+    set_cloud(s, 2, |_| CloudState::Queued);
+    set_cloud(s, 3, |_| CloudState::Queued);
+    set_cloud(s, 5, unavailable);
+    s.uploads = Some(UploadRun {
+        total: 7,
+        drafts: 3,
+        failed: 1,
+    });
+}
+
+/// A finished run: drafts, one failure a retry can help, and one it can't.
+fn uploads_finished(s: &mut Gallery) {
+    for index in [0, 1, 2, 3, 4, 6] {
+        set_cloud(s, index, |cloud_id| CloudState::Draft { cloud_id });
+    }
+    set_cloud(s, 5, unavailable);
+    set_cloud(s, 7, |cloud_id| CloudState::Failed {
+        cloud_id: Some(cloud_id),
+        failure: UploadFailure::Rejected {
+            message: "w1200 carries metadata".into(),
+        },
+    });
+    s.status = format::upload_summary(&UploadRun {
+        total: 8,
+        drafts: 6,
+        failed: 2,
+    });
+}
+
+fn unavailable(cloud_id: CloudId) -> CloudState {
+    CloudState::Failed {
+        cloud_id: Some(cloud_id),
+        failure: UploadFailure::Unavailable {
+            message: "HTTP 503, 5 tries".into(),
+        },
+    }
+}
+
+/// Gives photo `index` a cloud state, with a made-up cloud identity.
+fn set_cloud(s: &mut Gallery, index: usize, state: fn(CloudId) -> CloudState) {
+    let record = &mut s.photos[index].record;
+    record.cloud = state(CloudId::from_hex(record.id.as_str()));
+}
 
 /// The shoots the demo library holds: a folder, a film simulation and a
 /// lens each, with eight frames from each.

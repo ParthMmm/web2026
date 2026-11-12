@@ -9,6 +9,7 @@ use super::super::{
 };
 use super::{
     TITLE_BAR_HEIGHT,
+    cloud::cloud_section,
     parts::{detail, detail_text, exposure_readout, film_chip},
 };
 use rune::{El, ScrollSpec, SurfaceFit, TextStyle, col, el, icon, row, text};
@@ -87,6 +88,7 @@ pub(super) fn inspector(s: &Gallery, look: &Look) -> El {
                     .color(look.faint),
                 ),
         )
+        .child(cloud_section(s, photo, look))
         .children(exposure_readout(look, &record.metadata))
         .child(details(s, photo, look));
     panel.child(
