@@ -119,6 +119,14 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Test.** `tests/site/og.test.ts`.
 - **Left.** The table itself. The cards for the seven write-ups could be derived from `site.ts` if each record carried its tone, which would remove the table's duplicate titles. That is a data-model change to make together with S13.
 
+#### S11. The two work write-ups were the same page, typed twice (fixed)
+
+- **Evidence.** `diff src/pages/work/carbon-law-group.astro src/pages/work/embic.astro` showed four differing lines: the slug, the title, and the description, each as a string literal. Both descriptions were copies of the ones in `src/data/site.ts`, so a page, the home page row and the share card could drift apart. A third write-up would have meant a third copy.
+- **Fix.** One route, `src/pages/work/[slug].astro`, builds a page for each entry in the `work` collection and takes the title and description from `site.ts`, as `projects/[slug].astro` already does. Two files deleted, one added: 48 lines to 31.
+- **Proof.** `diff -rq` of the whole build before and after reports no difference: every file is byte-identical.
+- **Test.** None added. This is a refactor with no behaviour to fail first, and the byte comparison is a stronger check than a test I could write. The link, heading and share-card tests cover the two pages as before.
+- **Found on the way, and fixed in its own commit.** `bun test` sets `NODE_ENV=test`, and the build the tests spawn inherited it. Astro then built as if for dev, so the tests were checking a build no visitor gets. The helper now sets `NODE_ENV=production`, and the test build is byte-identical to `astro build`.
+
 ### Worker: `now.parthm.dev`
 
 The Worker is deployed and polls three sources every minute, and every 15 seconds while a socket is open. No page on `main` reads it yet (`wip/now-playing-masthead` does). It had no tests, and CI did not typecheck it.
