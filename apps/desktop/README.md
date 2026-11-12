@@ -39,7 +39,7 @@ Arguments are JPEG files or folders to import on launch. Rune reads its own flag
 
 The theme follows the system's light or dark appearance. Both palettes live in `src/ui/look.rs`, which lays them over rune-kit's tokens.
 
-On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. Copies that duplicate a photo already in the library, or that fail to import, are deleted. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
+On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. A copy that duplicates a photo already in the library is deleted. A copy that fails to import stays in the failure list, so **Retry all** can read it; **Clear list** deletes it. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
 
 Selecting a folder imports JPEGs from all nested subfolders. Photos library packages and Photo Booth are excluded, and symlinks are skipped. Folder names do not become albums.
 

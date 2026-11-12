@@ -126,7 +126,7 @@ pub enum Event {
 struct PendingSource {
     path: PathBuf,
     /// App-owned copies (for example from the Photos picker) are deleted when
-    /// they duplicate existing content or fail, instead of lingering unused.
+    /// they duplicate existing content, instead of lingering unused.
     owned: bool,
 }
 
@@ -144,6 +144,7 @@ struct Queue {
     film_metadata_running: bool,
     web_sizes: VecDeque<(PhotoId, DerivativeSize)>,
     clear_failures: bool,
+    retry_failures: bool,
     preview: Option<PhotoId>,
     preview_running: bool,
     processed: usize,
@@ -155,6 +156,7 @@ struct Queue {
 impl Queue {
     fn has_background_work(&self, prepare_web_sizes: bool) -> bool {
         self.clear_failures
+            || self.retry_failures
             || !self.requests.is_empty()
             || !self.sources.is_empty()
             || !self.grid_repairs.is_empty()
@@ -165,6 +167,7 @@ impl Queue {
 
 enum Job {
     ClearFailures,
+    RetryFailures,
     Scan(ImportRequest),
     Import(PendingSource),
     Derivative(PhotoId, DerivativeSize),
@@ -366,8 +369,9 @@ impl Library {
         });
     }
 
-    /// Like [`Self::import`], for copies the app created itself. Copies that
-    /// duplicate existing content or fail to import are deleted.
+    /// Like [`Self::import`], for copies the app created itself. A copy that
+    /// duplicates existing content is deleted. A copy that fails stays in the
+    /// failure list until a retry imports it or the list is cleared.
     pub fn import_copies(&self, inputs: Vec<PathBuf>) {
         self.enqueue(ImportRequest {
             inputs,
@@ -386,6 +390,13 @@ impl Library {
         self.shared.wake.notify_all();
     }
 
+    /// Imports every file in the failure list again.
+    pub fn retry_failures(&self) {
+        self.shared.queue().retry_failures = true;
+        self.shared.wake.notify_all();
+    }
+
+    /// Empties the failure list and deletes the failed copies the app made.
     pub fn clear_failures(&self) {
         self.shared.queue().clear_failures = true;
         self.shared.wake.notify_all();
@@ -468,6 +479,8 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
             }
             if std::mem::take(&mut queue.clear_failures) {
                 Job::ClearFailures
+            } else if std::mem::take(&mut queue.retry_failures) {
+                Job::RetryFailures
             } else if let Some(request) = queue.requests.pop_front() {
                 Job::Scan(request)
             } else if let Some(source) = queue.sources.pop_front() {
@@ -485,8 +498,27 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
         };
         let events = match job {
             Job::ClearFailures => {
+                let failed = shared.catalog().failure_paths().unwrap_or_default();
+                for (path, _) in failed.iter().filter(|(_, owned)| *owned) {
+                    remove_copy(shared, path);
+                }
                 let _ = shared.catalog().clear_failures();
                 vec![Event::FailuresCleared]
+            }
+            Job::RetryFailures => {
+                let failed = shared.catalog().failure_paths().unwrap_or_default();
+                let mut queue = shared.queue();
+                for owned in [false, true] {
+                    let inputs: Vec<PathBuf> = failed
+                        .iter()
+                        .filter(|(_, is_owned)| *is_owned == owned)
+                        .map(|(path, _)| path.clone())
+                        .collect();
+                    if !inputs.is_empty() {
+                        queue.requests.push_back(ImportRequest { inputs, owned });
+                    }
+                }
+                Vec::new()
             }
             Job::Scan(request) => scan(shared, request),
             Job::Import(source) => import_one(shared, source),
@@ -568,7 +600,9 @@ fn scan(shared: &Shared, request: ImportRequest) -> Vec<Event> {
             owned: request.owned,
         }));
     for (input, message) in failed {
-        let _ = shared.catalog().record_failure(&input, &message);
+        let _ = shared
+            .catalog()
+            .record_failure(&input, &message, request.owned);
         let outcome = ImportOutcome::Failed(message);
         queue.summary.count(&outcome);
         queue.processed += 1;
@@ -606,15 +640,14 @@ fn import_one(shared: &Shared, source: PendingSource) -> Vec<Event> {
         Ok(outcome) => outcome,
         Err(error) => {
             let message = format!("{error:#}");
-            let _ = shared.catalog().record_failure(&source.path, &message);
+            let _ = shared
+                .catalog()
+                .record_failure(&source.path, &message, source.owned);
             ImportOutcome::Failed(message)
         }
     };
-    let discard_copy = matches!(
-        outcome,
-        ImportOutcome::Duplicate(_) | ImportOutcome::Failed(_)
-    );
-    if source.owned && discard_copy {
+    // A failed copy stays until it imports on a retry or the list is cleared.
+    if source.owned && matches!(outcome, ImportOutcome::Duplicate(_)) {
         remove_copy(shared, &source.path);
     }
     if shared.prepare_web_sizes

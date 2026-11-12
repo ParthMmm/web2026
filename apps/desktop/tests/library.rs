@@ -825,7 +825,8 @@ fn v1_catalog_migrates_and_background_backfills_without_reimporting() {
     connection
         .execute_batch(
             "ALTER TABLE photos DROP COLUMN film_simulation;
-        ALTER TABLE photos DROP COLUMN film_metadata_checked; PRAGMA user_version = 1;",
+        ALTER TABLE photos DROP COLUMN film_metadata_checked;
+        ALTER TABLE import_failures DROP COLUMN owned; PRAGMA user_version = 1;",
         )
         .unwrap();
     drop(connection);
@@ -839,7 +840,7 @@ fn v1_catalog_migrates_and_background_backfills_without_reimporting() {
         connection
             .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     assert_eq!(
         connection
@@ -1042,4 +1043,57 @@ fn an_import_that_finds_no_jpegs_still_finishes() {
         }
     };
     assert_eq!(summary, ImportSummary::default());
+}
+
+fn wait_for_finish(library: &Library) -> (Vec<ImportOutcome>, ImportSummary) {
+    let mut outcomes = Vec::new();
+    loop {
+        match library.recv_timeout(TIMEOUT).expect("import stalled") {
+            Event::Imported { outcome, .. } => outcomes.push(outcome),
+            Event::ImportFinished { summary } => return (outcomes, summary),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn a_failed_app_owned_copy_can_be_retried_and_is_deleted_only_when_cleared() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("library");
+    let session = temp.path().join("imports/session-1");
+    let copy = session.join("photo-000000.jpg");
+    std::fs::create_dir_all(&session).unwrap();
+    std::fs::write(&copy, b"a conversion that was cut short").unwrap();
+
+    let library = open(&root);
+    library.import_copies(vec![copy.clone()]);
+    let (_, summary) = wait_for_finish(&library);
+    assert_eq!(summary.failed, 1);
+    assert!(copy.exists(), "a failed copy stays, so a retry can read it");
+    drop(library);
+
+    let reopened = open(&root);
+    assert_eq!(
+        reopened.failures().len(),
+        1,
+        "the failure survives a restart"
+    );
+    solid(&copy, 60, 40, [10, 30, 90]);
+    reopened.retry_failures();
+    let (outcomes, summary) = wait_for_finish(&reopened);
+    assert_eq!(summary.added, 1, "{outcomes:?}");
+    drop(reopened);
+
+    let other = session.join("photo-000001.jpg");
+    std::fs::write(&other, b"also cut short").unwrap();
+    let library = open(&root);
+    library.import_copies(vec![other.clone()]);
+    wait_for_finish(&library);
+    library.clear_failures();
+    while !matches!(
+        library.recv_timeout(TIMEOUT).unwrap(),
+        Event::FailuresCleared
+    ) {}
+    assert!(!other.exists(), "clearing the list deletes the unused copy");
+    assert!(copy.exists(), "the imported copy is the photo's original");
 }
