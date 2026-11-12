@@ -160,6 +160,26 @@ OpenAPI Generator **7.23.0**, generator `rust`, library `reqwest`, says its Open
 
 The experiment crate was removed because CI never ran it. This result is its record. It is evidence about one generator, configuration and version, not a claim that all generators fail.
 
+## Client transport
+
+The client keeps idle connections open and reuses them. The Worker can refuse an upload before it reads the body, for example a `LengthMismatch`, and then close the connection. When a request fails to send on a connection that closed, the client sends it once more on a new connection. A timeout is never retried. `tests/transport.rs` proves the retry against a server that closes a reused connection, and fails when the retry is removed.
+
+`put_file(photo_id, kind, path)` streams a file from disk with its `Content-Length`, so a camera original is never read into memory. `put` takes `Bytes`, so a retry reuses the body without a copy.
+
+Measured on 2026-11-12 against `bun scripts/serve.ts` on localhost. Each run sent 20 uploads and 2 refused short uploads. The figure is the median of 5 interleaved runs, under a load average of 18 to 30 on 10 cores:
+
+| Upload             | New connection each time | Reused connection |
+| ------------------ | ------------------------ | ----------------- |
+| 8 MiB original     | 173.2 ms                 | 171.8 ms          |
+| 64-byte derivative | 4.4 ms                   | 3.8 ms            |
+
+On localhost there is no TLS handshake to save, so the gain is small. Repeat the run with `client/examples/upload_bench.rs`:
+
+```sh
+bun scripts/photo-fixture.ts /tmp/bench-photo 8388608
+OWNER_TOKEN=... cargo run --release --manifest-path client/Cargo.toml --example upload_bench -- http://127.0.0.1:8787 /tmp/bench-photo 20 original
+```
+
 ## Versions
 
 Effect **4.1.2**, Alchemy **2.0.0-beta.85** and their supporting packages are pinned exactly in `package.json` and `bun.lock`. Bun **1.4.1** owns this directory's TypeScript dependencies. Cargo owns `client/`. The Worker runs with compatibility date 2026-08-01, the newest date the pinned Miniflare supports.
