@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     let mut transitions = 0;
     while states
         .values()
-        .any(|state| !matches!(state, CloudState::Draft { .. } | CloudState::Failed { .. }))
+        .any(|state| matches!(state, CloudState::Local) || state.is_pending())
     {
         if let Event::CloudChanged { id, state } = library.recv_timeout(EVENT_TIMEOUT)? {
             transitions += 1;
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
                 );
                 drafts += 1;
             }
-            other @ PhotoView::Uploading { .. } => {
+            other => {
                 anyhow::bail!("{}: the Worker reports {other:?}", photo.file_name())
             }
         }

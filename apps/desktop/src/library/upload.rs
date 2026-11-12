@@ -1,9 +1,11 @@
 //! Uploading photos as private drafts. The background lane marks a photo queued, then
 //! prepares it: it hashes the original with SHA-256 and copies the three web sizes into the
 //! photo's upload folder, so the bytes the manifest declares never change under it. The
-//! transfer lanes then ask the server what it still misses, send each missing object whole,
-//! and finalize. Every call is safe to repeat, so a lost answer costs one more call, never a
-//! second upload. The catalog holds each state before the call that follows it.
+//! transfer lanes then ask the server what it still misses, stream each missing object from
+//! disk, and finalize. Every call is safe to repeat, so a lost answer costs one more call, never
+//! a second upload. The catalog holds each state before the call that follows it, and the state
+//! an upload ends in is the one the server reports: a photo another run published stays
+//! published.
 
 use super::{Event, Shared, ensure_derivative, ensure_unchanged};
 use crate::{
@@ -24,7 +26,7 @@ use std::{
 
 const CHANGING_ANSWER: &str = "the server kept changing its answer";
 
-/// At most this many uploads send at once. Each holds one object in memory while it sends.
+/// At most this many uploads send at once. Each streams one object from disk at a time.
 pub(super) const TRANSFER_LANES: usize = 2;
 
 /// The web sizes the API takes, and the derivative each one is.
@@ -146,7 +148,7 @@ fn prepared_manifest(shared: &Shared, id: &PhotoId) -> Result<Manifest, UploadFa
         && manifest.original.sha256 == original_sha256
         && RENDITIONS
             .iter()
-            .all(|&(kind, _)| read_staged(&folder, kind, &manifest).is_ok())
+            .all(|&(kind, _)| staged_copy(&folder, kind, &manifest).is_ok())
     {
         return Ok(manifest);
     }
@@ -189,12 +191,12 @@ fn stage(rendered: &Path, staged: &Path) -> anyhow::Result<Derivative> {
     let temporary = staged.with_extension("tmp");
     fs::copy(rendered, &temporary)?;
     fs::rename(&temporary, staged)?;
-    let bytes = fs::read(staged)?;
+    let (sha256, bytes) = sha256_file(staged)?;
     let (width, height) = image::image_dimensions(staged).context("unreadable web size")?;
     Ok(Derivative {
-        bytes: bytes.len() as u64,
+        bytes,
         height,
-        sha256: hex(&Sha256::digest(&bytes)),
+        sha256,
         width,
     })
 }
@@ -251,15 +253,24 @@ fn hex(digest: &[u8]) -> String {
     CloudId::from_digest(digest).as_str().to_owned()
 }
 
-/// The bytes to send for `kind`, checked against the manifest first.
-fn read_object(
+/// A file's SHA-256 and length, read in chunks so no file is held whole in memory.
+fn sha256_file(path: &Path) -> std::io::Result<(String, u64)> {
+    let mut file = fs::File::open(path)?;
+    let mut sha256 = Sha256::new();
+    let bytes = std::io::copy(&mut file, &mut sha256)?;
+    Ok((hex(&sha256.finalize()), bytes))
+}
+
+/// The file to send for `kind`, checked against the manifest first. The server checks the hash
+/// again as the file streams, so a change after this check is refused, not stored.
+fn object_path(
     shared: &Shared,
     id: &PhotoId,
     kind: ObjectKind,
     manifest: &Manifest,
-) -> Result<Vec<u8>, UploadFailure> {
+) -> Result<PathBuf, UploadFailure> {
     if kind != ObjectKind::Original {
-        return read_staged(&shared.upload_dir(id), kind, manifest);
+        return staged_copy(&shared.upload_dir(id), kind, manifest);
     }
     let paths = shared
         .catalog()
@@ -267,12 +278,12 @@ fn read_object(
         .map_err(|_| UploadFailure::OriginalMissing)?;
     let mut present = false;
     for path in paths {
-        let Ok(bytes) = fs::read(&path) else {
+        let Ok((sha256, _)) = sha256_file(&path) else {
             continue;
         };
         present = true;
-        if hex(&Sha256::digest(&bytes)) == manifest.original.sha256 {
-            return Ok(bytes);
+        if sha256 == manifest.original.sha256 {
+            return Ok(path);
         }
     }
     Err(if present {
@@ -282,15 +293,17 @@ fn read_object(
     })
 }
 
-fn read_staged(
+fn staged_copy(
     folder: &Path,
     kind: ObjectKind,
     manifest: &Manifest,
-) -> Result<Vec<u8>, UploadFailure> {
+) -> Result<PathBuf, UploadFailure> {
     let (_, sha256) = manifest.facts(kind);
-    fs::read(staged_path(folder, kind))
+    let path = staged_path(folder, kind);
+    sha256_file(&path)
         .ok()
-        .filter(|bytes| hex(&Sha256::digest(bytes)) == sha256)
+        .filter(|(found, _)| found == sha256)
+        .map(|_| path)
         .ok_or_else(|| UploadFailure::Renditions {
             message: format!("the prepared {} copy is gone or changed", kind.as_str()),
         })
@@ -350,13 +363,14 @@ fn transfer_one(shared: &Shared, api: &Api, sender: &SyncSender<Event>, transfer
         return;
     }
     let state = match result {
-        Ok(()) => {
+        Ok(state) => {
             let _ = fs::remove_dir_all(shared.upload_dir(&id));
-            CloudState::Draft { cloud_id }
+            state
         }
-        Err(error @ (CallError::Transient(_) | CallError::AlreadyDraft)) => {
+        Err(error @ (CallError::Transient(_) | CallError::File(_) | CallError::AlreadyDraft)) => {
             let message = match error {
                 CallError::Transient(message) => message,
+                CallError::File(message) => format!("couldn't read a file to send ({message})"),
                 _ => CHANGING_ANSWER.into(),
             };
             let failed_tries = transfer.failed_tries + 1;
@@ -396,8 +410,9 @@ fn record(shared: &Shared, id: &PhotoId, state: CloudState) -> Event {
     }
 }
 
-/// Begin, send what the server misses, finalize. A write the server refuses because the
-/// photo is already a draft starts over from `begin`, which then reports the draft.
+/// Begin, send what the server misses, finalize, and return the state the server reports once
+/// the upload is done: Draft, or a later state another run reached. A write the server refuses
+/// because the photo is past upload starts over from `begin`, which then reports that state.
 fn send(
     shared: &Shared,
     api: &Api,
@@ -405,11 +420,11 @@ fn send(
     id: &PhotoId,
     cloud_id: &CloudId,
     manifest: &Manifest,
-) -> Result<(), CallError> {
+) -> Result<CloudState, CallError> {
     'round: for _ in 0..2 {
         let missing = match api.begin(manifest)? {
-            PhotoView::Draft { .. } => return Ok(()),
             PhotoView::Uploading { missing, .. } => missing,
+            done => return Ok(CloudState::reported(&done)),
         };
         let mut left = missing.clone();
         let _ = sender.send(record(shared, id, uploading(cloud_id, &left)));
@@ -417,18 +432,26 @@ fn send(
             if shared.queue().stopped {
                 return Err(CallError::Transient("the library closed".into()));
             }
-            let body = read_object(shared, id, kind, manifest).map_err(CallError::Stop)?;
-            match api.put(cloud_id, kind, &body) {
+            let path = object_path(shared, id, kind, manifest).map_err(CallError::Stop)?;
+            match api.put_file(cloud_id, kind, &path) {
                 Ok(()) => {}
                 Err(CallError::AlreadyDraft) => continue 'round,
+                Err(
+                    error @ (CallError::File(_) | CallError::Stop(UploadFailure::Rejected { .. })),
+                ) => {
+                    // The file may have gone or changed while it streamed. If so, say that: the
+                    // person can act on it, and a server refusal would only say to report it.
+                    object_path(shared, id, kind, manifest).map_err(CallError::Stop)?;
+                    return Err(error);
+                }
                 Err(error) => return Err(error),
             }
             left.retain(|other| *other != kind);
             let _ = sender.send(record(shared, id, uploading(cloud_id, &left)));
         }
         match api.finalize(cloud_id) {
-            Ok(PhotoView::Draft { .. }) => return Ok(()),
             Ok(PhotoView::Uploading { .. }) | Err(CallError::AlreadyDraft) => continue 'round,
+            Ok(done) => return Ok(CloudState::reported(&done)),
             Err(error) => return Err(error),
         }
     }

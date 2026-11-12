@@ -4,7 +4,7 @@
 
 use crate::cloud::{CloudId, UploadFailure};
 use photo_upload_client::{ApiError, Client, ClientError, Problem};
-use std::{fmt, process::Command};
+use std::{fmt, path::Path, process::Command};
 
 pub use photo_upload_client::{Derivative, Kind as ObjectKind, Manifest, Original, PhotoView};
 
@@ -84,6 +84,8 @@ pub(crate) enum CallError {
     Transient(String),
     /// The photo became a draft before this write; ask the server again.
     AlreadyDraft,
+    /// The local file to send couldn't be opened or read.
+    File(String),
     /// Retrying the same call cannot help.
     Stop(UploadFailure),
 }
@@ -104,8 +106,16 @@ impl Api {
         self.client.begin(manifest).map_err(classify)
     }
 
-    pub(crate) fn put(&self, id: &CloudId, kind: ObjectKind, body: &[u8]) -> Result<(), CallError> {
-        self.client.put(id.as_str(), kind, body).map_err(classify)
+    /// Streams the file at `path` as one object, with its length from disk.
+    pub(crate) fn put_file(
+        &self,
+        id: &CloudId,
+        kind: ObjectKind,
+        path: &Path,
+    ) -> Result<(), CallError> {
+        self.client
+            .put_file(id.as_str(), kind, path)
+            .map_err(classify)
     }
 
     pub(crate) fn finalize(&self, id: &CloudId) -> Result<PhotoView, CallError> {
@@ -125,6 +135,7 @@ fn classify(error: ClientError) -> CallError {
             };
             return CallError::Transient(reason.into());
         }
+        ClientError::File(error) => return CallError::File(error.kind().to_string()),
         ClientError::Http { status, error } => (status, error),
     };
     match (status, error) {
@@ -162,5 +173,19 @@ fn describe(problem: &Problem) -> String {
         Problem::DimensionsMismatch { kind, .. } => {
             format!("{} has other dimensions than declared", kind.as_str())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_local_file_error_is_not_blamed_on_the_server() {
+        let error = std::io::Error::from(std::io::ErrorKind::NotFound);
+        assert!(matches!(
+            classify(ClientError::File(error)),
+            CallError::File(_)
+        ));
     }
 }
