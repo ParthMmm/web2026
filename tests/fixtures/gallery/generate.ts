@@ -19,7 +19,8 @@ interface Seed {
   /** Size of the drawn "original". */
   width: number;
   height: number;
-  /** Two oklch hues for the sky and the ground. */
+  /** Two hues for the sky and the ground. librsvg, which sharp draws SVG
+      with, reads hsl() but not oklch(). */
   hues: [number, number];
   publishedAt: string;
   capturedAt?: string;
@@ -92,13 +93,13 @@ const drawing = (seed: Seed): Buffer => {
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="oklch(0.85 0.08 ${sky})"/>
-      <stop offset="1" stop-color="oklch(0.65 0.14 ${sky})"/>
+      <stop offset="0" stop-color="hsl(${sky} 55% 78%)"/>
+      <stop offset="1" stop-color="hsl(${sky} 50% 55%)"/>
     </linearGradient>
   </defs>
   <rect width="100%" height="100%" fill="url(#sky)"/>
-  <circle cx="${width * 0.68}" cy="${height * 0.42}" r="${Math.min(width, height) * 0.12}" fill="oklch(0.93 0.06 85)"/>
-  <rect y="${height * 0.62}" width="100%" height="${height * 0.38}" fill="oklch(0.4 0.09 ${ground})"/>
+  <circle cx="${width * 0.68}" cy="${height * 0.42}" r="${Math.min(width, height) * 0.12}" fill="hsl(45 80% 90%)"/>
+  <rect y="${height * 0.62}" width="100%" height="${height * 0.38}" fill="hsl(${ground} 35% 28%)"/>
 </svg>`);
 };
 
