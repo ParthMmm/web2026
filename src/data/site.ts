@@ -24,13 +24,13 @@ export const work: Record[] = [
     description:
       "Sole engineer on a full-stack SaaS for state filing compliance. Shipped a Chrome extension that automates 30+ form fields.",
     title: "Carbon Law Group",
-    url: "/work/carbon-law-group",
+    url: "/work/carbon-law-group/",
   },
   {
     description:
       "Healthcare platform with an admin dashboard for medical organizations and patient records. Fixed production bugs affecting 125+ users.",
     title: "Embic",
-    url: "/work/embic",
+    url: "/work/embic/",
   },
   {
     description: "Landing page for a clinical research facility.",
@@ -52,34 +52,34 @@ export const projects: Record[] = [
       "Runs Magic: The Gathering nights for a playgroup, formerly Mana Margherita. Swiss and Commander tournaments, ratings, and a live timer on the web, the TV, and iPhone.",
     site: "https://motehall.com/",
     title: "Möte",
-    url: "/projects/mote",
+    url: "/projects/mote/",
   },
   {
     description:
       "Playlist builder for DJ sets, formerly Tracklister. Paste a tracklist or a link, and a durable import on Cloudflare parses it, matches each track, and builds an Apple Music playlist.",
     site: "https://versos.studio/",
     title: "Versos",
-    url: "/projects/versos",
+    url: "/projects/versos/",
   },
   {
     description:
       "Shared library for DJ sets and mixes. Native apps for iPhone, iPad, Mac, and Apple TV, and a web app, on a Cloudflare API with an audio server I own.",
     site: "https://github.com/ParthMmm/orbis",
     title: "Orbis",
-    url: "/projects/orbis",
+    url: "/projects/orbis/",
   },
   {
     description:
       "Travel app for planning trips together. Shared trips, places, and itineraries on Expo and Cloudflare, and Claude or ChatGPT can help plan over MCP.",
     title: "Beacon",
-    url: "/projects/beacon",
+    url: "/projects/beacon/",
   },
   {
     description:
       "Social platform for music lovers. Built during Buildspace Nights and Weekends S2.",
     site: "https://github.com/ParthMmm/auriom",
     title: "Auriom",
-    url: "/projects/auriom",
+    url: "/projects/auriom/",
   },
 ];
 
