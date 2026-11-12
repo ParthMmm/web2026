@@ -92,9 +92,37 @@
   (() => {
     const KEY = "theme-override";
     const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+    /* A browser that blocks site data throws on every use of localStorage,
+       even reading the property. The visitor's choice then lasts for the
+       page, and the theme and the toggle still work. */
+    const choice = {
+      forget: (key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* Nothing was stored. */
+        }
+      },
+      read: () => {
+        try {
+          return localStorage.getItem(KEY);
+        } catch {
+          return null;
+        }
+      },
+      write: (theme) => {
+        try {
+          localStorage.setItem(KEY, theme);
+        } catch {
+          /* The choice lasts until the page unloads. */
+        }
+      },
+    };
+
     /* "theme" held the resolved theme, not a choice, so it can't be trusted. */
-    localStorage.removeItem("theme");
-    const stored = localStorage.getItem(KEY);
+    choice.forget("theme");
+    const stored = choice.read();
 
     const CANVAS = { dark: "#1f1d17", light: "#fcf6e9" };
 
@@ -109,7 +137,7 @@
 
     apply(stored ? stored === "dark" : systemDark.matches);
     systemDark.addEventListener("change", (event) => {
-      if (!localStorage.getItem(KEY)) {
+      if (!choice.read()) {
         apply(event.matches);
       }
     });
@@ -118,9 +146,9 @@
       const isDark = !document.documentElement.classList.contains("dark");
       apply(isDark);
       if (isDark === systemDark.matches) {
-        localStorage.removeItem(KEY);
+        choice.forget(KEY);
       } else {
-        localStorage.setItem(KEY, isDark ? "dark" : "light");
+        choice.write(isDark ? "dark" : "light");
       }
     };
 
