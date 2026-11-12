@@ -35,6 +35,17 @@ export default defineConfig({
       },
     },
     {
+      files: ["src/lib/gallery-manifest.ts"],
+      rules: {
+        // This file is the parser at the boundary these rules ask for: it
+        // turns the fetched manifest into typed photos. Effect Schema would
+        // add about 24 kB gzipped to a page that ships no Effect otherwise.
+        "anti-slop/no-runtime-typeof": "off",
+        "anti-slop/no-unknown-parameters": "off",
+        "anti-slop/no-unsafe-dictionary-type": "off",
+      },
+    },
+    {
       files: ["apps/api/src/photos/blobs.ts", "apps/api/src/photos/domain.ts"],
       rules: {
         // Effect schemas export a value and its type under one name. The
