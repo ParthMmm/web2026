@@ -94,3 +94,11 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Checked.** axe-core reports 0 violations on the page. The `<head>` of the existing pages is byte-identical before and after the `Layout` change.
 - **Tests.** `tests/site/not-found.test.ts`: the build has a `404.html` with an `h1` and a home link inside `main`; it is `noindex` and absent from the sitemap.
 - **To confirm after the next deploy.** `curl -i https://www.parthm.dev/nope` must return `404` with the page. The `alchemy.run.ts` line is typechecked but I could not run it: I did not deploy.
+
+#### S8. With site data blocked, the theme is wrong and the toggle is dead (fixed)
+
+- **Evidence.** Chrome, with an init script that makes `window.localStorage` throw `SecurityError` (what Chrome and Safari do when a visitor blocks site data), system theme dark: the page rendered light, `html` had no `dark` class, and clicking the toggle did nothing. The inline theme script's first statement is `localStorage.removeItem("theme")`; it threw, so the script never applied the theme or registered the click handler. This is on every page. `src/lib/figure.ts` already guards `sessionStorage` for the same reason; the theme script did not.
+- **Fix.** The script reads, writes and forgets the choice through three guarded functions. With storage blocked, the page follows the system theme and the toggle works for the life of the page.
+- **Tests.** `tests/site/theme.test.ts` takes the inline script out of the built home page and runs it in a `node:vm` context that has only what the script touches. "with site data blocked…" failed before the fix. "a stored choice wins over the system theme…" covers the override rule, which had no test.
+- **Checked in Chrome** after the fix, storage still blocked: dark theme applied, one click switches to light.
+- **State machine.** The theme is two facts: the visitor's choice (`dark`, `light` or none) and the system theme. The resolved theme is the choice, else the system. Toggling to the system's theme clears the choice. That was already explicit enough in three small functions, so I did not restructure it.
