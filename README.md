@@ -45,6 +45,20 @@ bun run deploy
 
 State lives in `.alchemy/` (ignored). Don't delete it while the Worker is deployed; it tracks ownership.
 
+## Photos
+
+`/photos/` shows the photos published from Rune. The page is static; it fetches `<PUBLIC_GALLERY_URL>/v1.json` in the browser, so a publish or unpublish shows without a rebuild. While `PUBLIC_GALLERY_URL` is unset, the page says the gallery is not connected, carries `noindex`, stays out of the sitemap, and the masthead does not link to it.
+
+To try it against seeded data:
+
+```sh
+bun tests/fixtures/gallery/serve.ts    # http://127.0.0.1:8787/gallery
+PUBLIC_GALLERY_URL=http://127.0.0.1:8787/gallery bun run build
+bun run preview
+```
+
+`bun tests/fixtures/gallery/generate.ts` redraws the fixture.
+
 ## Now playing
 
 The Worker serves what is playing now as JSON. Sources, in order: Orbis Presence, Last.fm (NepTunes on the laptop), then MusicKit recently played. Copy `.env.example` to `.env` and fill in the ones you want. MusicKit needs a one-time Apple sign-in:
