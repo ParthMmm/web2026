@@ -11,7 +11,7 @@ const linkAttrs = isExternal ? { rel: "noopener noreferrer", target: "_blank" } 
 ---
 
 <article class="record">
-  <h3 class="record-title">
+  <h2 class="record-title">
     {
       url ? (
         <a href={url} {...linkAttrs}>
@@ -36,7 +36,7 @@ const linkAttrs = isExternal ? { rel: "noopener noreferrer", target: "_blank" } 
         title
       )
     }
-  </h3>
+  </h2>
   <p class="record-description">{description}</p>
 </article>
 

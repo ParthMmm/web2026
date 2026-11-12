@@ -3,9 +3,11 @@ interface Props {
 	label: string;
 	/** The section's accessible name. Falls back to the visible rail label. */
 	title?: string;
+	/** `h1` when the chapter is the whole page, so the page has a title. */
+	heading?: "h1" | "h2";
 }
 
-const { label, title } = Astro.props;
+const { label, title, heading: Heading = "h2" } = Astro.props;
 const id = `chapter-${label.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-")}`;
 ---
 
@@ -13,7 +15,7 @@ const id = `chapter-${label.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-")}`;
   <hr class="rule" />
   <div class="spine">
     <div class="rail">
-      <h2 id={id} class="rail-label">{title ?? label}</h2>
+      <Heading id={id} class="rail-label">{title ?? label}</Heading>
     </div>
     <div class="flow">
       <slot />

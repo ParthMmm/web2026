@@ -71,3 +71,10 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Fix.** `public/_headers` gives `/_astro/*` `Cache-Control: public, max-age=31536000, immutable`. Pages keep the default, so a deploy still shows up at once. Alchemy reads `_headers` from the asset directory (`@alchemy.run/cloudflare/src/Workers/Assets.ts`).
 - **Tests.** `tests/site/caching.test.ts`: the built `_headers` marks `/_astro/*` immutable for a year, and every file under `/_astro/` has a content hash in its name. The second test is what makes the first safe.
 - **To confirm after the next deploy.** `curl -I https://www.parthm.dev/_astro/<any file>` must show `immutable`. I did not deploy.
+
+#### S5. `/projects/` and `/work/` have no `h1` (fixed)
+
+- **Evidence.** axe-core: `page-has-heading-one` fails on both pages, in both themes and at both widths. Their outline started at `h2` ("Projects"), with each record an `h3`. A screen-reader user who jumps to the page title finds none, and a search engine has no heading for the page.
+- **Fix.** `Chapter` takes `heading="h1"`; the two index pages pass it. `Record`, which only those pages use, moves from `h3` to `h2` so the outline stays unbroken. The heading is styled by class, not by tag.
+- **No visual change, proven.** The computed-style dump of both pages shows 0 differences at both widths and in both themes.
+- **Tests.** `tests/site/headings.test.ts`: every page has exactly one `h1`, and no page skips a heading level.
