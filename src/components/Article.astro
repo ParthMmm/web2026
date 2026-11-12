@@ -6,8 +6,8 @@ interface Props {
 	title: string;
 	description?: string;
 	/** Live site or repository, when the thing itself is reachable. */
-	url?: string;
-	urlLabel?: string;
+	url?: string | undefined;
+	urlLabel?: string | undefined;
 }
 
 const { section, sectionUrl, title, description, url, urlLabel } = Astro.props;
