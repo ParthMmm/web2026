@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "dev:stack": "alchemy dev --stage \"dev_${USER:-agent}_$(basename \"$(git rev-parse --show-toplevel)\" | sed 's/[^A-Za-z0-9_-]/-/g')\"",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

@@ -17,6 +17,10 @@ bun install
 bun run dev
 ```
 
+`bun run dev` serves the site alone. `bun run dev:stack` runs `alchemy dev`: the site on Astro's dev server and the now-playing Worker in workerd, both on this machine. It needs no Cloudflare login and creates nothing on Cloudflare; the domains in `alchemy.run.ts` apply only to a deploy. The stage is `dev_<user>_<worktree directory>`, so two worktrees never share one.
+
+When both are ready it prints their addresses, such as `{ nowPlaying: 'http://localhost:1337', url: 'http://localhost:4321/' }`, and writes them to `.alchemy/state/web2026-site/<stage>/__stack_output__.json`. A busy port moves to the next free one, so read the address before you open it.
+
 ## Checks
 
 ```sh

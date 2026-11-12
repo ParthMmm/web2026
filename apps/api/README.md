@@ -104,6 +104,7 @@ bun run smoke
 - `test:workerd` runs in workerd through Miniflare. It runs the same blob contract on the R2 adapter with a real R2 binding, and upload, publish, unpublish and list on real R2 and D1. It also bundles the Worker the way Alchemy does, checks that runtime init answers with 401, not a crash, and reads the public gallery from the bundled Worker.
 - `smoke` bundles the Worker into workerd with local R2 and D1, then runs the Rust client over HTTP. The client sends a wrong-hash upload, a short upload, all four objects, and two finalize calls. It then publishes twice, lists, reads the manifest and all three derivatives without a token, checks that the draft's derivatives and the original were never public, unpublishes twice, and checks that the public copies are gone.
 - `bun run dev` serves the same local Worker. Set `OWNER_TOKEN` first.
+- `bun run dev:stack` runs `alchemy dev`: the Worker in workerd with local R2 and D1, on a stage named after the worktree. Set `OWNER_TOKEN` first. It needs no Cloudflare login, prints the Worker's address, and writes it to `.alchemy/state/web2026-photos/<stage>/__stack_output__.json`.
 
 No check deploys or needs Cloudflare credentials.
 

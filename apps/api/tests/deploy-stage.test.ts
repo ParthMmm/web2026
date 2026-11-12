@@ -19,6 +19,9 @@ const scriptsOf = (file: string) =>
   );
 
 const stageChanging = /\balchemy (?:deploy|destroy)\b/u;
+// Every checkout of one user shares `dev_$USER`, so a dev script names the worktree too.
+const worktreeStage =
+  /\balchemy dev --stage "dev_\$\{USER:-agent\}_\$\(basename "\$\(git rev-parse --show-toplevel\)"/u;
 
 describe.each(["../package.json", "../../../package.json"])(
   "scripts in %s",
@@ -37,6 +40,12 @@ describe.each(["../package.json", "../../../package.json"])(
 
     it.each(scripts)("%s asks before it applies", (_name, command) => {
       expect(command).not.toMatch(/--yes\b|\s-y\b/u);
+    });
+
+    it("runs alchemy dev on a stage named after the worktree", () => {
+      expect(Object.fromEntries(scriptsOf(file))["dev:stack"]).toMatch(
+        worktreeStage
+      );
     });
   }
 );

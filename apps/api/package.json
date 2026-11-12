@@ -7,6 +7,7 @@
     "test:workerd": "vitest run --config vitest.workerd.config.ts",
     "typecheck": "tsc --noEmit",
     "dev": "bun scripts/serve.ts",
+    "dev:stack": "alchemy dev --stage \"dev_${USER:-agent}_$(basename \"$(git rev-parse --show-toplevel)\" | sed 's/[^A-Za-z0-9_-]/-/g')\"",
     "openapi": "bun scripts/openapi.ts",
     "smoke": "bun scripts/smoke.ts",
     "deploy": "alchemy deploy --stage prod",
