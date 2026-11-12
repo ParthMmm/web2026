@@ -82,6 +82,41 @@ const parsers = new Map([
   ["VP8X", parseVp8x],
 ]);
 
+export const VP8X_BODY_START = 30;
+export const CHUNK_HEADER_BYTES = 8;
+// A still image needs at most an alpha chunk and an image chunk; the bound stops a file of many tiny chunks.
+export const MAX_BODY_CHUNKS = 8;
+
+export type BodyChunk =
+  | "Image"
+  | "Alpha"
+  | "Metadata"
+  | "Animation"
+  | "Unknown";
+
+const bodyChunks = new Map<string, BodyChunk>([
+  ["VP8 ", "Image"],
+  ["VP8L", "Image"],
+  ["ALPH", "Alpha"],
+  ["ICCP", "Metadata"],
+  ["EXIF", "Metadata"],
+  ["XMP ", "Metadata"],
+  ["ANIM", "Animation"],
+  ["ANMF", "Animation"],
+]);
+
+/** The VP8X flags only announce chunks. A reader finds an EXIF chunk whether or not its flag is set. */
+export const isExtended = (prefix: Uint8Array) => fourcc(prefix, 12) === "VP8X";
+
+/** Reads one chunk header that starts at `offset`, and where the next chunk starts. */
+export const readBodyChunk = (header: Uint8Array, offset: number) => {
+  const size = u32(header, 4);
+  return {
+    kind: bodyChunks.get(fourcc(header, 0)) ?? "Unknown",
+    next: offset + CHUNK_HEADER_BYTES + size + (size & 1),
+  };
+};
+
 // The RIFF size must match the verified object size, so a truncated file fails even with a valid header.
 export const parseWebpHeader = (
   prefix: Uint8Array,

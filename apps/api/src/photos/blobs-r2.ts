@@ -65,18 +65,18 @@ export const r2Blobs = (
           ),
           Effect.mapError(unavailable("head"))
         ),
-      prefix: (key, length) =>
-        bucket.get(key, { range: { length, offset: 0 } }).pipe(
-          runtime,
-          Effect.flatMap((object) =>
-            object === null ? Effect.succeed(null) : object.bytes()
-          ),
-          Effect.mapError(unavailable("prefix"))
-        ),
       put: (key, body, expect) =>
         write(key, body, expect).pipe(
           Effect.asVoid,
           Effect.mapError(rejectedOr(key, "put"))
+        ),
+      range: (key, offset, length) =>
+        bucket.get(key, { range: { length, offset } }).pipe(
+          runtime,
+          Effect.flatMap((object) =>
+            object === null ? Effect.succeed(null) : object.bytes()
+          ),
+          Effect.mapError(unavailable("range"))
         ),
       remove: (keys) =>
         keys.length === 0

@@ -41,7 +41,15 @@ import type {
   Stored,
   Uploading,
 } from "./internal/ledger.ts";
-import { parseWebpHeader, WEBP_PREFIX_BYTES } from "./internal/webp.ts";
+import {
+  CHUNK_HEADER_BYTES,
+  isExtended,
+  MAX_BODY_CHUNKS,
+  parseWebpHeader,
+  readBodyChunk,
+  VP8X_BODY_START,
+  WEBP_PREFIX_BYTES,
+} from "./internal/webp.ts";
 
 export interface StoreInput {
   readonly photoId: PhotoId;
@@ -103,21 +111,35 @@ const draftView = ({ finalizedAt, manifest, photoId }: Draft): DraftView => ({
   photoId,
 });
 
+/** What the chunks after the VP8X header hold. `wellFormed` means one image chunk, and chunks that fill the file exactly. */
+interface BodyScan {
+  readonly animated: boolean;
+  readonly hasMetadata: boolean;
+  readonly wellFormed: boolean;
+}
+
+const SIMPLE_BODY: BodyScan = {
+  animated: false,
+  hasMetadata: false,
+  wellFormed: true,
+};
+
 const webpProblems = (
   kind: DerivativeKind,
   declared: { readonly width: number; readonly height: number },
   prefix: Uint8Array,
-  totalBytes: number
+  totalBytes: number,
+  body: BodyScan
 ): readonly Problem[] => {
   const header = parseWebpHeader(prefix, totalBytes);
-  if (header._tag === "NotWebp") {
+  if (header._tag === "NotWebp" || !body.wellFormed) {
     return [{ _tag: "NotWebp", kind }];
   }
   const problems: Problem[] = [];
-  if (header.animated) {
+  if (header.animated || body.animated) {
     problems.push({ _tag: "Animated", kind });
   }
-  if (header.hasMetadata) {
+  if (header.hasMetadata || body.hasMetadata) {
     problems.push({ _tag: "HasMetadata", kind });
   }
   if (header.width !== declared.width || header.height !== declared.height) {
@@ -222,6 +244,35 @@ export class Photos extends Context.Service<
               }))
             );
 
+      const scanBody = (key: BlobKey, totalBytes: number) =>
+        Effect.gen(function* scanBodyChunks() {
+          let animated = false;
+          let hasMetadata = false;
+          let images = 0;
+          let offset = VP8X_BODY_START;
+          for (let read = 0; offset < totalBytes; read += 1) {
+            const header =
+              read < MAX_BODY_CHUNKS
+                ? yield* blobs.range(key, offset, CHUNK_HEADER_BYTES)
+                : null;
+            if (header === null || header.length < CHUNK_HEADER_BYTES) {
+              return { animated, hasMetadata, wellFormed: false };
+            }
+            const chunk = readBodyChunk(header, offset);
+            if (chunk.kind === "Unknown") {
+              return { animated, hasMetadata, wellFormed: false };
+            }
+            animated ||= chunk.kind === "Animation";
+            hasMetadata ||= chunk.kind === "Metadata";
+            images += chunk.kind === "Image" ? 1 : 0;
+            offset = chunk.next;
+          }
+          // An animation keeps its frames inside ANMF chunks, so it has no top-level image chunk.
+          const wellFormed =
+            offset === totalBytes && (animated ? images === 0 : images === 1);
+          return { animated, hasMetadata, wellFormed } satisfies BodyScan;
+        });
+
       const inspect = (stored: Uploading, at: Location) =>
         Effect.gen(function* inspectVariant() {
           if (at._tag === "Missing") {
@@ -231,10 +282,14 @@ export class Photos extends Context.Service<
             return [];
           }
           const facts = stored.manifest[at.kind];
-          const prefix = yield* blobs.prefix(at.key, WEBP_PREFIX_BYTES);
-          return prefix === null
-            ? missing(at.kind)
-            : webpProblems(at.kind, facts, prefix, facts.bytes);
+          const prefix = yield* blobs.range(at.key, 0, WEBP_PREFIX_BYTES);
+          if (prefix === null) {
+            return missing(at.kind);
+          }
+          const body = isExtended(prefix)
+            ? yield* scanBody(at.key, facts.bytes)
+            : SIMPLE_BODY;
+          return webpProblems(at.kind, facts, prefix, facts.bytes, body);
         });
 
       const promote = (stored: Uploading, at: Location) =>

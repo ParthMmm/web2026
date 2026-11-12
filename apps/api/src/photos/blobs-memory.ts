@@ -5,7 +5,7 @@ import { BlobMissing, BlobRejected, Blobs, BlobUnavailable } from "./blobs.ts";
 import type { BlobKey, Expected } from "./blobs.ts";
 import type { Sha256 } from "./domain.ts";
 
-export type BlobOperation = "put" | "copy" | "holds" | "prefix" | "remove";
+export type BlobOperation = "put" | "copy" | "holds" | "range" | "remove";
 
 interface StoredBlob {
   readonly bytes: Uint8Array;
@@ -95,10 +95,6 @@ export const makeMemoryBlobs = () => {
               );
             })
           ),
-        prefix: (key, length) =>
-          fault("prefix").pipe(
-            Effect.map(() => objects.get(key)?.bytes.slice(0, length) ?? null)
-          ),
         put: (key, body, expect) =>
           Effect.gen(function* put() {
             yield* fault("put");
@@ -111,6 +107,13 @@ export const makeMemoryBlobs = () => {
             );
             objects.set(key, yield* verified(key, bytes, expect));
           }),
+        range: (key, offset, length) =>
+          fault("range").pipe(
+            Effect.map(
+              () =>
+                objects.get(key)?.bytes.slice(offset, offset + length) ?? null
+            )
+          ),
         remove: (keys) =>
           fault("remove").pipe(
             Effect.andThen(

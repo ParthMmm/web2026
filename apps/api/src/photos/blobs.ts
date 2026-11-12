@@ -57,8 +57,10 @@ export class Blobs extends Context.Service<
       key: BlobKey,
       expect: Expected
     ) => Effect.Effect<boolean, BlobUnavailable>;
-    readonly prefix: (
+    /** Up to `length` bytes from `offset`, or null when the key holds nothing. */
+    readonly range: (
       key: BlobKey,
+      offset: number,
       length: number
     ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
     readonly remove: (

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { expect, it } from "@effect/vitest";
 import { Effect, Layer, Stream } from "effect";
 import { Digest } from "effect/crypto";
@@ -518,6 +520,51 @@ it.effect(
         manifest: rerendered.manifest,
         missing: ["w480"],
       });
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "finalize rejects an extended WebP that hides an EXIF chunk behind a cleared header flag",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* run() {
+      const hidden = Uint8Array.from(
+        readFileSync(new URL("fixtures/webp/exif.webp", import.meta.url))
+      );
+      // Byte 20 holds the VP8X feature flags. The EXIF chunk itself stays in the file.
+      hidden[20] = 0;
+      const { bodies, manifest, photoId } = yield* declare({
+        ...validBodies(),
+        w480: hidden,
+      });
+      yield* Photos.use((photos) => photos.begin(manifest));
+      yield* uploadAll(photoId, bodies);
+
+      expect(yield* rejectedProblems(photoId)).toEqual([
+        { _tag: "HasMetadata", kind: "w480" },
+      ]);
+      expect(keysUnder(objects, "photos/")).toEqual([]);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "finalize accepts an extended WebP that holds only an alpha chunk and its image",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* run() {
+      const { bodies, manifest, photoId } = yield* declare({
+        ...validBodies(),
+        w480: Uint8Array.from(
+          readFileSync(new URL("fixtures/webp/alpha.webp", import.meta.url))
+        ),
+      });
+      const photos = yield* Photos;
+      yield* photos.begin(manifest);
+      yield* uploadAll(photoId, bodies);
+
+      expect((yield* photos.finalize(photoId))._tag).toBe("Draft");
     }).pipe(Effect.provide(layer));
   }
 );
