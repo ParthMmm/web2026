@@ -6,6 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 import expressiveCode from "astro-expressive-code";
 import { defineConfig } from "astro/config";
 
+const FONT_FILE = /\.woff2?$/u;
+
 // https://astro.build/config
 export default defineConfig({
   integrations: [
@@ -38,6 +40,14 @@ export default defineConfig({
   },
   site: "https://www.parthm.dev",
   vite: {
+    build: {
+      // Vite inlines any asset under 4 kB as base64. Four Geist Mono files
+      // fall under that, so every page paid for Cyrillic Extended, Vietnamese
+      // and symbol glyphs in its render-blocking stylesheet. A font stays a
+      // file: the browser then fetches only the subsets the page renders.
+      // `undefined` keeps Vite's default for everything else.
+      assetsInlineLimit: (file) => (FONT_FILE.test(file) ? false : undefined),
+    },
     plugins: [tailwindcss()],
   },
 });
