@@ -1,0 +1,8 @@
+# Read by Cloudflare's static-asset layer (and by Alchemy at deploy).
+#
+# Astro puts a content hash in the name of every file under /_astro/, so a
+# changed file is a new URL. The default is `max-age=0, must-revalidate`,
+# which made each page view re-ask for the stylesheet, the fonts and the
+# scripts. Pages themselves keep that default.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
