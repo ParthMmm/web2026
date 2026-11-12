@@ -12,7 +12,6 @@ import {
 } from "effect/http-api";
 
 import {
-  Draft,
   FinalizeRejected,
   HashMismatch,
   LengthMismatch,
@@ -98,7 +97,7 @@ export const PhotosGroup = HttpApiGroup.make("photos")
         StorageUnavailable,
       ],
       params: PhotoParams,
-      success: Draft,
+      success: PhotoView,
     })
   )
   .middleware(OwnerAuth)

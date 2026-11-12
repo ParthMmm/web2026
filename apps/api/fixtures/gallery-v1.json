@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-11-12T10:00:00.000Z",
+  "photos": [
+    {
+      "alt": "Fog over the bay at dawn",
+      "capturedAt": "2026-10-03T07:12:00",
+      "film": "Portra 400",
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "publishedAt": "2026-11-11T09:30:00.000Z",
+      "sizes": {
+        "w480": {
+          "height": 320,
+          "path": "photos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/w480-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.webp",
+          "width": 480
+        },
+        "w1200": {
+          "height": 800,
+          "path": "photos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/w1200-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.webp",
+          "width": 1200
+        },
+        "w2400": {
+          "height": 1600,
+          "path": "photos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/w2400-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.webp",
+          "width": 2400
+        }
+      }
+    },
+    {
+      "id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "publishedAt": "2026-11-10T08:00:00.000Z",
+      "sizes": {
+        "w480": {
+          "height": 320,
+          "path": "photos/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/w480-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.webp",
+          "width": 480
+        },
+        "w1200": {
+          "height": 800,
+          "path": "photos/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/w1200-1111111111111111111111111111111111111111111111111111111111111111.webp",
+          "width": 1200
+        },
+        "w2400": {
+          "height": 1600,
+          "path": "photos/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/w2400-2222222222222222222222222222222222222222222222222222222222222222.webp",
+          "width": 2400
+        }
+      }
+    }
+  ],
+  "version": 1
+}

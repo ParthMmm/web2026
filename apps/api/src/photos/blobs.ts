@@ -45,39 +45,46 @@ export class BlobUnavailable extends Schema.TaggedError<BlobUnavailable>()(
  * a `put` or `copy` saw exactly `expect.bytes` bytes hashing to `expect.sha256`,
  * and the store records that hash. A rejected write leaves nothing behind.
  */
-export class Blobs extends Context.Service<
-  Blobs,
-  {
-    readonly put: (
-      key: BlobKey,
-      body: Stream.Stream<Uint8Array, unknown>,
-      expect: Expected
-    ) => Effect.Effect<void, BlobRejected | BlobUnavailable>;
-    readonly copy: (
-      from: BlobKey,
-      to: BlobKey,
-      expect: Expected
-    ) => Effect.Effect<void, BlobMissing | BlobRejected | BlobUnavailable>;
-    readonly holds: (
-      key: BlobKey,
-      expect: Expected
-    ) => Effect.Effect<boolean, BlobUnavailable>;
-    /** Up to `length` bytes from `offset`, or null when the key holds nothing. */
-    readonly range: (
-      key: BlobKey,
-      offset: number,
-      length: number
-    ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
-    /** The whole object, or null when the key holds nothing. */
-    readonly read: (
-      key: BlobKey
-    ) => Effect.Effect<BlobBody | null, BlobUnavailable>;
-    /** Every key that starts with `prefix`, in key order. */
-    readonly list: (
-      prefix: string
-    ) => Effect.Effect<readonly BlobKey[], BlobUnavailable>;
-    readonly remove: (
-      keys: readonly BlobKey[]
-    ) => Effect.Effect<void, BlobUnavailable>;
-  }
->()("@web2026/api/Blobs") {}
+export interface BlobStore {
+  readonly put: (
+    key: BlobKey,
+    body: Stream.Stream<Uint8Array, unknown>,
+    expect: Expected
+  ) => Effect.Effect<void, BlobRejected | BlobUnavailable>;
+  readonly copy: (
+    from: BlobKey,
+    to: BlobKey,
+    expect: Expected
+  ) => Effect.Effect<void, BlobMissing | BlobRejected | BlobUnavailable>;
+  readonly holds: (
+    key: BlobKey,
+    expect: Expected
+  ) => Effect.Effect<boolean, BlobUnavailable>;
+  /** Up to `length` bytes from `offset`, or null when the key holds nothing. */
+  readonly range: (
+    key: BlobKey,
+    offset: number,
+    length: number
+  ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
+  /** The whole object, or null when the key holds nothing. */
+  readonly read: (
+    key: BlobKey
+  ) => Effect.Effect<BlobBody | null, BlobUnavailable>;
+  /** Every key that starts with `prefix`, in key order. */
+  readonly list: (
+    prefix: string
+  ) => Effect.Effect<readonly BlobKey[], BlobUnavailable>;
+  readonly remove: (
+    keys: readonly BlobKey[]
+  ) => Effect.Effect<void, BlobUnavailable>;
+}
+
+/** The private bucket: staged uploads, verified finals and originals. */
+export class Blobs extends Context.Service<Blobs, BlobStore>()(
+  "@web2026/api/Blobs"
+) {}
+
+/** The public bucket: published derivatives and the gallery manifest, nothing else. */
+export class PublicBlobs extends Context.Service<PublicBlobs, BlobStore>()(
+  "@web2026/api/PublicBlobs"
+) {}

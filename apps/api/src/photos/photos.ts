@@ -5,7 +5,6 @@ import {
   Effect,
   Layer,
   Option,
-  Predicate,
   Stream,
 } from "effect";
 import type { SqlClient } from "effect/sql";
@@ -13,6 +12,7 @@ import type { SqlClient } from "effect/sql";
 import { Blobs } from "./blobs.ts";
 import type { BlobKey, BlobUnavailable } from "./blobs.ts";
 import {
+  DEFAULT_PAGE,
   FinalizeRejected,
   HashMismatch,
   isDerivativeKind,
@@ -21,26 +21,24 @@ import {
   PhotoManifestConflict,
   PhotoNotFound,
   photoIdOf,
-  StorageUnavailable,
   variantKinds,
 } from "./domain.ts";
 import type {
   DerivativeKind,
-  DraftView,
   Manifest,
   PhotoId,
+  PhotoPage,
   PhotoView,
   Problem,
+  SettledView,
+  StorageUnavailable,
   VariantKind,
 } from "./domain.ts";
 import { finalKey, finalPrefix, stagingKey } from "./internal/keys.ts";
 import { makeLedger } from "./internal/ledger.ts";
-import type {
-  Draft,
-  LedgerUnavailable,
-  Stored,
-  Uploading,
-} from "./internal/ledger.ts";
+import type { Stored, Uploading } from "./internal/ledger.ts";
+import { storage, toUnavailable } from "./internal/storage.ts";
+import { settledView } from "./internal/views.ts";
 import {
   CHUNK_HEADER_BYTES,
   isExtended,
@@ -50,6 +48,11 @@ import {
   VP8X_BODY_START,
   WEBP_PREFIX_BYTES,
 } from "./internal/webp.ts";
+
+export interface PageRequest {
+  readonly after?: PhotoId | undefined;
+  readonly limit?: number | undefined;
+}
 
 export interface StoreInput {
   readonly photoId: PhotoId;
@@ -71,28 +74,9 @@ type Location =
     }
   | { readonly _tag: "Missing"; readonly kind: VariantKind };
 
-const isStorageFailure = <E>(
-  error: E
-): error is Extract<E, BlobUnavailable | LedgerUnavailable> =>
-  Predicate.isTagged(error, "BlobUnavailable") ||
-  Predicate.isTagged(error, "LedgerUnavailable");
-
 const missing = (kind: VariantKind): readonly Problem[] => [
   { _tag: "Missing", kind },
 ];
-
-const toUnavailable = ({
-  cause,
-  operation,
-}: BlobUnavailable | LedgerUnavailable) =>
-  Effect.logWarning("storage failure", { cause, operation }).pipe(
-    Effect.andThen(Effect.fail(new StorageUnavailable({ operation })))
-  );
-
-const storage = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.catchIf(effect, isStorageFailure<E>, (failure) =>
-    toUnavailable(failure)
-  );
 
 const rejectIfAny = (
   photoId: PhotoId,
@@ -103,13 +87,6 @@ const rejectIfAny = (
     ? Effect.fail(new FinalizeRejected({ photoId, problems: flat }))
     : Effect.void;
 };
-
-const draftView = ({ finalizedAt, manifest, photoId }: Draft): DraftView => ({
-  _tag: "Draft",
-  finalizedAt,
-  manifest,
-  photoId,
-});
 
 /** What the chunks after the VP8X header hold. `wellFormed` means one image chunk, and chunks that fill the file exactly. */
 interface BodyScan {
@@ -163,6 +140,10 @@ export class Photos extends Context.Service<
     readonly get: (
       photoId: PhotoId
     ) => Effect.Effect<PhotoView, PhotoNotFound | StorageUnavailable>;
+    /** Every photo in ID order, one page at a time; `next` is the `after` of the next page. */
+    readonly list: (
+      request: PageRequest
+    ) => Effect.Effect<PhotoPage, StorageUnavailable>;
     readonly store: (
       input: StoreInput
     ) => Effect.Effect<
@@ -176,7 +157,7 @@ export class Photos extends Context.Service<
     readonly finalize: (
       photoId: PhotoId
     ) => Effect.Effect<
-      DraftView,
+      SettledView,
       | PhotoNotFound
       | PhotoManifestConflict
       | FinalizeRejected
@@ -230,9 +211,8 @@ export class Photos extends Context.Service<
       const view = (
         stored: Stored
       ): Effect.Effect<PhotoView, StorageUnavailable> =>
-        stored._tag === "Draft"
-          ? Effect.succeed(draftView(stored))
-          : locateAll(stored).pipe(
+        stored._tag === "Uploading"
+          ? locateAll(stored).pipe(
               storage,
               Effect.map((locations) => ({
                 _tag: "Uploading" as const,
@@ -242,7 +222,8 @@ export class Photos extends Context.Service<
                 ),
                 photoId: stored.photoId,
               }))
-            );
+            )
+          : Effect.succeed(settledView(stored));
 
       const scanBody = (key: BlobKey, totalBytes: number) =>
         Effect.gen(function* scanBodyChunks() {
@@ -337,7 +318,7 @@ export class Photos extends Context.Service<
       const store = ({ body, contentLength, kind, photoId }: StoreInput) =>
         Effect.gen(function* storeVariant() {
           const stored = yield* requirePhoto(photoId);
-          if (stored._tag === "Draft") {
+          if (stored._tag !== "Uploading") {
             return yield* new PhotoAlreadyDraft({ photoId });
           }
           const facts = stored.manifest[kind];
@@ -386,7 +367,10 @@ export class Photos extends Context.Service<
         );
 
       // A reopened draft leaves the objects of its earlier manifest under its final prefix.
-      const removeSuperseded = ({ manifest, photoId }: Draft) =>
+      const removeSuperseded = ({
+        manifest,
+        photoId,
+      }: Exclude<Stored, Uploading>) =>
         blobs.list(finalPrefix(photoId)).pipe(
           Effect.flatMap((keys) => {
             const current = new Set(
@@ -408,9 +392,9 @@ export class Photos extends Context.Service<
         photoId: PhotoId
       ) {
         const stored = yield* requirePhoto(photoId);
-        if (stored._tag === "Draft") {
+        if (stored._tag !== "Uploading") {
           yield* removeSuperseded(stored);
-          return draftView(stored);
+          return settledView(stored);
         }
         const locations = yield* locateAll(stored).pipe(storage);
         yield* rejectIfAny(
@@ -426,8 +410,8 @@ export class Photos extends Context.Service<
         ).pipe(storage);
         if (promotionProblems.flat().length > 0) {
           const current = yield* requirePhoto(photoId);
-          if (current._tag === "Draft") {
-            return draftView(current);
+          if (current._tag !== "Uploading") {
+            return settledView(current);
           }
         }
         yield* rejectIfAny(photoId, promotionProblems);
@@ -456,10 +440,24 @@ export class Photos extends Context.Service<
             )
           );
         yield* removeSuperseded(draft);
-        return draftView(draft);
+        return settledView(draft);
       });
 
-      return Photos.of({ begin, finalize, get, store });
+      const list = Effect.fn("Photos.list")(function* listPhotos({
+        after,
+        limit = DEFAULT_PAGE,
+      }: PageRequest) {
+        const rows = yield* ledger.page(after ?? null, limit + 1).pipe(storage);
+        const page = rows.slice(0, limit);
+        const photos = yield* Effect.forEach(page, view, { concurrency: 2 });
+        const last = page.at(-1);
+        return {
+          next: rows.length > limit && last !== undefined ? last.photoId : null,
+          photos,
+        };
+      });
+
+      return Photos.of({ begin, finalize, get, list, store });
     })
   );
 }

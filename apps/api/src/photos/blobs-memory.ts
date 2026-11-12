@@ -1,8 +1,14 @@
 import { Effect, Layer, Stream } from "effect";
 import { Digest } from "effect/crypto";
 
-import { BlobMissing, BlobRejected, Blobs, BlobUnavailable } from "./blobs.ts";
-import type { BlobKey, Expected } from "./blobs.ts";
+import {
+  BlobMissing,
+  BlobRejected,
+  Blobs,
+  BlobUnavailable,
+  PublicBlobs,
+} from "./blobs.ts";
+import type { BlobKey, BlobStore, Expected } from "./blobs.ts";
 import type { Sha256 } from "./domain.ts";
 
 export type BlobOperation =
@@ -68,9 +74,8 @@ export const makeMemoryBlobs = () => {
       return effect ?? Effect.void;
     });
 
-  const layer = Layer.effect(
-    Blobs,
-    Effect.gen(function* buildBlobs() {
+  const store: Effect.Effect<BlobStore, never, Digest.Digest> = Effect.gen(
+    function* buildBlobs() {
       const digest = yield* Digest.Digest;
 
       const verified = (key: BlobKey, bytes: Uint8Array, expect: Expected) =>
@@ -82,7 +87,7 @@ export const makeMemoryBlobs = () => {
           return { bytes, sha256: expect.sha256 };
         });
 
-      return Blobs.of({
+      return {
         copy: (from, to, expect) =>
           Effect.gen(function* copy() {
             yield* fault("copy");
@@ -148,9 +153,16 @@ export const makeMemoryBlobs = () => {
               })
             )
           ),
-      });
-    })
+      };
+    }
   );
 
-  return { faults, layer, objects };
+  return {
+    faults,
+    /** This store as the private bucket. */
+    layer: Layer.effect(Blobs, store),
+    objects,
+    /** This store as the public bucket. */
+    publicLayer: Layer.effect(PublicBlobs, store),
+  };
 };

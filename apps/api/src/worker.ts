@@ -5,6 +5,7 @@ import { HttpRouter } from "effect/http";
 
 import { photosApp } from "./http/handlers.ts";
 import { r2Blobs } from "./photos/blobs-r2.ts";
+import { Blobs } from "./photos/blobs.ts";
 import { PhotoDatabase, PrivateBucket } from "./photos/infra.ts";
 import { Photos } from "./photos/photos.ts";
 
@@ -31,7 +32,7 @@ export default Cloudflare.Worker(
     const database = yield* Cloudflare.D1.QueryDatabase(PhotoDatabase);
     const ownerToken = yield* OwnerToken;
     const photos = Photos.layer.pipe(
-      Layer.provide([r2Blobs(bucket), D1Layer(database)])
+      Layer.provide([Layer.succeed(Blobs, r2Blobs(bucket)), D1Layer(database)])
     );
     return { fetch: HttpRouter.toHttpEffect(photosApp(photos, ownerToken)) };
   }).pipe(

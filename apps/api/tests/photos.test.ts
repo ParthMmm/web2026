@@ -616,3 +616,63 @@ it.effect(
     }).pipe(Effect.provide(layer));
   }
 );
+
+it.effect(
+  "list pages through every photo in photo ID order, with each one's current view",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* run() {
+      const photos = yield* Photos;
+      const declared = [];
+      for (const seed of [1, 2, 3, 4, 5]) {
+        declared.push(yield* declare(validBodies(seed)));
+      }
+      for (const { manifest } of declared) {
+        yield* photos.begin(manifest);
+      }
+      const [first] = declared;
+      if (first === undefined) {
+        return;
+      }
+      yield* uploadAll(first.photoId, first.bodies);
+      const draft = yield* photos.finalize(first.photoId);
+      const ids = declared.map(({ photoId }) => photoId).toSorted();
+
+      const pages = [];
+      let after: PhotoId | undefined;
+      do {
+        const page = yield* photos.list({ after, limit: 2 });
+        pages.push(page.photos.map((view) => view.photoId));
+        after = page.next ?? undefined;
+      } while (after !== undefined);
+
+      expect(pages).toEqual([ids.slice(0, 2), ids.slice(2, 4), ids.slice(4)]);
+      const all = yield* photos.list({});
+      expect(all.next).toBe(null);
+      expect(all.photos.map((view) => view.photoId)).toEqual(ids);
+      expect(all.photos).toContainEqual(draft);
+      expect(all.photos).toContainEqual(
+        expect.objectContaining({ _tag: "Uploading", missing: variantKinds })
+      );
+      expect(yield* photos.list({ after: ids.at(-1) })).toEqual({
+        next: null,
+        photos: [],
+      });
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect("list sets next only when more photos follow", () => {
+  const { layer } = harness();
+  return Effect.gen(function* run() {
+    const photos = yield* Photos;
+    for (const seed of [1, 2]) {
+      yield* photos.begin((yield* declare(validBodies(seed))).manifest);
+    }
+    const page = yield* photos.list({ limit: 2 });
+    expect(page.photos).toHaveLength(2);
+    expect(page.next).toBe(null);
+    const one = yield* photos.list({ limit: 1 });
+    expect(one.next).toBe(one.photos[0]?.photoId);
+  }).pipe(Effect.provide(layer));
+});

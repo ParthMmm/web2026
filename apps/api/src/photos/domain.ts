@@ -52,6 +52,8 @@ export const VariantKindSchema = Schema.Literals(variantKinds);
 export const isDerivativeKind = (kind: VariantKind): kind is DerivativeKind =>
   kind !== "original";
 
+export const derivativeKinds = variantKinds.filter(isDerivativeKind);
+
 export const photoIdOf = (manifest: Manifest): PhotoId =>
   PhotoId.make(manifest.original.sha256);
 
@@ -68,8 +70,57 @@ export const Draft = Schema.TaggedStruct("Draft", {
 });
 export type DraftView = typeof Draft.Type;
 
-export const PhotoView = Schema.Union([Uploading, Draft]);
+const boundedText = (maxLength: number) =>
+  Schema.optionalKey(Schema.String.check(Schema.isMaxLength(maxLength)));
+
+/** What a visitor sees beside a published photo. `capturedAt` is the camera's local date-time as text, with no zone. */
+export const PhotoDetails = Schema.Struct({
+  alt: boundedText(300),
+  capturedAt: boundedText(40),
+  film: boundedText(64),
+});
+export type PhotoDetails = typeof PhotoDetails.Type;
+
+export const Published = Schema.TaggedStruct("Published", {
+  details: PhotoDetails,
+  finalizedAt: Schema.DateTimeUtcFromString,
+  manifest: Manifest,
+  photoId: PhotoId,
+  publishedAt: Schema.DateTimeUtcFromString,
+});
+export type PublishedView = typeof Published.Type;
+
+/** Public removal has started and has not finished. Another unpublish finishes it. */
+const Unpublishing = Schema.TaggedStruct("Unpublishing", {
+  details: PhotoDetails,
+  finalizedAt: Schema.DateTimeUtcFromString,
+  manifest: Manifest,
+  photoId: PhotoId,
+});
+type UnpublishingView = typeof Unpublishing.Type;
+
+export type SettledView = DraftView | PublishedView | UnpublishingView;
+
+export const PhotoView = Schema.Union([
+  Uploading,
+  Draft,
+  Published,
+  Unpublishing,
+]);
 export type PhotoView = typeof PhotoView.Type;
+
+export const MAX_PAGE = 200;
+export const DEFAULT_PAGE = 100;
+
+export const PageLimit = Schema.Int.check(
+  Schema.isBetween({ maximum: MAX_PAGE, minimum: 1 })
+);
+
+export const PhotoPage = Schema.Struct({
+  next: Schema.NullOr(PhotoId),
+  photos: Schema.Array(PhotoView),
+});
+export type PhotoPage = typeof PhotoPage.Type;
 
 const Dimensions = Schema.Struct({ height: Schema.Int, width: Schema.Int });
 
@@ -95,6 +146,12 @@ export class PhotoNotFound extends Schema.TaggedError<PhotoNotFound>()(
 
 export class PhotoManifestConflict extends Schema.TaggedError<PhotoManifestConflict>()(
   "PhotoManifestConflict",
+  { photoId: PhotoId },
+  { httpApiStatus: 409 }
+) {}
+
+export class PhotoNotDraft extends Schema.TaggedError<PhotoNotDraft>()(
+  "PhotoNotDraft",
   { photoId: PhotoId },
   { httpApiStatus: 409 }
 ) {}
