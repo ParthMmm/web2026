@@ -6,7 +6,7 @@ export interface Version {
 	version: string;
 	title: string;
 	description: string;
-	period?: string;
+	period?: string | undefined;
 	Content: Awaited<ReturnType<typeof render>>["Content"];
 }
 

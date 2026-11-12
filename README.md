@@ -17,6 +17,16 @@ bun install
 bun run dev
 ```
 
+## Checks
+
+```sh
+bun run check      # oxlint and oxfmt
+bun run typecheck  # the site, its .astro files, the tests and the Worker
+bun run test       # builds the site and checks what it ships; runs the Worker tests
+```
+
+CI runs all three. `tools/astro-check` holds the `.astro` checker and its own TypeScript 5, because `@astrojs/check` cannot use TypeScript 7 yet.
+
 ## Build
 
 ```sh
