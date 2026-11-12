@@ -4,7 +4,7 @@ import { Effect, Option, Schema } from "effect";
 import type { DateTime } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
-import { Manifest, PhotoId } from "../domain.ts";
+import { Manifest, PhotoDetails, PhotoId } from "../domain.ts";
 
 export class LedgerUnavailable extends Schema.TaggedError<LedgerUnavailable>()(
   "LedgerUnavailable",
@@ -29,12 +29,33 @@ export interface Draft {
   readonly finalizedAt: DateTime.Utc;
 }
 
-export type Stored = Uploading | Draft;
+/** Published and Unpublishing rows carry the same facts; only the tag differs. */
+export interface Public {
+  readonly _tag: "Published" | "Unpublishing";
+  readonly photoId: PhotoId;
+  readonly manifest: Manifest;
+  readonly finalizedAt: DateTime.Utc;
+  readonly publishedAt: DateTime.Utc;
+  readonly details: PhotoDetails;
+}
+
+export interface Published extends Public {
+  readonly _tag: "Published";
+}
+
+export interface Unpublishing extends Public {
+  readonly _tag: "Unpublishing";
+}
+
+export type Stored = Uploading | Draft | Published | Unpublishing;
 
 const PhotoRow = Schema.Struct({
+  details: Schema.NullOr(Schema.fromJsonString(PhotoDetails)),
   finalizedAt: Schema.NullOr(Schema.DateTimeUtcFromMillis),
   manifest: Schema.fromJsonString(Manifest),
   photoId: PhotoId,
+  publication: Schema.NullOr(Schema.Literals(["Published", "Unpublishing"])),
+  publishedAt: Schema.NullOr(Schema.DateTimeUtcFromMillis),
 });
 
 const Write = Schema.Struct({
@@ -43,14 +64,47 @@ const Write = Schema.Struct({
   photoId: PhotoId,
 });
 
+const Publish = Schema.Struct({
+  details: Schema.fromJsonString(PhotoDetails),
+  manifest: Schema.fromJsonString(Manifest),
+  nowMillis: Schema.Int,
+  photoId: PhotoId,
+});
+
+const Page = Schema.Struct({
+  after: Schema.NullOr(PhotoId),
+  limit: Schema.Int,
+});
+
+// The migration's checks keep publication, published_at and details all null or all set.
 const toStored = ({
+  details,
   finalizedAt,
   manifest,
   photoId,
-}: typeof PhotoRow.Type): Stored =>
-  finalizedAt === null
-    ? { _tag: "Uploading", manifest, photoId }
-    : { _tag: "Draft", finalizedAt, manifest, photoId };
+  publication,
+  publishedAt,
+}: typeof PhotoRow.Type): Stored => {
+  if (finalizedAt === null) {
+    return { _tag: "Uploading", manifest, photoId };
+  }
+  if (publication === null || publishedAt === null || details === null) {
+    return { _tag: "Draft", finalizedAt, manifest, photoId };
+  }
+  return {
+    _tag: publication,
+    details,
+    finalizedAt,
+    manifest,
+    photoId,
+    publishedAt,
+  };
+};
+
+const isPublished = (stored: Stored): stored is Published =>
+  stored._tag === "Published";
+
+const isDraft = (stored: Stored): stored is Draft => stored._tag === "Draft";
 
 const sameManifest = Schema.toEquivalence(Manifest);
 
@@ -66,6 +120,12 @@ export interface Ledger {
   readonly find: (
     photoId: PhotoId
   ) => Effect.Effect<Option.Option<Stored>, LedgerUnavailable>;
+  /** Up to `limit` rows after `after`, in photo ID order. */
+  readonly page: (
+    after: PhotoId | null,
+    limit: number
+  ) => Effect.Effect<readonly Stored[], LedgerUnavailable>;
+  /** A new manifest reopens a draft; a public photo keeps its manifest and answers a conflict. */
   readonly declare: (
     photoId: PhotoId,
     manifest: Manifest,
@@ -76,13 +136,33 @@ export interface Ledger {
     verified: Manifest,
     nowMillis: number
   ) => Effect.Effect<Draft, LedgerManifestConflict | LedgerUnavailable>;
+  /**
+   * Marks a finalized photo of exactly `copied` published with `details`. A
+   * published photo keeps its first publishedAt. None when the row no longer
+   * holds that manifest, or is no longer finalized.
+   */
+  readonly markPublished: (
+    photoId: PhotoId,
+    copied: Manifest,
+    details: PhotoDetails,
+    nowMillis: number
+  ) => Effect.Effect<Option.Option<Published>, LedgerUnavailable>;
+  /** Published becomes Unpublishing; any other state is left as it is. */
+  readonly markUnpublishing: (
+    photoId: PhotoId
+  ) => Effect.Effect<void, LedgerUnavailable>;
+  /** Unpublishing becomes Draft. None when the row was not Unpublishing. */
+  readonly markPrivate: (
+    photoId: PhotoId
+  ) => Effect.Effect<Option.Option<Draft>, LedgerUnavailable>;
+  readonly published: Effect.Effect<readonly Published[], LedgerUnavailable>;
 }
 
 export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
   Effect.gen(function* makeLedger() {
     const sql = yield* SqlClient.SqlClient;
     const columns = sql.unsafe(
-      "photo_id AS photoId, manifest, finalized_at AS finalizedAt"
+      "photo_id AS photoId, manifest, finalized_at AS finalizedAt, publication, published_at AS publishedAt, details"
     );
 
     const select = SqlSchema.findOneOption({
@@ -90,6 +170,22 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
       Result: PhotoRow,
       execute: (photoId) =>
         sql`SELECT ${columns} FROM photo WHERE photo_id = ${photoId}`,
+    });
+
+    const selectPage = SqlSchema.findAll({
+      Request: Page,
+      Result: PhotoRow,
+      execute: ({ after, limit }) =>
+        after === null
+          ? sql`SELECT ${columns} FROM photo ORDER BY photo_id LIMIT ${limit}`
+          : sql`SELECT ${columns} FROM photo WHERE photo_id > ${after} ORDER BY photo_id LIMIT ${limit}`,
+    });
+
+    const selectPublished = SqlSchema.findAll({
+      Request: Schema.Null,
+      Result: PhotoRow,
+      execute: () =>
+        sql`SELECT ${columns} FROM photo WHERE publication = 'Published' ORDER BY photo_id`,
     });
 
     const upsert = SqlSchema.findOne({
@@ -100,9 +196,13 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
         VALUES (${photoId}, ${manifest}, ${nowMillis})
         ON CONFLICT (photo_id) DO UPDATE SET
           finalized_at = CASE
-            WHEN photo.manifest = excluded.manifest THEN photo.finalized_at
+            WHEN photo.manifest = excluded.manifest OR photo.publication IS NOT NULL
+            THEN photo.finalized_at
           END,
-          manifest = excluded.manifest
+          manifest = CASE
+            WHEN photo.publication IS NULL THEN excluded.manifest
+            ELSE photo.manifest
+          END
         RETURNING ${columns}`,
     });
 
@@ -115,10 +215,40 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
         RETURNING ${columns}`,
     });
 
+    const compareAndPublish = SqlSchema.findOneOption({
+      Request: Publish,
+      Result: PhotoRow,
+      execute: ({ details, manifest, nowMillis, photoId }) => sql`
+        UPDATE photo SET
+          publication = 'Published',
+          published_at = CASE
+            WHEN publication = 'Published' THEN published_at
+            ELSE ${nowMillis}
+          END,
+          details = ${details}
+        WHERE photo_id = ${photoId} AND finalized_at IS NOT NULL AND manifest = ${manifest}
+        RETURNING ${columns}`,
+    });
+
+    const compareAndPrivate = SqlSchema.findOneOption({
+      Request: PhotoId,
+      Result: PhotoRow,
+      execute: (photoId) => sql`
+        UPDATE photo SET publication = NULL, published_at = NULL, details = NULL
+        WHERE photo_id = ${photoId} AND publication = 'Unpublishing'
+        RETURNING ${columns}`,
+    });
+
     const find: Ledger["find"] = (photoId) =>
       select(photoId).pipe(
         attempt("ledger.find"),
         Effect.map(Option.map(toStored))
+      );
+
+    const page: Ledger["page"] = (after, limit) =>
+      selectPage({ after, limit }).pipe(
+        attempt("ledger.page"),
+        Effect.map((rows) => rows.map(toStored))
       );
 
     const declare: Ledger["declare"] = (photoId, manifest, nowMillis) =>
@@ -146,7 +276,7 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
           : yield* find(photoId);
         if (
           Option.isSome(stored) &&
-          stored.value._tag === "Draft" &&
+          isDraft(stored.value) &&
           sameManifest(stored.value.manifest, verified)
         ) {
           return stored.value;
@@ -154,5 +284,44 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
         return yield* new LedgerManifestConflict({ photoId });
       });
 
-    return { declare, find, markFinal };
+    const markPublished: Ledger["markPublished"] = (
+      photoId,
+      copied,
+      details,
+      nowMillis
+    ) =>
+      compareAndPublish({ details, manifest: copied, nowMillis, photoId }).pipe(
+        attempt("ledger.markPublished"),
+        Effect.map(Option.map(toStored)),
+        Effect.map(Option.filter(isPublished))
+      );
+
+    const markUnpublishing: Ledger["markUnpublishing"] = (photoId) =>
+      sql`UPDATE photo SET publication = 'Unpublishing' WHERE photo_id = ${photoId} AND publication = 'Published'`.pipe(
+        Effect.asVoid,
+        attempt("ledger.markUnpublishing")
+      );
+
+    const markPrivate: Ledger["markPrivate"] = (photoId) =>
+      compareAndPrivate(photoId).pipe(
+        attempt("ledger.markPrivate"),
+        Effect.map(Option.map(toStored)),
+        Effect.map(Option.filter(isDraft))
+      );
+
+    const published: Ledger["published"] = selectPublished(null).pipe(
+      attempt("ledger.published"),
+      Effect.map((rows) => rows.map(toStored).filter(isPublished))
+    );
+
+    return {
+      declare,
+      find,
+      markFinal,
+      markPrivate,
+      markPublished,
+      markUnpublishing,
+      page,
+      published,
+    };
   });

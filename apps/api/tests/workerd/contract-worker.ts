@@ -7,6 +7,7 @@ import { Cause, Effect, Exit, Layer } from "effect";
 import { Digest } from "effect/crypto";
 
 import { r2Blobs } from "../../src/photos/blobs-r2.ts";
+import { Blobs } from "../../src/photos/blobs.ts";
 import { Photos } from "../../src/photos/photos.ts";
 import { blobsContract, contractKey } from "../support/blobs-contract.ts";
 import { photosScenarios } from "./scenarios.ts";
@@ -32,7 +33,10 @@ export default {
   fetch: (request: Request, env: Env) => {
     const url = new URL(request.url);
     const name = url.searchParams.get("case");
-    const blobs = r2Blobs(makeReadWrite(makeHelpers(env, privateBucket)));
+    const blobs = Layer.succeed(
+      Blobs,
+      r2Blobs(makeReadWrite(makeHelpers(env, privateBucket)))
+    );
 
     const contract = blobsContract.find((entry) => entry.name === name);
     if (url.pathname === "/blobs" && contract !== undefined) {
