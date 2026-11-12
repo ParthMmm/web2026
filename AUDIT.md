@@ -103,6 +103,14 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Checked in Chrome** after the fix, storage still blocked: dark theme applied, one click switches to light.
 - **State machine.** The theme is two facts: the visitor's choice (`dark`, `light` or none) and the system theme. The resolved theme is the choice, else the system. Toggling to the system's theme clears the choice. That was already explicit enough in three small functions, so I did not restructure it.
 
+#### S9. The Orbis player never finishes (fixed)
+
+- **Evidence.** Chrome, old build, with an init script that runs the page's one-second interval a thousand times faster: press Play on the Orbis figure and wait for the 34 minutes left in the set. At `1:59:33 / 1:59:33` the button still read "Pause", the status read "Playing", the level bars still animated, and the interval kept firing. Pause then Play at the end "played" again without moving.
+- **Cause.** An implicit state machine. The script kept `playing` (a boolean), `position`, `visible` and a timer handle, and nothing said that the end of the set is a state. `position` was clamped to the length and `playing` stayed `true`.
+- **Fix.** `src/components/media/orbis-player.ts` is the player as a tagged union (`Paused`, `Playing`, `Ended`) and one pure function, `step(player, event, length)`, over three events (`Toggle`, `Seek`, `Tick`). It also returns what the status line says, so the copy is in one place. `Ended` has no position; Play from `Ended` starts again at 0:00. The figure's script now only sends events and renders. The copy is unchanged.
+- **Tests.** `tests/site/orbis-player.test.ts`: playback stops at the end; Play on a finished set restarts it; and over all 4,096 six-event sequences the player is never playing at or past the end, and only a tick while playing moves it.
+- **Checked in Chrome** on the new build with the same fast clock: at the end the button reads "Play", the bars stop, and the status reads "Saved at 1:59:33 for every device". Pause, resume and cue seeking behave as before.
+
 ### Worker: `now.parthm.dev`
 
 The Worker is deployed and polls three sources every minute, and every 15 seconds while a socket is open. No page on `main` reads it yet (`wip/now-playing-masthead` does). It had no tests, and CI did not typecheck it.
