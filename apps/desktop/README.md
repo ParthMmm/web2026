@@ -37,7 +37,7 @@ Arguments are JPEG files or folders to import on launch. Rune reads its own flag
 - **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar, with their count (also File › Files Not Imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
 - **Performance:** the chip button in the title bar (Cmd-Alt-P, or View › Show or Hide Performance) shows the frames drawn in the last second and the slowest frame's CPU time, from Rune's per-frame reports. An idle window draws no frames, so the panel then says it is idle.
 
-The theme follows the system's light or dark appearance. Both palettes live in `src/ui/design/theme.json`, which is installed over the component library's defaults at startup.
+The theme follows the system's light or dark appearance. Both palettes live in `src/ui/look.rs`, which lays them over rune-kit's tokens.
 
 On macOS 13 and later, **Import from Photos…** opens the native Photos picker. The picker reads only the assets you select; it does not open the Photos library package or database. JPEG representations are copied into the library's `imports/` folder, and other image representations are converted to JPEG with the system `sips` tool. Those copies become the photos' originals. Copies that duplicate a photo already in the library, or that fail to import, are deleted. Set `PHOTO_IMPORT_DIR` to store copies elsewhere.
 

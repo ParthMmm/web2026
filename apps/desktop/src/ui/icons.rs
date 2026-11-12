@@ -1,4 +1,4 @@
-//! Lucide icons (ISC), the set gpui-kit drew. Rune rasterizes the bodies into
+//! Lucide icons (ISC). Rune rasterizes the bodies into
 //! its glyph atlas and paints `currentColor` with the element's colour.
 
 use rune::Icon;
