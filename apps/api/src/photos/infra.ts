@@ -31,3 +31,5 @@ export const PrivateBucket = Cloudflare.R2.Bucket("Private", {
 export const PhotoDatabase = Cloudflare.D1.Database("Db", {
   migrations: "./migrations",
 }).pipe(retainInProd);
+
+export const PublicBucket = Cloudflare.R2.Bucket("Public").pipe(retainInProd);
