@@ -1,4 +1,6 @@
+pub mod api;
 pub mod catalog;
+pub mod cloud;
 pub mod derivative;
 pub mod grid;
 mod library;
@@ -10,4 +12,4 @@ pub mod ui;
 
 pub use catalog::{ImportFailure, PhotoId, PhotoRecord};
 pub use derivative::DerivativeSize;
-pub use library::{Event, ImportOutcome, ImportSummary, Library, LibraryOptions};
+pub use library::{Event, ImportOutcome, ImportSummary, Library, LibraryOptions, UploadRetry};

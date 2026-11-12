@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     ImportFailure, PhotoId, PhotoRecord,
+    cloud::CloudState,
     metadata::{CaptureTime, ExposureTime, FilmSimulation, PhotoMetadata},
 };
 use rune::ImageCache;
@@ -137,6 +138,7 @@ pub(super) fn photos() -> Vec<GalleryPhoto> {
                             Some("+01:00".into()),
                         ),
                     },
+                    cloud: CloudState::Local,
                 };
                 GalleryPhoto::new(record, Thumbnail::Ready(path(&id, "grid")))
             })

@@ -1,7 +1,9 @@
 //! Persistent local catalog: photo identities, source references, derivative
-//! records, per-file import failures, and draft state.
+//! records, per-file import failures, and each photo's cloud state.
 
 use crate::{
+    api::Manifest,
+    cloud::CloudState,
     derivative::DerivativeSize,
     metadata::{CaptureTime, ExposureTime, FilmSimulation, PhotoMetadata},
 };
@@ -16,7 +18,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 /// Content identity: the BLAKE3 hash of the original's bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -78,6 +80,7 @@ pub struct PhotoRecord {
     pub byte_size: u64,
     pub imported_at: i64,
     pub metadata: PhotoMetadata,
+    pub cloud: CloudState,
 }
 
 impl PhotoRecord {
@@ -205,10 +208,29 @@ impl Catalog {
                 COMMIT;",
             )?;
         }
+        if version < 4 {
+            // A photo with no row is local. `cloud_id` repeats the state's own, so a query can
+            // tell which photos the server may hold. `detached_source` remembers the last path
+            // of a photo whose file now holds other bytes.
+            connection.execute_batch(
+                "BEGIN;
+                ALTER TABLE photos ADD COLUMN detached_source BLOB;
+                CREATE TABLE uploads (
+                    photo_id TEXT PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE,
+                    state TEXT NOT NULL,
+                    cloud_id TEXT,
+                    manifest TEXT,
+                    updated_at INTEGER NOT NULL
+                );
+                PRAGMA user_version = 4;
+                COMMIT;",
+            )?;
+        }
         Ok(Self { connection })
     }
 
-    /// All photos with at least one source, ordered by preferred source path.
+    /// Every photo, ordered by preferred source path. A photo without any source is kept only
+    /// while the cloud may hold it.
     pub fn photos(&self) -> Result<Vec<PhotoRecord>> {
         let mut statement = self
             .connection
@@ -311,7 +333,8 @@ impl Catalog {
             .is_some())
     }
 
-    pub fn insert_photo(&mut self, photo: NewPhoto<'_>) -> Result<()> {
+    /// Returns the photo that held this path before, if another one did.
+    pub fn insert_photo(&mut self, photo: NewPhoto<'_>) -> Result<Option<PhotoId>> {
         let now = unix_now();
         let metadata = photo.metadata;
         let transaction = self.connection.transaction()?;
@@ -339,25 +362,31 @@ impl Catalog {
                 metadata.film_simulation.map(FilmSimulation::as_str),
             ],
         )?;
-        upsert_source(&transaction, photo.id, photo.source, photo.stamp, now)?;
+        let previous = upsert_source(&transaction, photo.id, photo.source, photo.stamp, now)?;
         transaction.execute(
             "DELETE FROM import_failures WHERE path = ?1",
             [path_bytes(photo.source)],
         )?;
         transaction.commit()?;
-        Ok(())
+        Ok(previous)
     }
 
-    /// Points `path` at `id`, replacing any previous assignment of that path.
-    pub fn link_source(&mut self, id: &PhotoId, path: &Path, stamp: SourceStamp) -> Result<()> {
+    /// Points `path` at `id`, replacing any previous assignment of that path. Returns the photo
+    /// that held the path before, if another one did.
+    pub fn link_source(
+        &mut self,
+        id: &PhotoId,
+        path: &Path,
+        stamp: SourceStamp,
+    ) -> Result<Option<PhotoId>> {
         let transaction = self.connection.transaction()?;
-        upsert_source(&transaction, id, path, stamp, unix_now())?;
+        let previous = upsert_source(&transaction, id, path, stamp, unix_now())?;
         transaction.execute(
             "DELETE FROM import_failures WHERE path = ?1",
             [path_bytes(path)],
         )?;
         transaction.commit()?;
-        Ok(())
+        Ok(previous)
     }
 
     pub fn set_source_missing(&mut self, path: &Path, missing: bool) -> Result<()> {
@@ -368,10 +397,13 @@ impl Catalog {
         Ok(())
     }
 
-    /// Deletes photos that no longer have any source. Returns their IDs.
+    /// Deletes photos that no longer have any source, unless the cloud may hold them. Returns
+    /// the deleted IDs.
     pub fn remove_orphans(&mut self) -> Result<Vec<PhotoId>> {
         let mut statement = self.connection.prepare(
-            "DELETE FROM photos WHERE id NOT IN (SELECT photo_id FROM sources) RETURNING id",
+            "DELETE FROM photos WHERE id NOT IN (SELECT photo_id FROM sources)
+                AND id NOT IN (SELECT photo_id FROM uploads WHERE cloud_id IS NOT NULL)
+             RETURNING id",
         )?;
         let ids = statement
             .query_map([], |row| Ok(PhotoId(row.get::<_, String>(0)?.into())))?
@@ -457,6 +489,102 @@ impl Catalog {
         Ok(())
     }
 
+    pub fn cloud_state(&self, id: &PhotoId) -> Result<CloudState> {
+        let state: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT state FROM uploads WHERE photo_id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        state.map_or(Ok(CloudState::Local), |state| {
+            serde_json::from_str(&state).context("Unreadable cloud state")
+        })
+    }
+
+    /// Records a photo's cloud state, keeping its prepared manifest.
+    pub fn set_cloud_state(&mut self, id: &PhotoId, state: &CloudState) -> Result<()> {
+        self.connection.execute(
+            "INSERT INTO uploads (photo_id, state, cloud_id, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (photo_id) DO UPDATE SET state = excluded.state,
+                cloud_id = excluded.cloud_id, updated_at = excluded.updated_at",
+            params![
+                id.as_str(),
+                serde_json::to_string(state)?,
+                state
+                    .cloud_id()
+                    .map(|cloud_id| cloud_id.as_str().to_owned()),
+                unix_now()
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Records the manifest an upload declares together with the state that names it.
+    pub fn set_prepared(
+        &mut self,
+        id: &PhotoId,
+        manifest: &Manifest,
+        state: &CloudState,
+    ) -> Result<()> {
+        self.connection.execute(
+            "INSERT INTO uploads (photo_id, state, cloud_id, manifest, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT (photo_id) DO UPDATE SET state = excluded.state,
+                cloud_id = excluded.cloud_id, manifest = excluded.manifest,
+                updated_at = excluded.updated_at",
+            params![
+                id.as_str(),
+                serde_json::to_string(state)?,
+                state
+                    .cloud_id()
+                    .map(|cloud_id| cloud_id.as_str().to_owned()),
+                serde_json::to_string(manifest)?,
+                unix_now()
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// The manifest the photo's upload declared, once prepared.
+    pub fn manifest(&self, id: &PhotoId) -> Result<Option<Manifest>> {
+        let manifest: Option<Option<String>> = self
+            .connection
+            .query_row(
+                "SELECT manifest FROM uploads WHERE photo_id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        manifest
+            .flatten()
+            .map(|manifest| serde_json::from_str(&manifest).context("Unreadable manifest"))
+            .transpose()
+    }
+
+    /// Photos waiting for or in an upload, in the order they were queued.
+    pub fn pending_uploads(&self) -> Result<Vec<(PhotoId, CloudState)>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT photo_id, state FROM uploads ORDER BY updated_at, photo_id")?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    PhotoId(row.get::<_, String>(0)?.into()),
+                    row.get::<_, String>(1)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, state)| {
+                let state: CloudState = serde_json::from_str(&state).ok()?;
+                state.is_pending().then_some((id, state))
+            })
+            .collect())
+    }
+
     pub fn failures(&self) -> Result<Vec<ImportFailure>> {
         let mut statement = self
             .connection
@@ -475,17 +603,26 @@ impl Catalog {
 }
 
 /// The preferred source is the first present path; `MIN` over a key that sorts
-/// present paths before missing ones selects it in one pass.
+/// present paths before missing ones selects it in one pass. A photo with no source left
+/// shows its last path, as missing.
 const PHOTO_SELECT: &str = "
     SELECT p.id, p.byte_size, p.width, p.height, p.imported_at,
         p.iso, p.exposure_numerator, p.exposure_denominator, p.f_number, p.focal_length_mm,
         p.camera_make, p.camera_model, p.lens, p.captured_local, p.captured_offset, p.film_simulation,
-        MIN(CAST(CAST(s.missing AS TEXT) || s.path AS BLOB)) AS preferred,
-        COUNT(s.path) AS source_count
-    FROM photos p JOIN sources s ON s.photo_id = p.id";
+        COALESCE(
+            MIN(CAST(CAST(s.missing AS TEXT) || s.path AS BLOB)),
+            CAST('1' || p.detached_source AS BLOB)
+        ) AS preferred,
+        COUNT(s.path) AS source_count,
+        u.state AS cloud_state
+    FROM photos p
+    LEFT JOIN sources s ON s.photo_id = p.id
+    LEFT JOIN uploads u ON u.photo_id = p.id";
 
 fn photo_from_row(row: &Row<'_>) -> rusqlite::Result<PhotoRecord> {
-    let preferred: Vec<u8> = row.get("preferred")?;
+    let preferred: Vec<u8> = row
+        .get::<_, Option<Vec<u8>>>("preferred")?
+        .unwrap_or_default();
     // The first byte is the text "0" for a present path and "1" for a missing one.
     let (missing, path) = preferred
         .split_first()
@@ -518,16 +655,35 @@ fn photo_from_row(row: &Row<'_>) -> rusqlite::Result<PhotoRecord> {
             lens: row.get("lens")?,
             captured_at: captured_local.and_then(|local| CaptureTime::new(local, captured_offset)),
         },
+        cloud: row
+            .get::<_, Option<String>>("cloud_state")?
+            .and_then(|state| serde_json::from_str(&state).ok())
+            .unwrap_or_default(),
     })
 }
 
+/// Returns the photo that held `path` before, if another one did. That photo remembers the
+/// path, so it can still say where its original was.
 fn upsert_source(
     connection: &Connection,
     id: &PhotoId,
     path: &Path,
     stamp: SourceStamp,
     now: i64,
-) -> rusqlite::Result<usize> {
+) -> rusqlite::Result<Option<PhotoId>> {
+    let previous: Option<String> = connection
+        .query_row(
+            "SELECT photo_id FROM sources WHERE path = ?1 AND photo_id != ?2",
+            params![path_bytes(path), id.as_str()],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(previous) = &previous {
+        connection.execute(
+            "UPDATE photos SET detached_source = ?2 WHERE id = ?1",
+            params![previous, path_bytes(path)],
+        )?;
+    }
     connection.execute(
         "INSERT INTO sources (path, photo_id, byte_size, modified_ns, missing, added_at)
          VALUES (?1, ?2, ?3, ?4, 0, ?5)
@@ -540,7 +696,8 @@ fn upsert_source(
             stamp.modified_ns,
             now
         ],
-    )
+    )?;
+    Ok(previous.map(|previous| PhotoId(previous.into())))
 }
 
 /// SQLite integers are signed 64-bit; file sizes never approach the limit.
