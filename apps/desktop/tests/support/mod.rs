@@ -1,6 +1,6 @@
 //! A small in-process photo API for upload tests. It follows the Worker's contract for
 //! `begin`, `get`, `put` and `finalize` (identity by SHA-256, checked lengths and hashes, `409`
-//! after a draft), and lets a test inject faults: an HTTP status, a lost answer, a delay, or a
+//! on a write after upload, and `finalize` answering a published photo's real view), and lets a test inject faults: an HTTP status, a lost answer, a delay, or a
 //! hold until the test releases it.
 
 #![allow(dead_code)]
@@ -44,10 +44,19 @@ struct Fault {
     remaining: usize,
 }
 
+/// Where a photo stands on the server, as the Worker's ledger keeps it.
+#[derive(Clone, Debug, PartialEq)]
+enum Stage {
+    Uploading,
+    Draft,
+    Published { details: Value },
+    Unpublishing { details: Value },
+}
+
 struct Photo {
     manifest: Value,
     stored: HashSet<ObjectKind>,
-    draft: bool,
+    stage: Stage,
 }
 
 #[derive(Default)]
@@ -132,7 +141,7 @@ impl FakeApi {
         let mut ids: Vec<String> = state
             .photos
             .iter()
-            .filter(|(_, photo)| photo.draft)
+            .filter(|(_, photo)| photo.stage == Stage::Draft)
             .map(|(id, _)| id.clone())
             .collect();
         ids.sort();
@@ -143,6 +152,18 @@ impl FakeApi {
         let state = self.lock();
         let photo = state.photos.get(id)?;
         serde_json::from_value(photo.manifest.clone()).ok()
+    }
+
+    /// Publishes a photo on the server, as another run of the app would have, with every
+    /// object stored.
+    pub fn publish_directly(&self, id: &str) {
+        let mut state = self.lock();
+        let photo = state
+            .photos
+            .get_mut(id)
+            .expect("the server knows the photo");
+        photo.stored = ObjectKind::ALL.into_iter().collect();
+        photo.stage = Stage::Published { details: json!({}) };
     }
 
     pub fn knows_any_photo(&self) -> bool {
@@ -220,7 +241,7 @@ impl FakeApi {
                 let photo = state.photos.entry(id.clone()).or_insert_with(|| Photo {
                     manifest: manifest.clone(),
                     stored: HashSet::new(),
-                    draft: false,
+                    stage: Stage::Uploading,
                 });
                 if photo.manifest != manifest {
                     return (409, json!({"_tag": "PhotoManifestConflict", "photoId": id}));
@@ -235,7 +256,7 @@ impl FakeApi {
                 let Some(photo) = state.photos.get_mut(&id) else {
                     return (404, json!({"_tag": "PhotoNotFound", "photoId": id}));
                 };
-                if photo.draft {
+                if photo.stage != Stage::Uploading {
                     return (409, json!({"_tag": "PhotoAlreadyDraft", "photoId": id}));
                 }
                 let facts = &photo.manifest[kind.as_str()];
@@ -256,8 +277,12 @@ impl FakeApi {
                 let Some(photo) = state.photos.get_mut(&id) else {
                     return (404, json!({"_tag": "PhotoNotFound", "photoId": id}));
                 };
+                if photo.stage != Stage::Uploading {
+                    // Already past upload: the Worker answers the photo's real view.
+                    return (200, view(&id, photo));
+                }
                 let missing = missing(photo);
-                if !photo.draft && !missing.is_empty() {
+                if !missing.is_empty() {
                     let problems: Vec<Value> = missing
                         .iter()
                         .map(|kind| json!({"_tag": "Missing", "kind": kind}))
@@ -267,7 +292,7 @@ impl FakeApi {
                         json!({"_tag": "FinalizeRejected", "photoId": id, "problems": problems}),
                     );
                 }
-                photo.draft = true;
+                photo.stage = Stage::Draft;
                 (200, view(&id, photo))
             }
         }
@@ -281,11 +306,25 @@ fn missing(photo: &Photo) -> Vec<ObjectKind> {
         .collect()
 }
 
+const FINALIZED_AT: &str = "2026-11-12T00:00:00.000Z";
+
 fn view(id: &str, photo: &Photo) -> Value {
-    if photo.draft {
-        json!({"_tag": "Draft", "finalizedAt": "2026-11-12T00:00:00.000Z", "manifest": photo.manifest, "photoId": id})
-    } else {
-        json!({"_tag": "Uploading", "manifest": photo.manifest, "missing": missing(photo), "photoId": id})
+    let manifest = &photo.manifest;
+    match &photo.stage {
+        Stage::Uploading => {
+            json!({"_tag": "Uploading", "manifest": manifest, "missing": missing(photo), "photoId": id})
+        }
+        Stage::Draft => {
+            json!({"_tag": "Draft", "finalizedAt": FINALIZED_AT, "manifest": manifest, "photoId": id})
+        }
+        Stage::Published { details } => json!({
+            "_tag": "Published", "details": details, "finalizedAt": FINALIZED_AT,
+            "manifest": manifest, "photoId": id, "publishedAt": FINALIZED_AT,
+        }),
+        Stage::Unpublishing { details } => json!({
+            "_tag": "Unpublishing", "details": details, "finalizedAt": FINALIZED_AT,
+            "manifest": manifest, "photoId": id,
+        }),
     }
 }
 

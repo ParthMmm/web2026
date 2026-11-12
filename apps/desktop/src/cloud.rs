@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::api::PhotoView;
+
 pub use crate::api::ObjectKind;
 
 /// The API's identity for a photo: the SHA-256 of the original, in lowercase hex. The library's
@@ -84,6 +86,20 @@ impl CloudState {
             | Self::Published { cloud_id }
             | Self::Unpublishing { cloud_id } => Some(cloud_id),
             Self::Failed { cloud_id, .. } => cloud_id.as_ref(),
+        }
+    }
+
+    /// The state the server reports in `view`.
+    pub fn reported(view: &PhotoView) -> Self {
+        let cloud_id = CloudId::from_hex(view.photo_id());
+        match view {
+            PhotoView::Uploading { missing, .. } => Self::Uploading {
+                cloud_id,
+                missing: missing.clone(),
+            },
+            PhotoView::Draft { .. } => Self::Draft { cloud_id },
+            PhotoView::Published { .. } => Self::Published { cloud_id },
+            PhotoView::Unpublishing { .. } => Self::Unpublishing { cloud_id },
         }
     }
 

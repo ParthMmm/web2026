@@ -67,8 +67,8 @@ With no address or token, the inspector says the app is not connected, and the a
 
 - **Actions.** **File ▸ Upload Photo** (⌘U) or the inspector's **Upload** button uploads the selected photo. **Upload All Photos** (⇧⌘U) uploads every photo that is only in the library and retries each failure that a retry can fix. **Photos Not Uploaded…**, or the sidebar's **Not uploaded** row, lists each failure with its reason, and **Retry all** retries them.
 - **States.** The catalog keeps one cloud state per photo: Local, Queued, Uploading (with the files the server still lacks), Draft, or Failed with a reason. Publishing, Published, and Unpublishing are in the model for the coming publish actions; nothing sets them yet. A tile in the cloud carries a mark with its own icon and an accessible label, so no state depends on colour. The status bar counts the run, then sums it up, for example "Uploaded 16 photos as private drafts · 1 failed".
-- **Steps.** A photo's cloud identity is the SHA-256 of its original. The app computes it in the same pass as the BLAKE3 identity, with the same changed-file checks. To prepare a photo, the app copies its three WebP renditions to `uploads/<photo>/`, so the files the manifest describes cannot change, and records the manifest. A transfer lane then calls `begin`, sends each file the server reports missing, and calls `finalize`. Each call is safe to repeat. The staged copies are deleted when the photo becomes a draft.
-- **Recovery.** The app records each state before the network call that depends on it. After a restart, it prepares queued photos again and resumes uploading photos from the server's answer to `begin`. So a lost response never sends a second upload or loses a finished one. Timeouts, lost connections, and 5xx answers retry after 2 s, doubling up to 60 s, five attempts in all. Then the photo fails as unavailable, and a retry starts again. A 401 tells you to check the token. A manifest conflict or a rejected finalize stops that photo, because a retry would send the same files. A retry always sends whole files.
+- **Steps.** A photo's cloud identity is the SHA-256 of its original. The app computes it in the same pass as the BLAKE3 identity, with the same changed-file checks. To prepare a photo, the app copies its three WebP renditions to `uploads/<photo>/`, so the files the manifest describes cannot change, and records the manifest. A transfer lane then calls `begin`, streams each file the server reports missing from disk with its length, and calls `finalize`. No file is read whole into memory. Each call is safe to repeat. The upload ends in the state the server reports: a draft, or Published when another run already published the photo. The staged copies are deleted when the upload ends.
+- **Recovery.** The app records each state before the network call that depends on it. After a restart, it prepares queued photos again and resumes uploading photos from the server's answer to `begin`. So a lost response never sends a second upload or loses a finished one. Timeouts, lost connections, and 5xx answers retry after 2 s, doubling up to 60 s, five attempts in all. Then the photo fails as unavailable, and a retry starts again. A 401 tells you to check the token. A manifest conflict or a rejected finalize stops that photo, because a retry would send the same files. If a file can't be read, or the server refuses its bytes, the app checks the file again: one that went missing or changed fails with that reason, which a person can act on. A retry always sends whole files. The client itself sends a request once more when the connection drops before an answer.
 - **Changed originals.** If an original goes missing or changes before its bytes are sent, the upload fails and says what to do. If a photo in the cloud has its original changed in place, the photo stays in the library, detached from that path, so its cloud record is kept.
 
 Two transfer lanes do the network work, apart from the two image lanes, so an upload never holds an encoder or delays a preview.
@@ -78,6 +78,8 @@ Upload tests (`tests/upload.rs`) run the library against an in-process fake API 
 - the whole path to a draft, and the state after a reopen;
 - a restart mid-upload, which sends the original only once;
 - a lost answer to a PUT and to `finalize`;
+- an upload whose `begin` or `finalize` reports a published photo, which stays published;
+- a prepared copy that goes missing before it is sent;
 - 503 answers that recover, and 503 answers that reach the cap and then a retry;
 - a 401, and a rejected `finalize`;
 - a photo queued twice;
@@ -264,7 +266,6 @@ Remaining product work:
 - Add derivative quota and cleanup of orphaned files.
 - Verify the grid tile names, selection state, and activation actions with VoiceOver. Rune exposes elements through AccessKit, but screen-reader behavior is unverified.
 - Wire Publish and Unpublish to the API's calls when they land. The cloud states already model them.
-- Stream originals from disk with the client's `put_file` instead of reading each one into memory.
 - Let a person cancel an upload, and upload several selected photos at once.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No budget was relaxed for the Rune port. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.

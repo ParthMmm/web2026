@@ -19,6 +19,10 @@ use support::{Action, FakeApi, Route, TOKEN, hex, unavailable};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The client sends a request once more by itself when the connection drops before an answer,
+/// so a test loses this many answers in a row to reach the app's own recovery.
+const LOST_BY_THE_CLIENT: usize = 2;
+
 fn quick_retry(attempts: u32) -> UploadRetry {
     UploadRetry {
         attempts,
@@ -235,12 +239,20 @@ fn a_lost_answer_to_a_put_does_not_send_the_object_again() {
     let setup = setup(1);
     let library = open(&setup.root, &api);
     let id = import(&library, &setup.sources)[0].clone();
-    api.fault(Route::Put(ObjectKind::Original), Action::LoseAnswer, 1);
+    api.fault(
+        Route::Put(ObjectKind::Original),
+        Action::LoseAnswer,
+        LOST_BY_THE_CLIENT,
+    );
 
     library.upload(vec![id.clone()]);
     let states = wait_for(&library, &id, is_settled);
     assert!(is_draft(states.last().unwrap()), "{states:?}");
-    assert_eq!(api.count(Route::Put(ObjectKind::Original)), 1);
+    assert_eq!(
+        api.count(Route::Put(ObjectKind::Original)),
+        LOST_BY_THE_CLIENT,
+        "the client's own resend only; the app sends it no more"
+    );
     assert_eq!(
         api.count(Route::Begin),
         2,
@@ -255,17 +267,126 @@ fn a_lost_answer_to_finalize_keeps_the_one_draft() {
     let setup = setup(1);
     let library = open(&setup.root, &api);
     let id = import(&library, &setup.sources)[0].clone();
-    api.fault(Route::Finalize, Action::LoseAnswer, 1);
+    api.fault(Route::Finalize, Action::LoseAnswer, LOST_BY_THE_CLIENT);
 
     library.upload(vec![id.clone()]);
     let states = wait_for(&library, &id, is_settled);
     assert!(is_draft(states.last().unwrap()), "{states:?}");
     assert_eq!(
         api.count(Route::Finalize),
-        1,
-        "begin reports the draft; no second finalize"
+        LOST_BY_THE_CLIENT,
+        "begin reports the draft; the app sends no finalize of its own again"
     );
     assert_eq!(api.puts(), 4, "nothing is sent again");
+    assert_eq!(api.drafts().len(), 1);
+}
+
+fn is_published(state: &CloudState) -> bool {
+    matches!(state, CloudState::Published { .. })
+}
+
+fn is_finished(state: &CloudState) -> bool {
+    is_settled(state) || is_published(state)
+}
+
+/// Waits until the API holds a call, so the test can change things while it waits.
+fn until_held(api: &FakeApi) {
+    let deadline = Instant::now() + TIMEOUT;
+    while !api.holding() {
+        assert!(Instant::now() < deadline, "the held call never arrived");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn a_resumed_upload_of_a_photo_the_server_published_is_recorded_as_published() {
+    let api = FakeApi::start();
+    let setup = setup(1);
+    let library = connected(&setup.root, &api, TOKEN, quick_retry(1000));
+    let id = import(&library, &setup.sources)[0].clone();
+    api.fault(Route::Put(ObjectKind::W2400), unavailable(), usize::MAX);
+    library.upload(vec![id.clone()]);
+    let states = wait_for(
+        &library,
+        &id,
+        |state| matches!(state, CloudState::Uploading { missing, .. } if missing == &[ObjectKind::W2400]),
+    );
+    let cloud_id = states.last().unwrap().cloud_id().unwrap().clone();
+    drop(library);
+    api.clear_faults();
+    // Another run finished the upload and published the photo, and its answers were lost.
+    api.publish_directly(cloud_id.as_str());
+
+    let library = open(&setup.root, &api);
+    let states = wait_for(&library, &id, is_finished);
+    assert_eq!(
+        states.last(),
+        Some(&CloudState::Published {
+            cloud_id: cloud_id.clone()
+        }),
+        "the state the server reports, never Draft: {states:?}"
+    );
+    assert!(!states.iter().any(is_draft), "{states:?}");
+    assert!(!setup.root.join("uploads").join(id.as_str()).exists());
+    drop(library);
+    assert_eq!(
+        stored_state(&setup.root, &api, &id),
+        CloudState::Published { cloud_id }
+    );
+}
+
+#[test]
+fn a_finalize_that_answers_published_is_recorded_as_published() {
+    let api = FakeApi::start();
+    let setup = setup(1);
+    let library = open(&setup.root, &api);
+    let id = import(&library, &setup.sources)[0].clone();
+    api.fault(Route::Finalize, Action::Hold, 1);
+
+    library.upload(vec![id.clone()]);
+    until_held(&api);
+    let original = std::fs::read(&setup.sources[0]).unwrap();
+    api.publish_directly(&hex(&Sha256::digest(&original)));
+    api.release();
+    let states = wait_for(&library, &id, is_finished);
+    assert!(
+        is_published(states.last().unwrap()),
+        "the state the server reports: {states:?}"
+    );
+    assert_eq!(api.count(Route::Finalize), 1);
+}
+
+#[test]
+fn a_prepared_copy_removed_before_it_is_sent_fails_with_a_reason_a_retry_fixes() {
+    let api = FakeApi::start();
+    let setup = setup(1);
+    let library = open(&setup.root, &api);
+    let id = import(&library, &setup.sources)[0].clone();
+    api.fault(Route::Begin, Action::Hold, 1);
+
+    library.upload(vec![id.clone()]);
+    until_held(&api);
+    std::fs::remove_file(
+        setup
+            .root
+            .join("uploads")
+            .join(id.as_str())
+            .join("w1200.webp"),
+    )
+    .unwrap();
+    api.release();
+    let states = wait_for(&library, &id, is_settled);
+    let last = states.last().unwrap();
+    assert!(
+        matches!(failure(last), UploadFailure::Renditions { .. }),
+        "{last:?}"
+    );
+    assert!(last.can_upload(), "a retry makes the copy again");
+    assert_eq!(api.count(Route::Put(ObjectKind::W1200)), 0);
+
+    library.upload(vec![id.clone()]);
+    let states = wait_for(&library, &id, is_settled);
+    assert!(is_draft(states.last().unwrap()), "{states:?}");
     assert_eq!(api.drafts().len(), 1);
 }
 
