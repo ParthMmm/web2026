@@ -8,6 +8,11 @@ import type { ByteCount, Sha256 } from "./domain.ts";
 export const BlobKey = Schema.String.pipe(Schema.brand("BlobKey"));
 export type BlobKey = typeof BlobKey.Type;
 
+export interface BlobBody {
+  readonly size: number;
+  readonly body: Stream.Stream<Uint8Array, unknown>;
+}
+
 export interface Expected {
   readonly bytes: ByteCount;
   readonly sha256: Sha256;
@@ -63,6 +68,14 @@ export class Blobs extends Context.Service<
       offset: number,
       length: number
     ) => Effect.Effect<Uint8Array | null, BlobUnavailable>;
+    /** The whole object, or null when the key holds nothing. */
+    readonly read: (
+      key: BlobKey
+    ) => Effect.Effect<BlobBody | null, BlobUnavailable>;
+    /** Every key that starts with `prefix`, in key order. */
+    readonly list: (
+      prefix: string
+    ) => Effect.Effect<readonly BlobKey[], BlobUnavailable>;
     readonly remove: (
       keys: readonly BlobKey[]
     ) => Effect.Effect<void, BlobUnavailable>;

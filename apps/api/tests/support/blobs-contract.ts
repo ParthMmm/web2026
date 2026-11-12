@@ -1,4 +1,4 @@
-import { deepStrictEqual, strictEqual } from "node:assert";
+import { deepStrictEqual, ok, strictEqual } from "node:assert";
 
 import { Effect, Exit, Stream } from "effect";
 import { Digest } from "effect/crypto";
@@ -144,6 +144,46 @@ export const blobsContract: readonly BlobsCase[] = [
         yield* blobs.put(key("gone"), Stream.make(bytes), expected);
         yield* blobs.remove([key("gone"), key("never")]);
         strictEqual(yield* blobs.holds(key("gone"), expected), false);
+      }),
+  },
+  {
+    name: "list returns every key under a prefix in key order, and nothing beside it",
+    run: (key) =>
+      Effect.gen(function* run() {
+        const blobs = yield* Blobs;
+        const bytes = bytesOf(10);
+        const expected = yield* expectFor(bytes);
+        const names = ["dir/b", "dir/a", "dir/sub/c", "dirt/d", "other"];
+        yield* Effect.forEach(
+          names,
+          (name) => blobs.put(key(name), Stream.make(bytes), expected),
+          { discard: true }
+        );
+        deepStrictEqual(yield* blobs.list(key("dir/")), [
+          key("dir/a"),
+          key("dir/b"),
+          key("dir/sub/c"),
+        ]);
+        deepStrictEqual(yield* blobs.list(key("absent/")), []);
+      }),
+  },
+  {
+    name: "read streams the whole object with its size, and is null for an absent key",
+    run: (key) =>
+      Effect.gen(function* run() {
+        const blobs = yield* Blobs;
+        const bytes = bytesOf(70_000);
+        const expected = yield* expectFor(bytes);
+        yield* blobs.put(key("whole"), chunked(bytes, 4096), expected);
+        const found = yield* blobs.read(key("whole"));
+        ok(found !== null);
+        strictEqual(found.size, bytes.length);
+        const chunks = yield* Stream.runCollect(found.body);
+        deepStrictEqual(
+          Uint8Array.from(chunks.flatMap((chunk) => [...chunk])),
+          bytes
+        );
+        strictEqual(yield* blobs.read(key("absent")), null);
       }),
   },
 ];
