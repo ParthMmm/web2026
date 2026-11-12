@@ -1,7 +1,11 @@
 //! The sheets that list what didn't make it, at the window's trailing edge: files that could
-//! not be imported, and photos whose upload stopped.
+//! not be imported, and photos whose upload, publish or unpublish stopped.
 
-use super::super::{gallery::Gallery, look::Look};
+use super::super::{
+    format,
+    gallery::{Gallery, failure_of},
+    look::Look,
+};
 use crate::catalog::file_name;
 use rune::{Color, Edge, El, ScrollSpec, TextStyle, Transition, col, el, row, text};
 use rune_kit::{Button, ButtonVariant, IconButton, IconButtonVariant};
@@ -36,28 +40,28 @@ pub(super) fn failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
     sheet(look, "", "Not imported", list, actions, layer);
 }
 
-pub(super) fn upload_failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
-    let retryable = s
-        .upload_failures()
-        .any(|(_, failure)| failure.retry_helps());
-    let entries = s.upload_failures().filter_map(|(id, failure)| {
+/// Each photo whose upload, publish or unpublish stopped: what stopped and why.
+pub(super) fn cloud_failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
+    let retryable = s.cloud_failures().any(|(_, state)| state.retry().is_some());
+    let entries = s.cloud_failures().filter_map(|(id, state)| {
         let photo = s.photos.iter().find(|photo| &photo.record.id == id)?;
+        let (failure, step) = failure_of(state)?;
         Some(entry(
             look,
             photo.record.file_name(),
-            failure.message(),
+            format!("{}. {}", format::failed_step(step), failure.message()),
             None,
         ))
     });
-    let list = list(look, "Every upload finished.", entries);
+    let list = list(look, "Every upload and publish finished.", entries);
     let actions = vec![
         Button::new("Retry all")
             .disabled(!retryable || !s.is_connected())
-            .on_press(|s: &mut Gallery| s.retry_uploads())
+            .on_press(|s: &mut Gallery| s.retry_cloud())
             .build(look)
-            .key("retry-uploads"),
+            .key("retry-cloud"),
     ];
-    sheet(look, "upload-", "Not uploaded", list, actions, layer);
+    sheet(look, "cloud-", "Cloud problems", list, actions, layer);
 }
 
 /// One file or photo: its name, what went wrong, and where it is.

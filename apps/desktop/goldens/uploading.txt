@@ -47,9 +47,9 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
          section-title	group	section-title	-	-	-	16,117,91,18	#00000000	-	1.00
           #0	text	-	-	Needs attention	-	16,117,91,18	#00000000	#9a9a9aff	1.00
          spacer	group	spacer	-	-	-	107,126,109,0	#00000000	-	1.00
-        not-uploaded	listitem	not-uploaded	Not uploaded	-	-	8,140,216,28	#00000000	-	1.00
+        cloud-problems	listitem	cloud-problems	Cloud problems	-	-	8,140,216,28	#00000000	-	1.00
          icon	icon	icon	-	-	-	16,146,16,16	#00000000	#9a9a9aff	1.00
-         label	text	label	-	Not uploaded	-	38,144,167,20	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Cloud problems	-	38,144,167,20	#00000000	#9a9a9aff	1.00
          detail	text	detail	-	1	-	211,148,5,12	#00000000	#7f7f7fff	1.00
      sidebar-footer	group	sidebar-footer	-	-	-	0,756,232,40	#00000000	-	1.00
       library-size	group	library-size	-	-	-	8,764,216,24	#00000000	-	1.00
@@ -159,57 +159,64 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
     inspector-header	group	inspector-header	-	-	-	900,44,300,44	#00000000	-	1.00
      #0	text	-	-	Info	-	916,58.5,22,15	#00000000	#9a9a9aff	1.00
     inspector-scroll	group	inspector-scroll	-	-	-	900,88,300,708	#00000000	-	1.00
-     inspector-content	group	inspector-content	-	-	-	900,88,300,534.4	#00000000	-	1.00
+     inspector-content	group	inspector-content	-	-	-	900,88,300,613.4	#00000000	-	1.00
       inspector-preview	group	inspector-preview	-	-	-	912,100,276,184	#141414ff	-	1.00
        #0	group	-	-	-	-	912,100,276,184	#00000000	-	1.00
       #1	group	-	-	-	-	912,296,276,33.9	#00000000	-	1.00
        #0	text	-	-	DSCF4707.JPG	-	916,296,268,17.5	#00000000	#edededff	1.00
        #1	text	-	-	6240 × 4160 · 9.8 MB	-	916,315.5,268,14.4	#00000000	#7f7f7fff	1.00
-      cloud	group	cloud	-	-	-	912,341.9,276,54	#00000000	-	1.00
+      cloud	group	cloud	-	-	-	912,341.9,276,133	#00000000	-	1.00
        cloud-state	group	cloud-state	-	-	-	922,351.9,256,20	#00000000	-	1.00
         #0	icon	-	-	-	-	922,354.9,14,14	#00000000	#9a9a9aff	1.00
         #1	text	-	-	Uploading · 2 of 4 files	-	944,351.9,234,20	#00000000	#edededff	1.00
-       photo-upload-progress	progressbar	photo-upload-progress	-	-	-	922,377.9,256,8	#00000000	-	1.00
+       photo-cloud-progress	progressbar	photo-cloud-progress	-	-	-	922,377.9,256,8	#00000000	-	1.00
         track	group	track	-	-	-	922,377.9,256,8	#191919ff	-	1.00
          fill	group	fill	-	-	-	922,377.9,128,8	#e5483aff	-	1.00
-      exposure-readout	group	exposure-readout	Exposure	-	-	912,407.9,276,45.5	#161616ff	-	1.00
-       #0	group	-	-	-	-	912,407.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	f/2.8	-	927.5,415.9,38,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	APERTURE	-	923.5,433.5,46,11.9	#00000000	#9a9a9aff	1.00
-       #1	group	-	-	-	-	981,407.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	1/125 s	-	989,415.9,53,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	SHUTTER	-	995.5,433.5,40,11.9	#00000000	#9a9a9aff	1.00
-       #2	group	-	-	-	-	1050,407.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	400	-	1073,415.9,23,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	ISO	-	1075.5,433.5,18,11.9	#00000000	#9a9a9aff	1.00
-       #3	group	-	-	-	-	1119,407.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	56 mm	-	1134.5,415.9,38,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	FOCAL	-	1139,433.5,29,11.9	#00000000	#9a9a9aff	1.00
-      details	group	details	-	-	-	912,465.4,276,145	#00000000	-	1.00
-       #0	group	-	-	-	-	912,465.4,276,145	#00000000	-	1.00
-        #0	group	-	-	-	-	912,465.4,276,30	#00000000	-	1.00
-         #0	text	-	-	Film	-	912,470.4,72,20	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,470.4,192,20	#00000000	-	1.00
-          #0	group	-	-	-	-	996,470.4,192,20	#00000000	-	1.00
-           film-chip	group	film-chip	-	-	-	996,470.4,122,20	#00000000	-	1.00
-            #0	group	-	-	-	-	1003,477.4,6,6	#9a9a9aff	-	1.00
-            #1	text	-	-	CLASSIC NEGATIVE	-	1015,474.1,96,12.5	#00000000	#edededff	1.00
-        #1	group	-	-	-	-	912,495.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Camera	-	912,500.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,500.4,192,15	#00000000	-	1.00
-          #0	text	-	-	FUJIFILM X-T5	-	996,500.4,192,15	#00000000	#edededff	1.00
-        #2	group	-	-	-	-	912,520.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Lens	-	912,525.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,525.4,192,15	#00000000	-	1.00
-          #0	text	-	-	XF56mmF1.2 R WR	-	996,525.4,192,15	#00000000	#edededff	1.00
-        #3	group	-	-	-	-	912,545.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Taken	-	912,550.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,550.4,192,15	#00000000	-	1.00
-          #0	text	-	-	2026-08-11 11:21 (UTC+01:00)	-	996,550.4,192,15	#00000000	#edededff	1.00
-        #4	group	-	-	-	-	912,570.4,276,40	#00000000	-	1.00
-         #0	text	-	-	Original	-	912,575.4,72,30	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,575.4,192,30	#00000000	-	1.00
-          #0	text	-	-	/Users/demo/Pictures/2026-08 Kyoto/DSCF4707.JPG	-	996,575.4,192,30	#00000000	#9a9a9aff	1.00
+       description-section	group	description-section	-	-	-	922,391.9,256,73	#00000000	-	1.00
+        #0	group	-	-	-	-	922,397.9,256,12	#00000000	-	1.00
+         #0	text	-	-	Description	-	922,397.9,218,12	#00000000	#9a9a9aff	1.00
+         description-count	text	description-count	-	0 / 300	-	1140,397.9,38,12	#00000000	#7f7f7fff	1.00
+        description	textbox	description	-	-	-	922,413.9,256,51	#060606ff	-	1.00
+         scroll	group	scroll	-	-	-	930,421.9,240,35	#00000000	-	1.00
+          input	textbox	input	Description		-	930,421.9,240,17.5	#00000000	#edededff	1.00
+      exposure-readout	group	exposure-readout	Exposure	-	-	912,486.9,276,45.5	#161616ff	-	1.00
+       #0	group	-	-	-	-	912,486.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	f/2.8	-	927.5,494.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	APERTURE	-	923.5,512.5,46,11.9	#00000000	#9a9a9aff	1.00
+       #1	group	-	-	-	-	981,486.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	1/125 s	-	989,494.9,53,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	SHUTTER	-	995.5,512.5,40,11.9	#00000000	#9a9a9aff	1.00
+       #2	group	-	-	-	-	1050,486.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	400	-	1073,494.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	ISO	-	1075.5,512.5,18,11.9	#00000000	#9a9a9aff	1.00
+       #3	group	-	-	-	-	1119,486.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	56 mm	-	1134.5,494.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	FOCAL	-	1139,512.5,29,11.9	#00000000	#9a9a9aff	1.00
+      details	group	details	-	-	-	912,544.4,276,145	#00000000	-	1.00
+       #0	group	-	-	-	-	912,544.4,276,145	#00000000	-	1.00
+        #0	group	-	-	-	-	912,544.4,276,30	#00000000	-	1.00
+         #0	text	-	-	Film	-	912,549.4,72,20	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,549.4,192,20	#00000000	-	1.00
+          #0	group	-	-	-	-	996,549.4,192,20	#00000000	-	1.00
+           film-chip	group	film-chip	-	-	-	996,549.4,122,20	#00000000	-	1.00
+            #0	group	-	-	-	-	1003,556.4,6,6	#9a9a9aff	-	1.00
+            #1	text	-	-	CLASSIC NEGATIVE	-	1015,553.1,96,12.5	#00000000	#edededff	1.00
+        #1	group	-	-	-	-	912,574.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Camera	-	912,579.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,579.4,192,15	#00000000	-	1.00
+          #0	text	-	-	FUJIFILM X-T5	-	996,579.4,192,15	#00000000	#edededff	1.00
+        #2	group	-	-	-	-	912,599.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Lens	-	912,604.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,604.4,192,15	#00000000	-	1.00
+          #0	text	-	-	XF56mmF1.2 R WR	-	996,604.4,192,15	#00000000	#edededff	1.00
+        #3	group	-	-	-	-	912,624.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Taken	-	912,629.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,629.4,192,15	#00000000	-	1.00
+          #0	text	-	-	2026-08-11 11:21 (UTC+01:00)	-	996,629.4,192,15	#00000000	#edededff	1.00
+        #4	group	-	-	-	-	912,649.4,276,40	#00000000	-	1.00
+         #0	text	-	-	Original	-	912,654.4,72,30	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,654.4,192,30	#00000000	-	1.00
+          #0	text	-	-	/Users/demo/Pictures/2026-08 Kyoto/DSCF4707.JPG	-	996,654.4,192,30	#00000000	#9a9a9aff	1.00
   status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
    status	text	status	-	24 photos · 1 selected	-	14,800.8,926,14.4	#00000000	#9a9a9aff	1.00
    upload-progress	group	upload-progress	Upload progress	-	-	950,800.8,236,14.4	#00000000	-	1.00

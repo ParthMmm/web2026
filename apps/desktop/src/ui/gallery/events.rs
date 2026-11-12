@@ -140,6 +140,7 @@ impl Gallery {
                 }
             }
             Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
+            Event::CloudChecked { corrected } => self.cloud_checked(corrected),
             Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),
         }
@@ -223,8 +224,13 @@ pub(super) fn open_library(
     options: LibraryOptions,
 ) -> anyhow::Result<(Library, Vec<GalleryPhoto>)> {
     let library = Library::open(options)?;
-    let photos = library
-        .photos()
+    let photos = gallery_photos(&library, library.photos());
+    Ok((library, photos))
+}
+
+/// `records` as the grid shows them, with each grid rendition already made.
+pub(super) fn gallery_photos(library: &Library, records: &[PhotoRecord]) -> Vec<GalleryPhoto> {
+    records
         .iter()
         .map(|record| {
             let grid = library.derivative_path(&record.id, DerivativeSize::Grid);
@@ -235,6 +241,5 @@ pub(super) fn open_library(
             };
             GalleryPhoto::new(record.clone(), thumbnail)
         })
-        .collect();
-    Ok((library, photos))
+        .collect()
 }

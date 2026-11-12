@@ -1,9 +1,13 @@
-//! A small in-process photo API for upload tests. It follows the Worker's contract for
-//! `begin`, `get`, `put` and `finalize` (identity by SHA-256, checked lengths and hashes, `409`
-//! on a write after upload, and `finalize` answering a published photo's real view), and lets a test inject faults: an HTTP status, a lost answer, a delay, or a
+//! A small in-process photo API for upload and publish tests. It follows the Worker's contract
+//! for `begin`, `get`, `put`, `finalize`, `publish`, `unpublish` and `list` (identity by
+//! SHA-256, checked lengths and hashes, `409` on a write after upload, `finalize` answering a
+//! published photo's real view, `PhotoNotDraft` for publishing an upload), and lets a test
+//! inject faults: an HTTP status, a lost answer, a delay, an unpublish that stops midway, or a
 //! hold until the test releases it.
 
 #![allow(dead_code)]
+
+pub mod flow;
 
 use photo_prototype::api::{Manifest, ObjectKind};
 use serde_json::{Value, json};
@@ -24,6 +28,9 @@ pub enum Route {
     Get,
     Put(ObjectKind),
     Finalize,
+    Publish,
+    Unpublish,
+    List,
 }
 
 #[derive(Clone, Debug)]
@@ -36,6 +43,9 @@ pub enum Action {
     Delay(Duration),
     /// Wait until the test calls [`FakeApi::release`], then do the work and answer.
     Hold,
+    /// For `unpublish`: start the removal, then fail with 503 before it finishes, as the
+    /// Worker does when deleting the public copies fails.
+    Midway,
 }
 
 struct Fault {
@@ -166,6 +176,55 @@ impl FakeApi {
         photo.stage = Stage::Published { details: json!({}) };
     }
 
+    /// Makes a published photo a draft again, as another run's unpublish would have.
+    pub fn unpublish_directly(&self, id: &str) {
+        let mut state = self.lock();
+        state
+            .photos
+            .get_mut(id)
+            .expect("the server knows the photo")
+            .stage = Stage::Draft;
+    }
+
+    /// Reopens a draft for upload and drops its largest web size, as a `begin` with new
+    /// renditions from another run would have.
+    pub fn reopen(&self, id: &str) {
+        let mut state = self.lock();
+        let photo = state
+            .photos
+            .get_mut(id)
+            .expect("the server knows the photo");
+        photo.stored.remove(&ObjectKind::W2400);
+        photo.stage = Stage::Uploading;
+    }
+
+    /// Forgets a photo, as a fresh local Worker would.
+    pub fn forget(&self, id: &str) {
+        self.lock().photos.remove(id);
+    }
+
+    /// The public gallery: each published photo's identity and details, by identity.
+    pub fn gallery(&self) -> Vec<(String, Value)> {
+        let state = self.lock();
+        let mut photos: Vec<(String, Value)> = state
+            .photos
+            .iter()
+            .filter_map(|(id, photo)| match &photo.stage {
+                Stage::Published { details } => Some((id.clone(), details.clone())),
+                _ => None,
+            })
+            .collect();
+        photos.sort_by(|a, b| a.0.cmp(&b.0));
+        photos
+    }
+
+    /// The photo's view tag, as `get` would answer it.
+    pub fn stage(&self, id: &str) -> Option<String> {
+        let state = self.lock();
+        let photo = state.photos.get(id)?;
+        view(id, photo)["_tag"].as_str().map(str::to_owned)
+    }
+
     pub fn knows_any_photo(&self) -> bool {
         !self.lock().photos.is_empty()
     }
@@ -191,6 +250,24 @@ impl FakeApi {
         if let Some(Action::Status(status, body)) = &action {
             self.lock().calls.push(route);
             respond(&mut stream, *status, body);
+            return;
+        }
+        if matches!(action, Some(Action::Midway)) && authorized {
+            let mut state = self.lock();
+            state.calls.push(route);
+            if let Some(photo) = state.photos.get_mut(photo_id(&path))
+                && let Stage::Published { details } = &photo.stage
+            {
+                photo.stage = Stage::Unpublishing {
+                    details: details.clone(),
+                };
+            }
+            drop(state);
+            respond(
+                &mut stream,
+                503,
+                &json!({"_tag": "StorageUnavailable", "operation": "delete"}),
+            );
             return;
         }
         match &action {
@@ -232,7 +309,7 @@ impl FakeApi {
 
     fn handle(&self, route: Route, path: &str, body: &[u8]) -> (u16, Value) {
         let mut state = self.lock();
-        let id = path.split('/').nth(3).unwrap_or_default().to_owned();
+        let id = photo_id(path).to_owned();
         match route {
             Route::Begin => {
                 let request: Value = serde_json::from_slice(body).unwrap();
@@ -295,8 +372,67 @@ impl FakeApi {
                 photo.stage = Stage::Draft;
                 (200, view(&id, photo))
             }
+            Route::Publish => {
+                let Some(photo) = state.photos.get_mut(&id) else {
+                    return (404, json!({"_tag": "PhotoNotFound", "photoId": id}));
+                };
+                if photo.stage == Stage::Uploading {
+                    return (409, json!({"_tag": "PhotoNotDraft", "photoId": id}));
+                }
+                let details: Value = serde_json::from_slice(body).unwrap_or_else(|_| json!({}));
+                photo.stage = Stage::Published { details };
+                (200, view(&id, photo))
+            }
+            Route::Unpublish => {
+                let Some(photo) = state.photos.get_mut(&id) else {
+                    return (404, json!({"_tag": "PhotoNotFound", "photoId": id}));
+                };
+                if photo.stage == Stage::Uploading {
+                    return (409, json!({"_tag": "PhotoNotDraft", "photoId": id}));
+                }
+                photo.stage = Stage::Draft;
+                (200, view(&id, photo))
+            }
+            Route::List => list(&state.photos, path),
         }
     }
+}
+
+/// The photo identity in a path such as `/v1/photos/<id>/publish`.
+fn photo_id(path: &str) -> &str {
+    let path = path.split('?').next().unwrap_or_default();
+    path.split('/').nth(3).unwrap_or_default()
+}
+
+/// One page of `list`, in identity order, after `after`, at most `limit` long.
+fn list(photos: &HashMap<String, Photo>, path: &str) -> (u16, Value) {
+    let query = path.split_once('?').map_or("", |(_, query)| query);
+    let parameter = |name: &str| {
+        query
+            .split('&')
+            .find_map(|pair| pair.strip_prefix(&format!("{name}=")))
+            .map(str::to_owned)
+    };
+    let after = parameter("after");
+    let limit: usize = parameter("limit")
+        .and_then(|limit| limit.parse().ok())
+        .unwrap_or(100);
+    let mut ids: Vec<&String> = photos
+        .keys()
+        .filter(|id| {
+            after
+                .as_ref()
+                .is_none_or(|after| id.as_str() > after.as_str())
+        })
+        .collect();
+    ids.sort();
+    let next = (ids.len() > limit).then(|| ids[limit - 1].clone());
+    let page: Vec<Value> = ids
+        .into_iter()
+        .take(limit)
+        .map(|id| view(id, &photos[id]))
+        .collect();
+    (200, json!({"next": next, "photos": page}))
 }
 
 fn missing(photo: &Photo) -> Vec<ObjectKind> {
@@ -329,11 +465,15 @@ fn view(id: &str, photo: &Photo) -> Value {
 }
 
 fn route(method: &str, path: &str) -> Option<Route> {
+    let path = path.split('?').next().unwrap_or_default();
     let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     Some(match (method, parts.as_slice()) {
         ("POST", ["v1", "photos"]) => Route::Begin,
         ("GET", ["v1", "photos", _]) => Route::Get,
         ("POST", ["v1", "photos", _, "finalize"]) => Route::Finalize,
+        ("POST", ["v1", "photos", _, "publish"]) => Route::Publish,
+        ("POST", ["v1", "photos", _, "unpublish"]) => Route::Unpublish,
+        ("GET", ["v1", "photos"]) => Route::List,
         ("PUT", ["v1", "photos", _, kind]) => Route::Put(
             ObjectKind::ALL
                 .into_iter()

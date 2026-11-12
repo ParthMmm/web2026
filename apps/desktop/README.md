@@ -1,6 +1,6 @@
 # Photo prototype
 
-A macOS photo library built with [Rune](https://github.com/anomalyco/rune) and rune-kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). It uploads photos to the photo API in `apps/api` as private drafts (see [Upload](#upload)). Editing and publishing from the window are not built yet.
+A macOS photo library built with [Rune](https://github.com/anomalyco/rune) and rune-kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). It uploads photos to the photo API in `apps/api` as private drafts, and publishes them to the public gallery and takes them back out (see [Upload](#upload) and [Publish](#publish)). Photo editing is not built yet.
 
 ## Run on macOS
 
@@ -32,7 +32,7 @@ cargo run --release --locked --manifest-path apps/desktop/Cargo.toml --features 
 Arguments are JPEG files or folders to import on launch. Rune reads its own flags first (`--help` lists them) and passes the rest to the app. You can also launch without arguments and use **Import…** (Cmd-O) or **Import from Photos…** (Cmd-Shift-O), from the title bar or the File menu. Imports queue, so you can start another one while one is running. The status bar shows progress and a one-line summary when the import finishes.
 
 - **Browse:** click a photo to select it, or use the arrow keys, Page Up/Down, and Home/End (or Cmd-Up/Down). The inspector shows the large preview, dimensions, file size, camera, lens, exposure, capture time, and the original's location.
-- **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, and Show in Finder (also Cmd-Alt-R).
+- **Arrange:** the slider in the title bar, or Cmd-+ and Cmd--, sets the photo size. Ctrl-Cmd-S shows or hides the sidebar, and Cmd-I shows or hides the inspector. Right-click a photo for Open, Show Info, Show in Finder (also Cmd-Alt-R), Publish, and Unpublish.
 - **View:** double-click, Space, or Return opens the full-window viewer. Left/Right step through photos; Escape or Space closes it and returns focus to the grid.
 - **Failures:** files that couldn't be imported appear under **Needs attention › Not imported** in the sidebar, with their count (also File › Files Not Imported…). The sheet shows the reason for each file, and offers **Retry all** and **Clear list**.
 - **Performance:** the chip button in the title bar (Cmd-Alt-P, or View › Show or Hide Performance) shows the frames drawn in the last second and the slowest frame's CPU time, from Rune's per-frame reports. An idle window draws no frames, so the panel then says it is idle.
@@ -55,7 +55,7 @@ The library lives in `~/Library/Application Support/dev.parth.photo-prototype/li
 
 ## Upload
 
-The app uploads photos to the photo API (`apps/api`) as private drafts. Only the owner can see a draft. Publishing is modelled but not yet wired to the window.
+The app uploads photos to the photo API (`apps/api`) as private drafts. Only the owner can see a draft. [Publish](#publish) makes a draft public.
 
 `PHOTO_API_URL` sets the API's address. `PHOTO_API_TOKEN` sets the owner token. Without it, the app reads the Keychain item with service `dev.parth.photo-prototype` and account `owner-token`, which you can add with this command (it asks for the token):
 
@@ -65,13 +65,13 @@ security add-generic-password -s dev.parth.photo-prototype -a owner-token -w
 
 With no address or token, the inspector says the app is not connected, and the app stays a local library. The token never reaches the catalog, a log, or an error message.
 
-- **Actions.** **File ▸ Upload Photo** (⌘U) or the inspector's **Upload** button uploads the selected photo. **Upload All Photos** (⇧⌘U) uploads every photo that is only in the library and retries each failure that a retry can fix. **Photos Not Uploaded…**, or the sidebar's **Not uploaded** row, lists each failure with its reason, and **Retry all** retries them.
-- **States.** The catalog keeps one cloud state per photo: Local, Queued, Uploading (with the files the server still lacks), Draft, or Failed with a reason. Publishing, Published, and Unpublishing are in the model for the coming publish actions; nothing sets them yet. A tile in the cloud carries a mark with its own icon and an accessible label, so no state depends on colour. The status bar counts the run, then sums it up, for example "Uploaded 16 photos as private drafts · 1 failed".
+- **Actions.** **File ▸ Upload Photo** (⌘U) or the inspector's **Upload** button uploads the selected photo. **Upload All Photos** (⇧⌘U) uploads every photo that is only in the library and retries each failure that a retry can fix. **Cloud Problems…**, or the sidebar's **Cloud problems** row, lists each upload, publish, or unpublish that stopped, with the step and its reason, and **Retry all** retries each one with the step it needs.
+- **States.** The catalog keeps one cloud state per photo: Local, Queued, Uploading (with the files the server still lacks), Draft, Publishing, Published, Unpublishing, or Failed with a reason and the step that stopped. A tile in the cloud carries a mark with its own icon and an accessible label, so no state depends on colour. The status bar counts the run, then sums it up, for example "Uploaded 16 photos as private drafts · 1 failed".
 - **Steps.** A photo's cloud identity is the SHA-256 of its original. The app computes it in the same pass as the BLAKE3 identity, with the same changed-file checks. To prepare a photo, the app copies its three WebP renditions to `uploads/<photo>/`, so the files the manifest describes cannot change, and records the manifest. A transfer lane then calls `begin`, streams each file the server reports missing from disk with its length, and calls `finalize`. No file is read whole into memory. Each call is safe to repeat. The upload ends in the state the server reports: a draft, or Published when another run already published the photo. The staged copies are deleted when the upload ends.
 - **Recovery.** The app records each state before the network call that depends on it. After a restart, it prepares queued photos again and resumes uploading photos from the server's answer to `begin`. So a lost response never sends a second upload or loses a finished one. Timeouts, lost connections, and 5xx answers retry after 2 s, doubling up to 60 s, five attempts in all. Then the photo fails as unavailable, and a retry starts again. A 401 tells you to check the token. A manifest conflict or a rejected finalize stops that photo, because a retry would send the same files. If a file can't be read, or the server refuses its bytes, the app checks the file again: one that went missing or changed fails with that reason, which a person can act on. A retry always sends whole files. The client itself sends a request once more when the connection drops before an answer.
 - **Changed originals.** If an original goes missing or changes before its bytes are sent, the upload fails and says what to do. If a photo in the cloud has its original changed in place, the photo stays in the library, detached from that path, so its cloud record is kept.
 
-Two transfer lanes do the network work, apart from the two image lanes, so an upload never holds an encoder or delays a preview.
+Two transfer lanes do the network work for uploads, publishes, and unpublishes, apart from the two image lanes, so a call never holds an encoder or delays a preview.
 
 Upload tests (`tests/upload.rs`) run the library against an in-process fake API (`tests/support/mod.rs`) that follows the Worker's contract and injects faults. They cover:
 
@@ -88,7 +88,7 @@ Upload tests (`tests/upload.rs`) run the library against an in-process fake API 
 - a photo in the cloud whose original changes in place;
 - a library with no API set up.
 
-`upload-check` imports JPEGs into a new library, uploads them through the library, asks the API with its own client whether each photo is a draft of its original, then reopens the catalog to confirm the drafts persisted. Run it only against a local Worker:
+`upload-check` imports JPEGs into a new library, uploads them through the library, asks the API with its own client whether each photo is a draft of its original, then reopens the catalog to confirm the drafts persisted. It then checks publish and unpublish against the public gallery (see [Publish](#publish)). Run it only against a local Worker:
 
 ```sh
 cd apps/api && bun install --frozen-lockfile && OWNER_TOKEN=<32 or more characters> PORT=8791 bun scripts/serve.ts
@@ -98,6 +98,24 @@ PHOTO_API_URL=http://127.0.0.1:8791 PHOTO_API_TOKEN=<the same token> \
 ```
 
 Schema v4 adds the `uploads` table and a photo's detached source.
+
+## Publish
+
+**File ▸ Publish Photo** (⌘P), the inspector's **Publish** button, or **Publish** in a tile's context menu puts the selected draft in the public gallery. **Unpublish Photo** (⇧⌘P), or **Unpublish** in the same places, takes a published photo back out; it is a private draft again. Publish is offered only for a draft, and Unpublish only for a published photo.
+
+- **What is sent.** The capture time and film simulation the catalog read from EXIF, and the photo's description as alt text. Nothing else from EXIF leaves the library.
+- **Description.** The inspector edits it under the cloud state, with a count against the API's 300-character limit. **Save**, ⌘↩, or selecting another photo keeps it in the catalog as one line. When the photo is published, the app publishes it again with the new words.
+- **States.** The catalog says Publishing or Unpublishing before the call. A tile mark shows a globe for Published, a cloud for Draft, and a clock while either call runs, each with an accessible label. The inspector says who can see the photo: "Only you can see it" for a draft, "Anyone can see it in the gallery" when published, and "It may still be public" after an unpublish that stopped. The status bar says "Publishing 2 photos…" while calls run, then "Published DSCF0001.JPG" or why it couldn't.
+- **Recovery.** Publish and unpublish use the upload lanes' retry: timeouts, lost connections, and 5xx answers retry with the same backoff, then fail as unavailable with a retry. Each call is safe to repeat, so a lost answer ends in the right state once. An unpublish that the server stops midway (503) stays Unpublishing until a retry finishes it; the app never shows Draft while the server still says Unpublishing. A publish of a photo the server holds as an unfinished upload fails, and its retry finishes the upload first. A photo the server doesn't know fails as not in the cloud, and a retry uploads it again.
+- **Restart and reconcile.** A restart resumes each Publishing or Unpublishing photo and takes the server's answer. When the library opens with an API, a transfer lane reads the server's photo list once (at most 50 pages of 200) before any other call, and corrects local states that disagree: a draft the server published, a publish whose answer was lost, or a photo the server no longer has, which becomes Local. A photo past the pages read is left as it is.
+
+Publish tests (`tests/publish.rs`) use the same fake API. They cover publish and unpublish with the details sent, lost answers to both, an unpublish that stops midway once and every time, a restart during each, a publish refused because the upload is unfinished, a refused token, the check on open, a changed description on a published photo, and an API that is unavailable for a while.
+
+Window press tests (`src/ui/tests/cloud.rs`) open the real view on a library connected to the same fake API, so each press runs its call and the answer lands before the test reads the window. They press Publish, Unpublish, Retry after a publish that stopped, the description field with Save on a published photo, and Publish in a tile's context menu.
+
+`upload-check` also publishes every photo, reads `<api>/gallery/v1.json` with no token and finds each one there (one with its description as alt text), then unpublishes them and finds none.
+
+Schema v5 adds a photo's description.
 
 ## Processing and memory bounds
 
@@ -228,7 +246,7 @@ $B --script keys.json --snap stepped.png --at 1.5
 $B --tree tree.json --scene failures --at 1.5
 ```
 
-The upload scenes are `uploading`, `upload-draft`, `upload-failed`, `upload-failures`, and `not-connected`. In the demo library, Upload changes nothing and starts no thread.
+The upload scenes are `uploading`, `upload-draft`, `upload-failed`, `upload-failures`, and `not-connected`. The publish scenes are `published`, `publishing`, `unpublishing`, `publish-failed`, `unpublish-failed`, `cloud-problems`, `description-edit`, and `description-long`. In the demo library, Upload, Publish, and Unpublish change nothing and start no thread; a saved description stays in memory.
 
 Render at `--at 1.5`: Rune animates elements in, so earlier frames show them half in. `cargo test --features desktop` also presses the real view (`src/ui/tests.rs`) and compares every scene's element tree with `goldens/<scene>.txt`. After a change you meant to make, rewrite them with `PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens`, read the diff, and commit them with the change. A refactor rewrites none. `scripts/check` runs format, file size, clippy with no warnings, and every test and golden.
 
@@ -241,8 +259,8 @@ The window keeps the Library design from the ZUI build (#21), drawn with Rune an
 - **Shell.** One 44 pt title bar across the window: the sidebar toggle past the traffic lights, the grid's title where the grid starts, and the zoom slider, the Info and performance toggles, and **Import** at the trailing edge. Below it, the sidebar, the grid and the inspector. The sidebar has one destination per collection the library keeps, with its count, and the weight of the originals in its footer. The status bar is mono, shows what is in view and selected at rest, and owns transient import state, so no datum appears twice. Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed column count.
 - **Planes.** The grid and the viewer sit on the opaque content plane (`#060606` dark, white light). The title bar, sidebar, inspector and status bar sit on the chrome plane, with a hairline between planes. The accent is red (`#E5483A` dark, `#C8372A` light) and marks only the primary action and progress.
 - **Tiles.** Square crops on a plate, 6 pt apart, with a selection ring set 3 pt outside the photo. Rune paints hover and press itself, so the pointer crossing tiles never re-runs the view. A photo whose original is missing turns grey and says so. The grid's scroll edges fade while content is hidden under them.
-- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, a cloud section with the photo's upload state and its Upload or Retry action, and a detail list that leaves out values the camera never wrote.
-- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheets slide in at the trailing edge. One lists each file that didn't import, and the other each photo that didn't upload, with its reason.
+- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, a cloud section with the photo's cloud state, its Upload, Publish, Unpublish, or Retry action, who can see it, and its description, and a detail list that leaves out values the camera never wrote.
+- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheets slide in at the trailing edge. One lists each file that didn't import, and the other each upload, publish, or unpublish that stopped, with its reason.
 - **Type and icons.** Geist and Geist Mono (OFL, `fonts/`), with tabular figures for counts, sizes and camera settings. Icons are Lucide, as SVG bodies (`src/ui/icons.rs`).
 - **Numbers from the kit.** Radii come from `k.radius`. Status words appear only for transient import state or when something went wrong.
 
@@ -252,7 +270,7 @@ The window keeps the Library design from the ZUI build (#21), drawn with Rune an
 - `src/ui/look.rs` holds the palette, the fonts and the text styles.
 - `src/ui/view/` has one file per window region: title bar, grid, inspector, viewer, and the failures sheet. `view/mod.rs` assembles them with the sidebar and the status bar.
 - `src/ui/view/parts.rs` holds pieces that take data and draw it (the exposure readout and pill, the film chip, the detail list). They hold no state.
-- `src/api.rs` is the one door to the photo API, `src/cloud.rs` holds the cloud state, and `src/library/upload.rs` prepares and sends uploads. `src/ui/gallery/upload.rs` holds the window's upload actions, and `src/ui/view/cloud.rs` draws the inspector's cloud section and the tile mark.
+- `src/api.rs` is the one door to the photo API, `src/cloud.rs` holds the cloud state, `src/library/transfer.rs` runs the transfer lanes, `src/library/upload.rs` prepares and sends uploads, and `src/library/publish.rs` holds publish, unpublish, the description, and the check on open. `src/ui/gallery/cloud.rs` holds the window's cloud actions, `src/ui/gallery/description.rs` the description being edited, and `src/ui/view/cloud.rs` draws the inspector's cloud section and the tile mark.
 - `src/ui/demo.rs` holds the demo library and the scenes, and `goldens/` each scene's element tree.
 
 ## Pipeline choice and remaining product work
@@ -265,8 +283,8 @@ Remaining product work:
 - Tune the WebP quality with real photos and settle on a final value.
 - Add derivative quota and cleanup of orphaned files.
 - Verify the grid tile names, selection state, and activation actions with VoiceOver. Rune exposes elements through AccessKit, but screen-reader behavior is unverified.
-- Wire Publish and Unpublish to the API's calls when they land. The cloud states already model them.
-- Let a person cancel an upload, and upload several selected photos at once.
+- Verify the reconcile limit (50 pages) against a library larger than 10,000 photos.
+- Let a person cancel an upload, and upload or publish several selected photos at once.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No budget was relaxed for the Rune port. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
 

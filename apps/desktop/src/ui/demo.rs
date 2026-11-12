@@ -1,21 +1,23 @@
 //! Made-up photos for headless renders and the goldens, and the scenes `--scene` names. A
 //! headless run never opens the library on disk, so a render never shows anyone's photos.
 //! Every state the window can show has a scene: full, empty, opening, failed, importing,
-//! long names, each end of the zoom, the panels hidden, and each upload state.
-//! Demo uploads are made up too: the demo library makes no calls.
+//! long names, each end of the zoom, the panels hidden, and each upload and publish state.
+//! Demo uploads and publishes are made up too: the demo library makes no calls.
 
 use super::{
     format,
-    gallery::{Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail, UploadRun},
+    gallery::{
+        DescriptionEdit, Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail, UploadRun,
+    },
     images::ImageSlots,
 };
 use crate::{
     ImportFailure, PhotoId, PhotoRecord,
     api::Connection,
-    cloud::{CloudId, CloudState, ObjectKind, UploadFailure},
+    cloud::{CloudFailure, CloudId, CloudState, CloudStep, ObjectKind},
     metadata::{CaptureTime, ExposureTime, FilmSimulation, PhotoMetadata},
 };
-use rune::ImageCache;
+use rune::{ImageCache, TextEdit};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -110,14 +112,95 @@ pub(super) static SCENES: &[Scene] = &[
     }),
     ("upload-failures", |s| {
         uploads_finished(s);
-        s.overlay = Overlay::UploadFailures;
+        s.overlay = Overlay::CloudFailures;
     }),
     ("not-connected", |s| {
         s.connection = Connection::NotConnected {
             reason: "Set PHOTO_API_URL to the photo API's address".into(),
         };
     }),
+    ("published", |s| {
+        in_the_gallery(s);
+        select(s, 1);
+    }),
+    ("publishing", |s| {
+        in_the_gallery(s);
+        set_cloud(s, 0, |cloud_id| CloudState::Publishing { cloud_id });
+        set_cloud(s, 3, |cloud_id| CloudState::Unpublishing { cloud_id });
+        select(s, 0);
+    }),
+    ("unpublishing", |s| {
+        in_the_gallery(s);
+        set_cloud(s, 3, |cloud_id| CloudState::Unpublishing { cloud_id });
+        select(s, 3);
+    }),
+    ("publish-failed", |s| {
+        publishes_failed(s);
+        select(s, 2);
+    }),
+    ("unpublish-failed", |s| {
+        publishes_failed(s);
+        select(s, 4);
+    }),
+    ("cloud-problems", |s| {
+        publishes_failed(s);
+        set_cloud(s, 5, unavailable);
+        s.overlay = Overlay::CloudFailures;
+    }),
+    ("description-edit", |s| {
+        in_the_gallery(s);
+        select(s, 0);
+        editing(
+            s,
+            0,
+            "A tram climbs past the cathedral in the last light, its windows lit gold.",
+        );
+    }),
+    ("description-long", |s| {
+        in_the_gallery(s);
+        select(s, 1);
+        let long = "Low sun on the tram lines in Alfama, with the river beyond the roofs and a cat asleep on a step. ".repeat(4);
+        editing(s, 1, &long);
+    }),
 ];
+
+/// Drafts and two published photos, each with words a visitor's screen reader says.
+fn in_the_gallery(s: &mut Gallery) {
+    for index in 0..8 {
+        set_cloud(s, index, |cloud_id| CloudState::Draft { cloud_id });
+    }
+    for index in [1, 3] {
+        set_cloud(s, index, |cloud_id| CloudState::Published { cloud_id });
+    }
+    s.photos[1].record.description = Some("Low sun on the tram lines in Alfama".into());
+    s.photos[3].record.description = Some("A fisherman's boat pulled up on the shingle".into());
+}
+
+/// A publish that stopped and can be retried, an unpublish that stopped while the server was
+/// still removing the photo, and a publish the server refused because it holds an unfinished
+/// upload.
+fn publishes_failed(s: &mut Gallery) {
+    in_the_gallery(s);
+    set_cloud(s, 2, |cloud_id| {
+        unavailable_at(CloudStep::Publish, cloud_id)
+    });
+    set_cloud(s, 4, |cloud_id| {
+        unavailable_at(CloudStep::Unpublish, cloud_id)
+    });
+    set_cloud(s, 6, |cloud_id| CloudState::Failed {
+        cloud_id: Some(cloud_id),
+        failure: CloudFailure::NotDraft,
+        step: CloudStep::Publish,
+    });
+}
+
+/// The inspector's description field for photo `index`, holding `text` not yet saved.
+fn editing(s: &mut Gallery, index: usize, text: &str) {
+    s.description = DescriptionEdit {
+        id: Some(s.photos[index].record.id.clone()),
+        edit: TextEdit::new(text),
+    };
+}
 
 /// What the demo library says about its connection: made up, and never called.
 pub(super) fn connection() -> Connection {
@@ -153,9 +236,10 @@ fn uploads_finished(s: &mut Gallery) {
     set_cloud(s, 5, unavailable);
     set_cloud(s, 7, |cloud_id| CloudState::Failed {
         cloud_id: Some(cloud_id),
-        failure: UploadFailure::Rejected {
+        failure: CloudFailure::Rejected {
             message: "w1200 carries metadata".into(),
         },
+        step: CloudStep::Upload,
     });
     s.status = format::upload_summary(&UploadRun {
         total: 8,
@@ -165,11 +249,17 @@ fn uploads_finished(s: &mut Gallery) {
 }
 
 fn unavailable(cloud_id: CloudId) -> CloudState {
+    unavailable_at(CloudStep::Upload, cloud_id)
+}
+
+/// `step` stopped after the API didn't answer five times.
+fn unavailable_at(step: CloudStep, cloud_id: CloudId) -> CloudState {
     CloudState::Failed {
         cloud_id: Some(cloud_id),
-        failure: UploadFailure::Unavailable {
+        failure: CloudFailure::Unavailable {
             message: "HTTP 503, 5 tries".into(),
         },
+        step,
     }
 }
 
@@ -229,6 +319,7 @@ pub(super) fn photos() -> Vec<GalleryPhoto> {
                             Some("+01:00".into()),
                         ),
                     },
+                    description: None,
                     cloud: CloudState::Local,
                 };
                 GalleryPhoto::new(record, Thumbnail::Ready(path(&id, "grid")))

@@ -188,15 +188,25 @@ fn tile(s: &Gallery, photo: &GalleryPhoto, look: &Look, layout: GridLayout) -> E
             } else {
                 "Hide Info"
             };
+            let connected = s.is_connected();
+            let (can_publish, can_unpublish) = s.selected_photo().map_or((false, false), |photo| {
+                let state = &photo.record.cloud;
+                (state.can_publish(), state.can_unpublish())
+            });
             let items = PopupMenu::new()
                 .item(PopupItem::new("open", "Open"))
                 .item(PopupItem::new("info", info))
                 .separator()
-                .item(PopupItem::new("reveal", "Show in Finder"));
+                .item(PopupItem::new("reveal", "Show in Finder"))
+                .separator()
+                .item(PopupItem::new("publish", "Publish").enabled(connected && can_publish))
+                .item(PopupItem::new("unpublish", "Unpublish").enabled(connected && can_unpublish));
             tx.popup_menu(items, press, |s: &mut Gallery, picked, _| match picked {
                 Some("open") => s.open_viewer(),
                 Some("info") => s.toggle_inspector(),
                 Some("reveal") => s.reveal_selected(),
+                Some("publish") => s.publish_selected(),
+                Some("unpublish") => s.unpublish_selected(),
                 _ => {}
             });
         });

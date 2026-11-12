@@ -47,9 +47,9 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
          section-title	group	section-title	-	-	-	16,117,91,18	#00000000	-	1.00
           #0	text	-	-	Needs attention	-	16,117,91,18	#00000000	#9a9a9aff	1.00
          spacer	group	spacer	-	-	-	107,126,109,0	#00000000	-	1.00
-        not-uploaded	listitem	not-uploaded	Not uploaded	-	-	8,140,216,28	#00000000	-	1.00
+        cloud-problems	listitem	cloud-problems	Cloud problems	-	-	8,140,216,28	#00000000	-	1.00
          icon	icon	icon	-	-	-	16,146,16,16	#00000000	#9a9a9aff	1.00
-         label	text	label	-	Not uploaded	-	38,144,165,20	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Cloud problems	-	38,144,165,20	#00000000	#9a9a9aff	1.00
          detail	text	detail	-	2	-	209,148,7,12	#00000000	#7f7f7fff	1.00
      sidebar-footer	group	sidebar-footer	-	-	-	0,756,232,40	#00000000	-	1.00
       library-size	group	library-size	-	-	-	8,764,216,24	#00000000	-	1.00
@@ -161,71 +161,82 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
     inspector-header	group	inspector-header	-	-	-	900,44,300,44	#00000000	-	1.00
      #0	text	-	-	Info	-	916,58.5,22,15	#00000000	#9a9a9aff	1.00
     inspector-scroll	group	inspector-scroll	-	-	-	900,88,300,708	#00000000	-	1.00
-     inspector-content	group	inspector-content	-	-	-	900,88,300,520.4	#00000000	-	1.00
+     inspector-content	group	inspector-content	-	-	-	900,88,300,617.4	#00000000	-	1.00
       inspector-preview	group	inspector-preview	-	-	-	912,100,276,184	#141414ff	-	1.00
        #0	group	-	-	-	-	912,100,276,184	#00000000	-	1.00
       #1	group	-	-	-	-	912,296,276,33.9	#00000000	-	1.00
        #0	text	-	-	DSCF4700.JPG	-	916,296,268,17.5	#00000000	#edededff	1.00
        #1	text	-	-	6240 × 4160 · 12 MB	-	916,315.5,268,14.4	#00000000	#7f7f7fff	1.00
-      cloud	group	cloud	-	-	-	912,341.9,276,40	#00000000	-	1.00
+      cloud	group	cloud	-	-	-	912,341.9,276,137	#00000000	-	1.00
        cloud-state	group	cloud-state	-	-	-	922,351.9,256,20	#00000000	-	1.00
         #0	icon	-	-	-	-	922,354.9,14,14	#00000000	#9a9a9aff	1.00
-        #1	text	-	-	Private draft	-	944,351.9,234,20	#00000000	#edededff	1.00
-      exposure-readout	group	exposure-readout	Exposure	-	-	912,393.9,276,45.5	#161616ff	-	1.00
-       #0	group	-	-	-	-	912,393.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	f/2	-	935,401.9,23,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	APERTURE	-	923.5,419.5,46,11.9	#00000000	#9a9a9aff	1.00
-       #1	group	-	-	-	-	981,393.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	1/250 s	-	989,401.9,53,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	SHUTTER	-	995.5,419.5,40,11.9	#00000000	#9a9a9aff	1.00
-       #2	group	-	-	-	-	1050,393.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	160	-	1073,401.9,23,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	ISO	-	1075.5,419.5,18,11.9	#00000000	#9a9a9aff	1.00
-       #3	group	-	-	-	-	1119,393.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	56 mm	-	1134.5,401.9,38,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	FOCAL	-	1139,419.5,29,11.9	#00000000	#9a9a9aff	1.00
-      details	group	details	-	-	-	912,451.4,276,145	#00000000	-	1.00
-       #0	group	-	-	-	-	912,451.4,276,145	#00000000	-	1.00
-        #0	group	-	-	-	-	912,451.4,276,30	#00000000	-	1.00
-         #0	text	-	-	Film	-	912,456.4,72,20	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,456.4,192,20	#00000000	-	1.00
-          #0	group	-	-	-	-	996,456.4,192,20	#00000000	-	1.00
-           film-chip	group	film-chip	-	-	-	996,456.4,122,20	#00000000	-	1.00
-            #0	group	-	-	-	-	1003,463.4,6,6	#9a9a9aff	-	1.00
-            #1	text	-	-	CLASSIC NEGATIVE	-	1015,460.1,96,12.5	#00000000	#edededff	1.00
-        #1	group	-	-	-	-	912,481.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Camera	-	912,486.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,486.4,192,15	#00000000	-	1.00
-          #0	text	-	-	FUJIFILM X-T5	-	996,486.4,192,15	#00000000	#edededff	1.00
-        #2	group	-	-	-	-	912,506.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Lens	-	912,511.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,511.4,192,15	#00000000	-	1.00
-          #0	text	-	-	XF56mmF1.2 R WR	-	996,511.4,192,15	#00000000	#edededff	1.00
-        #3	group	-	-	-	-	912,531.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Taken	-	912,536.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,536.4,192,15	#00000000	-	1.00
-          #0	text	-	-	2026-08-10 10:20 (UTC+01:00)	-	996,536.4,192,15	#00000000	#edededff	1.00
-        #4	group	-	-	-	-	912,556.4,276,40	#00000000	-	1.00
-         #0	text	-	-	Original	-	912,561.4,72,30	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,561.4,192,30	#00000000	-	1.00
-          #0	text	-	-	/Users/demo/Pictures/2026-08 Kyoto/DSCF4700.JPG	-	996,561.4,192,30	#00000000	#9a9a9aff	1.00
+        #1	text	-	-	Private draft	-	944,351.9,147,20	#00000000	#edededff	1.00
+        publish-photo	button	publish-photo	Publish	-	Add it to the public gallery (⌘P)	1099,351.9,79,20	#131313ff	-	1.00
+         icon	icon	icon	-	-	-	1109,354.9,14,14	#00000000	#edededff	1.00
+         label	text	label	-	Publish	-	1129,355.9,39,12	#00000000	#edededff	1.00
+       public-state	text	public-state	-	Private. Only you can see it.	-	922,377.9,256,12	#00000000	#9a9a9aff	1.00
+       description-section	group	description-section	-	-	-	922,395.9,256,73	#00000000	-	1.00
+        #0	group	-	-	-	-	922,401.9,256,12	#00000000	-	1.00
+         #0	text	-	-	Description	-	922,401.9,218,12	#00000000	#9a9a9aff	1.00
+         description-count	text	description-count	-	0 / 300	-	1140,401.9,38,12	#00000000	#7f7f7fff	1.00
+        description	textbox	description	-	-	-	922,417.9,256,51	#060606ff	-	1.00
+         scroll	group	scroll	-	-	-	930,425.9,240,35	#00000000	-	1.00
+          input	textbox	input	Description		-	930,425.9,240,17.5	#00000000	#edededff	1.00
+      exposure-readout	group	exposure-readout	Exposure	-	-	912,490.9,276,45.5	#161616ff	-	1.00
+       #0	group	-	-	-	-	912,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	f/2	-	935,498.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	APERTURE	-	923.5,516.5,46,11.9	#00000000	#9a9a9aff	1.00
+       #1	group	-	-	-	-	981,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	1/250 s	-	989,498.9,53,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	SHUTTER	-	995.5,516.5,40,11.9	#00000000	#9a9a9aff	1.00
+       #2	group	-	-	-	-	1050,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	160	-	1073,498.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	ISO	-	1075.5,516.5,18,11.9	#00000000	#9a9a9aff	1.00
+       #3	group	-	-	-	-	1119,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	56 mm	-	1134.5,498.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	FOCAL	-	1139,516.5,29,11.9	#00000000	#9a9a9aff	1.00
+      details	group	details	-	-	-	912,548.4,276,145	#00000000	-	1.00
+       #0	group	-	-	-	-	912,548.4,276,145	#00000000	-	1.00
+        #0	group	-	-	-	-	912,548.4,276,30	#00000000	-	1.00
+         #0	text	-	-	Film	-	912,553.4,72,20	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,553.4,192,20	#00000000	-	1.00
+          #0	group	-	-	-	-	996,553.4,192,20	#00000000	-	1.00
+           film-chip	group	film-chip	-	-	-	996,553.4,122,20	#00000000	-	1.00
+            #0	group	-	-	-	-	1003,560.4,6,6	#9a9a9aff	-	1.00
+            #1	text	-	-	CLASSIC NEGATIVE	-	1015,557.1,96,12.5	#00000000	#edededff	1.00
+        #1	group	-	-	-	-	912,578.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Camera	-	912,583.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,583.4,192,15	#00000000	-	1.00
+          #0	text	-	-	FUJIFILM X-T5	-	996,583.4,192,15	#00000000	#edededff	1.00
+        #2	group	-	-	-	-	912,603.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Lens	-	912,608.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,608.4,192,15	#00000000	-	1.00
+          #0	text	-	-	XF56mmF1.2 R WR	-	996,608.4,192,15	#00000000	#edededff	1.00
+        #3	group	-	-	-	-	912,628.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Taken	-	912,633.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,633.4,192,15	#00000000	-	1.00
+          #0	text	-	-	2026-08-10 10:20 (UTC+01:00)	-	996,633.4,192,15	#00000000	#edededff	1.00
+        #4	group	-	-	-	-	912,653.4,276,40	#00000000	-	1.00
+         #0	text	-	-	Original	-	912,658.4,72,30	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,658.4,192,30	#00000000	-	1.00
+          #0	text	-	-	/Users/demo/Pictures/2026-08 Kyoto/DSCF4700.JPG	-	996,658.4,192,30	#00000000	#9a9a9aff	1.00
   status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
    status	text	status	-	Uploaded 6 photos as private drafts · 2 failed	-	14,800.8,1172,14.4	#00000000	#9a9a9aff	1.00
- upload-failures-scrim	group	upload-failures-scrim	-	-	-	0,0,1200,820	#00000099	-	1.00
- upload-failures-sheet	dialog	upload-failures-sheet	Not uploaded	-	-	760,0,440,820	#161616ff	-	1.00
-  upload-failure-header	group	upload-failure-header	-	-	-	760,0,440,56	#00000000	-	1.00
-   #0	text	-	-	Not uploaded	-	776,18.6,384,18.8	#00000000	#edededff	1.00
-   close-upload-failures	button	close-upload-failures	Close	-	Close (Esc)	1160,16,24,24	#00000000	-	1.00
+ cloud-failures-scrim	group	cloud-failures-scrim	-	-	-	0,0,1200,820	#00000099	-	1.00
+ cloud-failures-sheet	dialog	cloud-failures-sheet	Cloud problems	-	-	760,0,440,820	#161616ff	-	1.00
+  cloud-failure-header	group	cloud-failure-header	-	-	-	760,0,440,56	#00000000	-	1.00
+   #0	text	-	-	Cloud problems	-	776,18.6,384,18.8	#00000000	#edededff	1.00
+   close-cloud-failures	button	close-cloud-failures	Close	-	Close (Esc)	1160,16,24,24	#00000000	-	1.00
     icon	icon	icon	-	-	-	1164,20,16,16	#00000000	#9a9a9aff	1.00
-  upload-failure-list	group	upload-failure-list	-	-	-	760,56,440,708	#00000000	-	1.00
+  cloud-failure-list	group	cloud-failure-list	-	-	-	760,56,440,708	#00000000	-	1.00
    #0	group	-	-	-	-	760,56,440,152.5	#00000000	-	1.00
     #0	group	-	-	-	-	776,56,408,136.5	#00000000	-	1.00
      #0	group	-	-	-	-	776,56,408,60.3	#00000000	-	1.00
       #0	text	-	-	DSCF4735.JPG	-	776,56,408,16.3	#00000000	#edededff	1.00
-      #1	text	-	-	The photo API didn't answer (HTTP 503, 5 tries). Retry when it is reachable.	-	776,76.3,408,40	#00000000	#9a9a9aff	1.00
+      #1	text	-	-	Couldn't upload. The photo API didn't answer (HTTP 503, 5 tries). Retry when it is reachable.	-	776,76.3,408,40	#00000000	#9a9a9aff	1.00
      #1	group	-	-	-	-	776,132.3,408,60.3	#00000000	-	1.00
       #0	text	-	-	DSCF4749.JPG	-	776,132.3,408,16.3	#00000000	#edededff	1.00
-      #1	text	-	-	The photo API refused the files: w1200 carries metadata. A retry would send the same files, so report it.	-	776,152.5,408,40	#00000000	#9a9a9aff	1.00
-  upload-failure-actions	group	upload-failure-actions	-	-	-	760,764,440,56	#00000000	-	1.00
-   retry-uploads	button	retry-uploads	Retry all	-	-	1108,780,76,24	#131313ff	-	1.00
+      #1	text	-	-	Couldn't upload. The photo API refused the files: w1200 carries metadata. A retry would send the same files, so report it.	-	776,152.5,408,40	#00000000	#9a9a9aff	1.00
+  cloud-failure-actions	group	cloud-failure-actions	-	-	-	760,764,440,56	#00000000	-	1.00
+   retry-cloud	button	retry-cloud	Retry all	-	-	1108,780,76,24	#131313ff	-	1.00
     label	text	label	-	Retry all	-	1120,782,52,20	#00000000	#edededff	1.00

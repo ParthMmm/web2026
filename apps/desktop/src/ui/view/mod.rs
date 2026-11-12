@@ -17,7 +17,7 @@ use super::{
     look::{Look, MONO, MONO_SMALL},
 };
 use cloud::progress_kit;
-use failures::{failures, upload_failures};
+use failures::{cloud_failures, failures};
 use grid::grid_region;
 use inspector::inspector;
 use rune::{Cx, El, TextStyle, col, icon, row, text};
@@ -64,7 +64,7 @@ pub(super) fn view(s: &Gallery, cx: &mut Cx<Gallery>) -> El {
     match s.overlay {
         Overlay::Viewer => layer.extend(viewer(s, &look)),
         Overlay::Failures => failures(s, &look, &mut layer),
-        Overlay::UploadFailures => upload_failures(s, &look, &mut layer),
+        Overlay::CloudFailures => cloud_failures(s, &look, &mut layer),
         Overlay::None => {}
     }
     if let Some(line) = &s.performance {
@@ -109,8 +109,8 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
                 .key("all-photos"),
         ),
     );
-    let not_uploaded = s.upload_failures().count();
-    if !s.failures.is_empty() || not_uploaded > 0 {
+    let cloud_problems = s.cloud_failures().count();
+    if !s.failures.is_empty() || cloud_problems > 0 {
         let mut attention = SidebarSection::new("Needs attention").key("attention");
         if !s.failures.is_empty() {
             attention = attention.row(
@@ -122,14 +122,14 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
                     .key("not-imported"),
             );
         }
-        if not_uploaded > 0 {
+        if cloud_problems > 0 {
             attention = attention.row(
-                SidebarRow::new("Not uploaded")
+                SidebarRow::new("Cloud problems")
                     .icon(&icons::CLOUD_OFF)
-                    .detail(format::number(not_uploaded))
-                    .on_select(|s: &mut Gallery, _| s.open_upload_failures())
+                    .detail(format::number(cloud_problems))
+                    .on_select(|s: &mut Gallery, _| s.open_cloud_failures())
                     .build(look)
-                    .key("not-uploaded"),
+                    .key("cloud-problems"),
             );
         }
         sidebar = sidebar.section(attention);
@@ -145,8 +145,8 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
         .child(sidebar.build(look))
 }
 
-/// What is in view and selected at rest, a transient message when there is one, and import
-/// and upload progress.
+/// What is in view and selected at rest, a transient message when there is one, import and
+/// upload progress, and the photos being published or unpublished.
 fn status_bar(s: &Gallery, look: &Look) -> El {
     let progress = s.progress.map(|(processed, total)| {
         let scanning = total == 0;
@@ -177,6 +177,15 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
             Some((run.finished(), run.total)),
         )
     });
+    let (publishing, unpublishing) = s.publishing();
+    let publish =
+        format::publishing_status(publishing, unpublishing, s.is_connected()).map(|words| {
+            text(words)
+                .key("publish-status")
+                .font(STATUS)
+                .color(look.muted)
+                .truncate()
+        });
     let left = if s.status.is_empty() {
         text(selection_summary(s)).font(MONO_SMALL)
     } else {
@@ -192,6 +201,7 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
         .fill(look.chrome)
         .border_sides([1.0, 0.0, 0.0, 0.0], look.rule)
         .child(left.key("status").color(look.muted).truncate().grow(1.0))
+        .children(publish)
         .children(progress)
         .children(uploads)
 }

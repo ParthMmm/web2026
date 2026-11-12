@@ -3,150 +3,15 @@
 
 mod support;
 
-use image::{Rgb, RgbImage};
 use photo_prototype::{
-    Event, ImportOutcome, Library, LibraryOptions, PhotoId, UploadRetry,
-    api::{Config, Connection, ObjectKind, Token},
-    cloud::{CloudState, UploadFailure},
+    Event, Library, LibraryOptions,
+    api::{Connection, ObjectKind},
+    cloud::{CloudFailure, CloudState},
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::{
-    path::{Path, PathBuf},
-    time::{Duration, Instant},
-};
-use support::{Action, FakeApi, Route, TOKEN, hex, unavailable};
-
-const TIMEOUT: Duration = Duration::from_secs(30);
-
-/// The client sends a request once more by itself when the connection drops before an answer,
-/// so a test loses this many answers in a row to reach the app's own recovery.
-const LOST_BY_THE_CLIENT: usize = 2;
-
-fn quick_retry(attempts: u32) -> UploadRetry {
-    UploadRetry {
-        attempts,
-        first_wait: Duration::from_millis(5),
-        longest_wait: Duration::from_millis(20),
-    }
-}
-
-fn connected(root: &Path, api: &FakeApi, token: &str, retry: UploadRetry) -> Library {
-    Library::open(
-        LibraryOptions::new(root)
-            .cloud(Ok(Config {
-                address: api.address().to_owned(),
-                token: Token::new(token),
-            }))
-            .upload_retry(retry),
-    )
-    .unwrap()
-}
-
-fn open(root: &Path, api: &FakeApi) -> Library {
-    connected(root, api, TOKEN, quick_retry(4))
-}
-
-fn photo(path: &Path, seed: u8) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let image = RgbImage::from_fn(900, 600, |x, y| {
-        Rgb([
-            (x % 251) as u8 ^ seed,
-            (y % 241) as u8,
-            seed.wrapping_mul(7),
-        ])
-    });
-    image.save(path).unwrap();
-}
-
-/// Imports `sources` and returns their new identities, in order.
-fn import(library: &Library, sources: &[PathBuf]) -> Vec<PhotoId> {
-    library.import(sources.to_vec());
-    let mut ids = Vec::new();
-    loop {
-        match library.recv_timeout(TIMEOUT).expect("import stalled") {
-            Event::Imported {
-                outcome: ImportOutcome::Added(photo),
-                ..
-            } => ids.push(photo.id),
-            Event::Imported { outcome, .. } => panic!("unexpected import outcome {outcome:?}"),
-            Event::ImportFinished { .. } => return ids,
-            _ => {}
-        }
-    }
-}
-
-/// Waits until `id` reaches a state `done` accepts, and returns every state on the way.
-fn wait_for(
-    library: &Library,
-    id: &PhotoId,
-    done: impl Fn(&CloudState) -> bool,
-) -> Vec<CloudState> {
-    let deadline = Instant::now() + TIMEOUT;
-    let mut seen = Vec::new();
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        match library.recv_timeout(remaining) {
-            Ok(Event::CloudChanged { id: changed, state }) if &changed == id => {
-                let finished = done(&state);
-                seen.push(state);
-                if finished {
-                    return seen;
-                }
-            }
-            Ok(_) => {}
-            Err(_) => panic!("upload stalled; states so far: {seen:?}"),
-        }
-    }
-}
-
-fn is_draft(state: &CloudState) -> bool {
-    matches!(state, CloudState::Draft { .. })
-}
-
-fn is_settled(state: &CloudState) -> bool {
-    matches!(state, CloudState::Draft { .. } | CloudState::Failed { .. })
-}
-
-fn failure(state: &CloudState) -> &UploadFailure {
-    match state {
-        CloudState::Failed { failure, .. } => failure,
-        other => panic!("expected a failure, got {other:?}"),
-    }
-}
-
-fn stored_state(root: &Path, api: &FakeApi, id: &PhotoId) -> CloudState {
-    let library = Library::open(LibraryOptions::new(root)).unwrap();
-    let _ = api;
-    library
-        .photos()
-        .iter()
-        .find(|photo| &photo.id == id)
-        .map(|photo| photo.cloud.clone())
-        .expect("photo is in the catalog")
-}
-
-struct Setup {
-    _temp: tempfile::TempDir,
-    root: PathBuf,
-    sources: Vec<PathBuf>,
-}
-
-fn setup(count: u8) -> Setup {
-    let temp = tempfile::tempdir().unwrap();
-    let sources = (0..count)
-        .map(|index| {
-            let path = temp.path().join(format!("photos/DSCF{index:04}.jpg"));
-            photo(&path, index * 40 + 1);
-            path
-        })
-        .collect();
-    Setup {
-        root: temp.path().join("library"),
-        _temp: temp,
-        sources,
-    }
-}
+use std::time::{Duration, Instant};
+use support::{Action, FakeApi, Route, TOKEN, flow::*, hex, unavailable};
 
 #[test]
 fn an_upload_becomes_a_verified_draft_that_survives_restart() {
@@ -281,23 +146,6 @@ fn a_lost_answer_to_finalize_keeps_the_one_draft() {
     assert_eq!(api.drafts().len(), 1);
 }
 
-fn is_published(state: &CloudState) -> bool {
-    matches!(state, CloudState::Published { .. })
-}
-
-fn is_finished(state: &CloudState) -> bool {
-    is_settled(state) || is_published(state)
-}
-
-/// Waits until the API holds a call, so the test can change things while it waits.
-fn until_held(api: &FakeApi) {
-    let deadline = Instant::now() + TIMEOUT;
-    while !api.holding() {
-        assert!(Instant::now() < deadline, "the held call never arrived");
-        std::thread::sleep(Duration::from_millis(5));
-    }
-}
-
 #[test]
 fn a_resumed_upload_of_a_photo_the_server_published_is_recorded_as_published() {
     let api = FakeApi::start();
@@ -378,7 +226,7 @@ fn a_prepared_copy_removed_before_it_is_sent_fails_with_a_reason_a_retry_fixes()
     let states = wait_for(&library, &id, is_settled);
     let last = states.last().unwrap();
     assert!(
-        matches!(failure(last), UploadFailure::Renditions { .. }),
+        matches!(failure(last), CloudFailure::Renditions { .. }),
         "{last:?}"
     );
     assert!(last.can_upload(), "a retry makes the copy again");
@@ -417,7 +265,7 @@ fn an_api_that_stays_unavailable_stops_at_the_retry_cap_and_can_be_retried() {
     let states = wait_for(&library, &id, is_settled);
     let last = states.last().unwrap();
     assert!(
-        matches!(failure(last), UploadFailure::Unavailable { .. }),
+        matches!(failure(last), CloudFailure::Unavailable { .. }),
         "{last:?}"
     );
     assert!(last.can_upload(), "a retry can help");
@@ -447,7 +295,7 @@ fn a_refused_token_stops_at_once_and_says_what_to_do() {
     library.upload(vec![id.clone()]);
     let states = wait_for(&library, &id, is_settled);
     let failure = failure(states.last().unwrap());
-    assert_eq!(failure, &UploadFailure::Unauthorized);
+    assert_eq!(failure, &CloudFailure::Unauthorized);
     assert!(failure.message().contains("PHOTO_API_TOKEN"));
     assert!(
         !failure.message().contains("not-the-owner-token"),
@@ -455,8 +303,8 @@ fn a_refused_token_stops_at_once_and_says_what_to_do() {
     );
     assert_eq!(
         api.calls(),
-        vec![Route::Begin],
-        "no retry on a refused token"
+        vec![Route::List, Route::Begin],
+        "the list on open, then one begin: no retry on a refused token"
     );
 }
 
@@ -525,12 +373,12 @@ fn an_original_that_changed_or_went_missing_before_upload_is_never_sent() {
     library.upload(ids.clone());
     let changed = wait_for(&library, &ids[0], is_settled);
     let changed = changed.last().unwrap();
-    assert_eq!(failure(changed), &UploadFailure::OriginalChanged);
+    assert_eq!(failure(changed), &CloudFailure::OriginalChanged);
     assert!(!changed.can_upload());
     let missing = wait_for(&library, &ids[1], is_settled);
     assert_eq!(
         failure(missing.last().unwrap()),
-        &UploadFailure::OriginalMissing
+        &CloudFailure::OriginalMissing
     );
     assert!(!api.knows_any_photo(), "the server heard of neither");
 }
@@ -544,17 +392,13 @@ fn an_original_that_changes_after_it_was_prepared_is_not_sent() {
     api.fault(Route::Begin, Action::Hold, 1);
 
     library.upload(vec![id.clone()]);
-    let deadline = Instant::now() + TIMEOUT;
-    while !api.holding() {
-        assert!(Instant::now() < deadline, "begin never arrived");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    until_held(&api);
     photo(&setup.sources[0], 99);
     api.release();
     let states = wait_for(&library, &id, is_settled);
     assert_eq!(
         failure(states.last().unwrap()),
-        &UploadFailure::OriginalChanged
+        &CloudFailure::OriginalChanged
     );
     assert_eq!(api.count(Route::Put(ObjectKind::Original)), 0);
 }

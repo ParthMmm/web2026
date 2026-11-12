@@ -7,7 +7,7 @@
 //! diff.
 
 use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, look, on_key, poll, setup, view::view};
-use crate::cloud::{CloudId, CloudState, UploadFailure};
+use crate::cloud::{CloudFailure, CloudId, CloudState, CloudStep};
 use rune::{Env, Key, KeyEvent, Runtime, ScrollBars, text::TextSystem};
 use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 
@@ -15,9 +15,16 @@ use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 const STEPS: usize = 3;
 const STEP: f64 = 0.5;
 
+mod cloud;
+
 fn window(apply: fn(&mut Gallery)) -> Runtime<Gallery> {
     let mut gallery = Gallery::demo();
     apply(&mut gallery);
+    runtime(gallery)
+}
+
+/// The real view, `poll` and keys on `gallery`, settled.
+fn runtime(gallery: Gallery) -> Runtime<Gallery> {
     let text = TextSystem::new(look::FONTS, look::FAMILIES);
     let mut rt = Runtime::with_text(gallery, view, WINDOW_SIZE, Env::new(true, 1.0), text);
     rt.poll = Some(poll);
@@ -149,20 +156,116 @@ fn scene(name: &str) -> fn(&mut Gallery) {
 }
 
 #[test]
-fn the_not_uploaded_row_lists_each_reason() {
+fn the_cloud_problems_row_lists_each_reason() {
     let mut rt = window(scene("upload-failed"));
-    press(&mut rt, "not-uploaded");
-    assert!(
-        shows(&rt, "upload-failures-sheet"),
-        "the row opens the list"
-    );
-    let list = text_in(&rt, "upload-failures-sheet");
+    press(&mut rt, "cloud-problems");
+    assert!(shows(&rt, "cloud-failures-sheet"), "the row opens the list");
+    let list = text_in(&rt, "cloud-failures-sheet");
     assert!(
         list.contains("didn't answer") && list.contains("w1200 carries metadata"),
         "{list}"
     );
-    press(&mut rt, "close-upload-failures");
-    assert!(!shows(&rt, "upload-failures-sheet"), "the list closes");
+    press(&mut rt, "close-cloud-failures");
+    assert!(!shows(&rt, "cloud-failures-sheet"), "the list closes");
+}
+
+#[test]
+fn the_cloud_problems_list_names_the_step_that_stopped() {
+    let mut rt = window(scene("publish-failed"));
+    press(&mut rt, "cloud-problems");
+    let list = text_in(&rt, "cloud-failures-sheet");
+    assert!(
+        list.contains("Couldn't publish") && list.contains("Couldn't unpublish"),
+        "{list}"
+    );
+}
+
+#[test]
+fn a_draft_offers_publish_and_says_it_is_private() {
+    let mut rt = window(scene("description-edit"));
+    let cloud = text_in(&rt, "cloud");
+    assert!(cloud.contains("Only you can see it"), "{cloud}");
+    assert!(shows(&rt, "publish-photo") && !shows(&rt, "unpublish-photo"));
+    let before = rt.state.photos[0].record.cloud.clone();
+    press(&mut rt, "publish-photo");
+    assert_eq!(
+        rt.state.photos[0].record.cloud, before,
+        "the demo library makes no calls"
+    );
+}
+
+#[test]
+fn a_published_photo_offers_unpublish_and_says_it_is_public() {
+    let rt = window(scene("published"));
+    let cloud = text_in(&rt, "cloud");
+    assert!(cloud.contains("Anyone can see it"), "{cloud}");
+    assert!(shows(&rt, "unpublish-photo") && !shows(&rt, "publish-photo"));
+}
+
+#[test]
+fn a_failed_publish_offers_a_retry_of_that_step() {
+    let rt = window(scene("publish-failed"));
+    assert!(shows(&rt, "retry-publish"), "{}", text_in(&rt, "cloud"));
+    let rt = window(scene("unpublish-failed"));
+    assert!(shows(&rt, "retry-unpublish"), "{}", text_in(&rt, "cloud"));
+    assert!(text_in(&rt, "cloud").contains("It may still be public"));
+}
+
+#[test]
+fn the_status_bar_says_what_is_being_published_and_how_it_ended() {
+    let mut rt = window(scene("published"));
+    let id = rt.state.photos[0].record.id.clone();
+    let cloud_id = CloudId::from_hex("ab");
+    rt.state.cloud_changed(
+        &id,
+        CloudState::Publishing {
+            cloud_id: cloud_id.clone(),
+        },
+    );
+    settle(&mut rt);
+    assert_eq!(text_in(&rt, "publish-status"), "Publishing 1 photo…");
+    rt.state
+        .cloud_changed(&id, CloudState::Published { cloud_id });
+    settle(&mut rt);
+    assert!(!shows(&rt, "publish-status"));
+    assert_eq!(
+        text_in(&rt, "status"),
+        format!("Published {}", name(&rt, 0))
+    );
+}
+
+#[test]
+fn a_description_is_counted_and_saved_as_one_line() {
+    let mut rt = window(scene("published"));
+    press(&mut rt, "description");
+    rt.paste("  The tram at dawn\n ");
+    settle(&mut rt);
+    let length = "The tram at dawn".len()
+        + rt.state.photos[1]
+            .record
+            .description
+            .as_ref()
+            .map_or(0, |kept| kept.chars().count() + 1);
+    assert!(
+        text_in(&rt, "description-count").starts_with(&format!("{length} / ")),
+        "{}",
+        text_in(&rt, "description-count")
+    );
+    assert!(shows(&rt, "save-description"));
+    press(&mut rt, "save-description");
+    let kept = rt.state.photos[1].record.description.clone().unwrap();
+    assert!(!kept.contains('\n') && !kept.contains("  "), "{kept:?}");
+    assert!(kept.contains("The tram at dawn"), "{kept:?}");
+    assert!(!shows(&rt, "save-description"), "nothing is left to save");
+}
+
+#[test]
+fn a_description_over_the_limit_says_so_and_is_not_saved() {
+    let mut rt = window(scene("description-long"));
+    let before = rt.state.photos[1].record.description.clone();
+    assert!(shows(&rt, "description-too-long"));
+    press(&mut rt, "save-description");
+    assert_eq!(rt.state.photos[1].record.description, before);
 }
 
 #[test]
@@ -212,7 +315,8 @@ fn the_status_bar_counts_an_upload_run_and_then_sums_it_up() {
         &ids[2],
         CloudState::Failed {
             cloud_id: None,
-            failure: UploadFailure::OriginalMissing,
+            failure: CloudFailure::OriginalMissing,
+            step: CloudStep::Upload,
         },
     );
     settle(&mut rt);

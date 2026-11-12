@@ -1,8 +1,10 @@
 //! The persistent photo library: import, duplicate detection, derivative
-//! generation, preview scheduling, and uploads. All file and image work runs on two
-//! worker lanes owned by [`Library`], and uploads on their own transfer lanes; callers
-//! receive [`Event`]s.
+//! generation, preview scheduling, uploads and publishing. All file and image work runs on two
+//! worker lanes owned by [`Library`], and calls to the photo API on their own transfer lanes;
+//! callers receive [`Event`]s.
 
+mod publish;
+mod transfer;
 mod upload;
 
 use crate::{
@@ -10,11 +12,12 @@ use crate::{
     catalog::{
         Catalog, DerivativeRecord, ImportFailure, NewPhoto, PhotoId, PhotoRecord, SourceStamp,
     },
-    cloud::CloudState,
+    cloud::{CloudState, CloudStep},
     derivative::{self, DerivativeSize, RECIPE_VERSION},
     metadata::{SourceExif, read_source_exif_reader},
 };
 use anyhow::{Context, Result};
+pub use publish::{DESCRIPTION_LIMIT, clean_description, single_line};
 use std::{
     collections::{HashSet, VecDeque},
     fs,
@@ -27,8 +30,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use upload::Transfer;
-pub use upload::UploadRetry;
+use transfer::Transfer;
+pub use transfer::UploadRetry;
 
 /// Where a library lives, how much background work it does, and where it uploads.
 #[derive(Clone, Debug)]
@@ -154,6 +157,11 @@ pub enum Event {
         id: PhotoId,
         state: CloudState,
     },
+    /// The library compared its cloud states with the server's list on open: how many it
+    /// corrected, or why it couldn't.
+    CloudChecked {
+        corrected: Result<usize, String>,
+    },
 }
 
 struct PendingSource {
@@ -180,12 +188,17 @@ struct Queue {
     retry_failures: bool,
     preview: Option<PhotoId>,
     preview_running: bool,
-    /// Photos the person asked to upload, not yet marked as queued.
-    upload_requests: Vec<PhotoId>,
+    /// Steps the person asked for (upload, publish, unpublish), not yet in the catalog.
+    cloud_requests: Vec<(CloudStep, PhotoId)>,
+    /// New descriptions, not yet in the catalog.
+    descriptions: Vec<(PhotoId, String)>,
     /// Queued photos to hash and give their web sizes.
     prepares: VecDeque<PhotoId>,
-    /// Prepared photos for the transfer lanes, each with when it may start.
+    /// Photos with cloud work under way, for the transfer lanes, each with when it may start.
     transfers: Vec<Transfer>,
+    /// A transfer lane compares the catalog with the server's list before any transfer.
+    reconcile_due: bool,
+    reconciling: bool,
     processed: usize,
     total: usize,
     summary: ImportSummary,
@@ -196,7 +209,8 @@ impl Queue {
     fn has_background_work(&self, prepare_web_sizes: bool) -> bool {
         self.clear_failures
             || self.retry_failures
-            || !self.upload_requests.is_empty()
+            || !self.cloud_requests.is_empty()
+            || !self.descriptions.is_empty()
             || !self.prepares.is_empty()
             || !self.requests.is_empty()
             || !self.sources.is_empty()
@@ -209,7 +223,8 @@ impl Queue {
 enum Job {
     ClearFailures,
     RetryFailures,
-    QueueUploads(Vec<PhotoId>),
+    Ask(Vec<(CloudStep, PhotoId)>),
+    Describe(PhotoId, String),
     PrepareUpload(PhotoId),
     Scan(ImportRequest),
     Import(PendingSource),
@@ -296,7 +311,7 @@ impl Library {
                 reason: reason.clone(),
             },
         };
-        let pending_uploads = catalog.pending_uploads()?;
+        let cloud_states = catalog.cloud_states()?;
         let shared = Arc::new(Shared {
             queue: Mutex::new(Queue::default()),
             wake: Condvar::new(),
@@ -311,9 +326,15 @@ impl Library {
             queue
                 .film_metadata
                 .extend(shared.catalog().pending_film_metadata()?);
-            // The server's answer to `begin` decides what is left of each upload.
+            // Work a restart cut short resumes, and the server's answers decide what is left:
+            // `begin` for an upload, a repeated publish or unpublish for those. The server's
+            // list corrects every other photo first.
             if api.is_ok() {
-                for (id, state) in pending_uploads {
+                queue.reconcile_due = true;
+                for (id, state) in cloud_states
+                    .into_iter()
+                    .filter(|(_, state)| state.is_busy())
+                {
                     match state {
                         CloudState::Queued => queue.prepares.push_back(id),
                         _ => queue.transfers.push(Transfer::now(id)),
@@ -346,11 +367,11 @@ impl Library {
         let uploads_enabled = api.is_ok();
         if let Ok((api, _)) = api {
             let api = Arc::new(api);
-            for lane in 0..upload::TRANSFER_LANES {
+            for lane in 0..transfer::TRANSFER_LANES {
                 let (shared, api, sender) = (shared.clone(), api.clone(), sender.clone());
                 std::thread::Builder::new()
                     .name(format!("library-transfer-{lane}"))
-                    .spawn(move || upload::run_transfers(&shared, &api, &sender))?;
+                    .spawn(move || transfer::run_transfers(&shared, &api, &sender))?;
             }
         }
         let interactive = shared.clone();
@@ -451,10 +472,36 @@ impl Library {
     /// Uploads each photo as a private draft. A photo already queued, uploading or in the
     /// cloud is left alone; a failed one starts again. Does nothing without a connection.
     pub fn upload(&self, ids: Vec<PhotoId>) {
+        self.ask(CloudStep::Upload, ids);
+    }
+
+    /// Publishes each draft, and retries each publish that stopped. Other photos are left
+    /// alone. Does nothing without a connection.
+    pub fn publish(&self, ids: Vec<PhotoId>) {
+        self.ask(CloudStep::Publish, ids);
+    }
+
+    /// Takes each published photo out of the public gallery, and retries each unpublish that
+    /// stopped. Other photos are left alone. Does nothing without a connection.
+    pub fn unpublish(&self, ids: Vec<PhotoId>) {
+        self.ask(CloudStep::Unpublish, ids);
+    }
+
+    fn ask(&self, step: CloudStep, ids: Vec<PhotoId>) {
         if !self.uploads_enabled || ids.is_empty() {
             return;
         }
-        self.shared.queue().upload_requests.extend(ids);
+        self.shared
+            .queue()
+            .cloud_requests
+            .extend(ids.into_iter().map(|id| (step, id)));
+        self.shared.wake.notify_all();
+    }
+
+    /// Keeps the photo's description, the alt text a publish sends. A published photo is
+    /// published again with it. See [`clean_description`] for what is kept.
+    pub fn describe(&self, id: PhotoId, description: String) {
+        self.shared.queue().descriptions.push((id, description));
         self.shared.wake.notify_all();
     }
 
@@ -583,8 +630,13 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
                 Job::ClearFailures
             } else if std::mem::take(&mut queue.retry_failures) {
                 Job::RetryFailures
-            } else if !queue.upload_requests.is_empty() {
-                Job::QueueUploads(std::mem::take(&mut queue.upload_requests))
+            } else if !queue.descriptions.is_empty() {
+                // Before cloud requests, so a publish asked for right after a save carries the
+                // new words.
+                let (id, text) = queue.descriptions.remove(0);
+                Job::Describe(id, text)
+            } else if !queue.cloud_requests.is_empty() {
+                Job::Ask(std::mem::take(&mut queue.cloud_requests))
             } else if let Some(id) = queue.prepares.pop_front() {
                 Job::PrepareUpload(id)
             } else if let Some(request) = queue.requests.pop_front() {
@@ -626,7 +678,8 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
                 }
                 Vec::new()
             }
-            Job::QueueUploads(ids) => upload::queue(shared, ids),
+            Job::Ask(requests) => transfer::ask(shared, requests),
+            Job::Describe(id, text) => publish::describe(shared, &id, &text),
             Job::PrepareUpload(id) => upload::prepare(shared, &id),
             Job::Scan(request) => scan(shared, request),
             Job::Import(source) => import_one(shared, source),

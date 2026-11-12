@@ -828,6 +828,7 @@ fn v1_catalog_migrates_and_background_backfills_without_reimporting() {
         ALTER TABLE photos DROP COLUMN film_metadata_checked;
         ALTER TABLE import_failures DROP COLUMN owned;
         ALTER TABLE photos DROP COLUMN detached_source; DROP TABLE uploads;
+        ALTER TABLE photos DROP COLUMN description;
         PRAGMA user_version = 1;",
         )
         .unwrap();
@@ -842,7 +843,7 @@ fn v1_catalog_migrates_and_background_backfills_without_reimporting() {
         connection
             .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        4
+        5
     );
     assert_eq!(
         connection

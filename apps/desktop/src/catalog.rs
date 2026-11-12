@@ -18,7 +18,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 /// Content identity: the BLAKE3 hash of the original's bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -80,6 +80,8 @@ pub struct PhotoRecord {
     pub byte_size: u64,
     pub imported_at: i64,
     pub metadata: PhotoMetadata,
+    /// Words that describe the photo for people who can't see it: the public alt text.
+    pub description: Option<String>,
     pub cloud: CloudState,
 }
 
@@ -223,6 +225,14 @@ impl Catalog {
                     updated_at INTEGER NOT NULL
                 );
                 PRAGMA user_version = 4;
+                COMMIT;",
+            )?;
+        }
+        if version < 5 {
+            connection.execute_batch(
+                "BEGIN;
+                ALTER TABLE photos ADD COLUMN description TEXT;
+                PRAGMA user_version = 5;
                 COMMIT;",
             )?;
         }
@@ -563,8 +573,17 @@ impl Catalog {
             .transpose()
     }
 
-    /// Photos waiting for or in an upload, in the order they were queued.
-    pub fn pending_uploads(&self) -> Result<Vec<(PhotoId, CloudState)>> {
+    pub fn set_description(&mut self, id: &PhotoId, description: Option<&str>) -> Result<()> {
+        self.connection.execute(
+            "UPDATE photos SET description = ?2 WHERE id = ?1",
+            params![id.as_str(), description],
+        )?;
+        Ok(())
+    }
+
+    /// Every photo that has been in the cloud or asked to be, with its state, in the order
+    /// the states were written.
+    pub fn cloud_states(&self) -> Result<Vec<(PhotoId, CloudState)>> {
         let mut statement = self
             .connection
             .prepare("SELECT photo_id, state FROM uploads ORDER BY updated_at, photo_id")?;
@@ -578,10 +597,7 @@ impl Catalog {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows
             .into_iter()
-            .filter_map(|(id, state)| {
-                let state: CloudState = serde_json::from_str(&state).ok()?;
-                state.is_pending().then_some((id, state))
-            })
+            .filter_map(|(id, state)| Some((id, serde_json::from_str(&state).ok()?)))
             .collect())
     }
 
@@ -609,6 +625,7 @@ const PHOTO_SELECT: &str = "
     SELECT p.id, p.byte_size, p.width, p.height, p.imported_at,
         p.iso, p.exposure_numerator, p.exposure_denominator, p.f_number, p.focal_length_mm,
         p.camera_make, p.camera_model, p.lens, p.captured_local, p.captured_offset, p.film_simulation,
+        p.description,
         COALESCE(
             MIN(CAST(CAST(s.missing AS TEXT) || s.path AS BLOB)),
             CAST('1' || p.detached_source AS BLOB)
@@ -655,6 +672,7 @@ fn photo_from_row(row: &Row<'_>) -> rusqlite::Result<PhotoRecord> {
             lens: row.get("lens")?,
             captured_at: captured_local.and_then(|local| CaptureTime::new(local, captured_offset)),
         },
+        description: row.get("description")?,
         cloud: row
             .get::<_, Option<String>>("cloud_state")?
             .and_then(|state| serde_json::from_str(&state).ok())
