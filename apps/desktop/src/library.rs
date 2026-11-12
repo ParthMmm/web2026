@@ -1,11 +1,16 @@
 //! The persistent photo library: import, duplicate detection, derivative
-//! generation, and preview scheduling. All file and image work runs on two
-//! worker lanes owned by [`Library`]; callers receive [`Event`]s.
+//! generation, preview scheduling, and uploads. All file and image work runs on two
+//! worker lanes owned by [`Library`], and uploads on their own transfer lanes; callers
+//! receive [`Event`]s.
+
+mod upload;
 
 use crate::{
+    api::{Api, Config, Connection},
     catalog::{
         Catalog, DerivativeRecord, ImportFailure, NewPhoto, PhotoId, PhotoRecord, SourceStamp,
     },
+    cloud::CloudState,
     derivative::{self, DerivativeSize, RECIPE_VERSION},
     metadata::{SourceExif, read_source_exif_reader},
 };
@@ -22,21 +27,39 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use upload::Transfer;
+pub use upload::UploadRetry;
 
-/// Where a library lives and how much background work it does.
+/// Where a library lives, how much background work it does, and where it uploads.
 #[derive(Clone, Debug)]
 pub struct LibraryOptions {
     root: PathBuf,
     prepare_web_sizes: bool,
+    cloud: Result<Config, String>,
+    upload_retry: UploadRetry,
 }
 
 impl LibraryOptions {
-    /// `root` holds `catalog.sqlite` and the `derivatives` directory.
+    /// `root` holds `catalog.sqlite` and the `derivatives` directory. The library starts
+    /// without a connection to the photo API.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: root.into(),
             prepare_web_sizes: false,
+            cloud: Err("Not set up".into()),
+            upload_retry: UploadRetry::default(),
         }
+    }
+
+    /// Uploads to the photo API `cloud` describes, or says why it can't.
+    pub fn cloud(mut self, cloud: Result<Config, String>) -> Self {
+        self.cloud = cloud;
+        self
+    }
+
+    pub fn upload_retry(mut self, retry: UploadRetry) -> Self {
+        self.upload_retry = retry;
+        self
     }
 
     /// Also render mobile and desktop sizes for every photo once imports and
@@ -119,8 +142,18 @@ pub enum Event {
     MetadataUpdated {
         photo: PhotoRecord,
     },
+    /// A photo lost its last source because that file's content changed, and stays because
+    /// the cloud may hold it. It now shows its original as missing.
+    Detached {
+        photo: PhotoRecord,
+    },
     FilmMetadataFinished,
     FailuresCleared,
+    /// A photo's cloud state changed, and the catalog holds the new one.
+    CloudChanged {
+        id: PhotoId,
+        state: CloudState,
+    },
 }
 
 struct PendingSource {
@@ -147,6 +180,12 @@ struct Queue {
     retry_failures: bool,
     preview: Option<PhotoId>,
     preview_running: bool,
+    /// Photos the person asked to upload, not yet marked as queued.
+    upload_requests: Vec<PhotoId>,
+    /// Queued photos to hash and give their web sizes.
+    prepares: VecDeque<PhotoId>,
+    /// Prepared photos for the transfer lanes, each with when it may start.
+    transfers: Vec<Transfer>,
     processed: usize,
     total: usize,
     summary: ImportSummary,
@@ -157,6 +196,8 @@ impl Queue {
     fn has_background_work(&self, prepare_web_sizes: bool) -> bool {
         self.clear_failures
             || self.retry_failures
+            || !self.upload_requests.is_empty()
+            || !self.prepares.is_empty()
             || !self.requests.is_empty()
             || !self.sources.is_empty()
             || !self.grid_repairs.is_empty()
@@ -168,6 +209,8 @@ impl Queue {
 enum Job {
     ClearFailures,
     RetryFailures,
+    QueueUploads(Vec<PhotoId>),
+    PrepareUpload(PhotoId),
     Scan(ImportRequest),
     Import(PendingSource),
     Derivative(PhotoId, DerivativeSize),
@@ -179,7 +222,10 @@ struct Shared {
     wake: Condvar,
     catalog: Mutex<Catalog>,
     derivatives: PathBuf,
+    /// Upload copies of the web sizes, one folder per photo, kept until it is a draft.
+    uploads: PathBuf,
     prepare_web_sizes: bool,
+    upload_retry: UploadRetry,
 }
 
 impl Shared {
@@ -199,6 +245,10 @@ impl Shared {
         self.derivatives.join(format!("{id}-{}.webp", size.key()))
     }
 
+    fn upload_dir(&self, id: &PhotoId) -> PathBuf {
+        self.uploads.join(id.as_str())
+    }
+
     fn has_current_derivative(&self, id: &PhotoId, size: DerivativeSize) -> Result<bool> {
         let recorded = self.catalog().derivative(id, size)?;
         Ok(
@@ -210,6 +260,8 @@ impl Shared {
 
 pub struct Library {
     root: PathBuf,
+    connection: Connection,
+    uploads_enabled: bool,
     photos: Vec<PhotoRecord>,
     failures: Vec<ImportFailure>,
     receiver: Receiver<Event>,
@@ -233,18 +285,41 @@ impl Library {
         }
         let photos = catalog.photos()?;
         let failures = catalog.failures()?;
+        let api = options
+            .cloud
+            .and_then(|config| Api::connect(&config).map(|api| (api, config.address)));
+        let connection = match &api {
+            Ok((_, address)) => Connection::Connected {
+                address: address.clone(),
+            },
+            Err(reason) => Connection::NotConnected {
+                reason: reason.clone(),
+            },
+        };
+        let pending_uploads = catalog.pending_uploads()?;
         let shared = Arc::new(Shared {
             queue: Mutex::new(Queue::default()),
             wake: Condvar::new(),
             catalog: Mutex::new(catalog),
             derivatives,
+            uploads: options.root.join("uploads"),
             prepare_web_sizes: options.prepare_web_sizes,
+            upload_retry: options.upload_retry,
         });
         {
             let mut queue = shared.queue();
             queue
                 .film_metadata
                 .extend(shared.catalog().pending_film_metadata()?);
+            // The server's answer to `begin` decides what is left of each upload.
+            if api.is_ok() {
+                for (id, state) in pending_uploads {
+                    match state {
+                        CloudState::Queued => queue.prepares.push_back(id),
+                        _ => queue.transfers.push(Transfer::now(id)),
+                    }
+                }
+            }
             for photo in &photos {
                 if !shared.has_current_derivative(&photo.id, DerivativeSize::Grid)? {
                     queue.grid_repairs.push_back(photo.id.clone());
@@ -268,12 +343,24 @@ impl Library {
         std::thread::Builder::new()
             .name("library-background".into())
             .spawn(move || run_background(&background.0, &background.1))?;
+        let uploads_enabled = api.is_ok();
+        if let Ok((api, _)) = api {
+            let api = Arc::new(api);
+            for lane in 0..upload::TRANSFER_LANES {
+                let (shared, api, sender) = (shared.clone(), api.clone(), sender.clone());
+                std::thread::Builder::new()
+                    .name(format!("library-transfer-{lane}"))
+                    .spawn(move || upload::run_transfers(&shared, &api, &sender))?;
+            }
+        }
         let interactive = shared.clone();
         std::thread::Builder::new()
             .name("library-interactive".into())
             .spawn(move || run_interactive(&interactive, &sender))?;
         Ok(Self {
             root: options.root,
+            connection,
+            uploads_enabled,
             photos,
             failures,
             receiver,
@@ -354,6 +441,21 @@ impl Library {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Whether uploads can run, and why not.
+    pub fn connection(&self) -> &Connection {
+        &self.connection
+    }
+
+    /// Uploads each photo as a private draft. A photo already queued, uploading or in the
+    /// cloud is left alone; a failed one starts again. Does nothing without a connection.
+    pub fn upload(&self, ids: Vec<PhotoId>) {
+        if !self.uploads_enabled || ids.is_empty() {
+            return;
+        }
+        self.shared.queue().upload_requests.extend(ids);
+        self.shared.wake.notify_all();
     }
 
     pub fn derivative_path(&self, id: &PhotoId, size: DerivativeSize) -> PathBuf {
@@ -481,6 +583,10 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
                 Job::ClearFailures
             } else if std::mem::take(&mut queue.retry_failures) {
                 Job::RetryFailures
+            } else if !queue.upload_requests.is_empty() {
+                Job::QueueUploads(std::mem::take(&mut queue.upload_requests))
+            } else if let Some(id) = queue.prepares.pop_front() {
+                Job::PrepareUpload(id)
             } else if let Some(request) = queue.requests.pop_front() {
                 Job::Scan(request)
             } else if let Some(source) = queue.sources.pop_front() {
@@ -520,6 +626,8 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
                 }
                 Vec::new()
             }
+            Job::QueueUploads(ids) => upload::queue(shared, ids),
+            Job::PrepareUpload(id) => upload::prepare(shared, &id),
             Job::Scan(request) => scan(shared, request),
             Job::Import(source) => import_one(shared, source),
             Job::Derivative(id, size) => vec![derivative_event(shared, id, size)],
@@ -714,8 +822,8 @@ fn import_source(
         if source.owned && !was_missing && !same_path {
             return Ok(ImportOutcome::Duplicate(existing));
         }
-        shared.catalog().link_source(&id, path, stamp)?;
-        remove_orphans(shared, events)?;
+        let previous = shared.catalog().link_source(&id, path, stamp)?;
+        remove_orphans(shared, previous, events)?;
         ensure_grid(shared, &id, path)?;
         return if same_path {
             Ok(ImportOutcome::Unchanged(id))
@@ -743,9 +851,9 @@ fn import_source(
             && source_identity.ino() == current_identity.ino(),
         "Original changed during import; retry it"
     );
-    {
+    let previous = {
         let mut catalog = shared.catalog();
-        catalog.insert_photo(NewPhoto {
+        let previous = catalog.insert_photo(NewPhoto {
             id: &id,
             source: path,
             stamp,
@@ -762,21 +870,35 @@ fn import_source(
                 recipe: RECIPE_VERSION,
             },
         )?;
-    }
-    remove_orphans(shared, events)?;
+        previous
+    };
+    remove_orphans(shared, previous, events)?;
     let photo = shared.catalog().photo(&id)?.context("Photo disappeared")?;
     Ok(ImportOutcome::Added(photo))
 }
 
 /// A path whose bytes changed in place now belongs to different content; a
-/// photo left without any path is removed with its derivatives.
-fn remove_orphans(shared: &Shared, events: &mut Vec<Event>) -> Result<()> {
+/// photo left without any path is removed with its derivatives. A photo the cloud may hold
+/// stays, with its original missing, so its cloud record is never dropped. `previous` is
+/// the photo that held the path before, if another one did.
+fn remove_orphans(
+    shared: &Shared,
+    previous: Option<PhotoId>,
+    events: &mut Vec<Event>,
+) -> Result<()> {
     let removed = shared.catalog().remove_orphans()?;
-    for orphan in removed {
+    for orphan in &removed {
         for size in DerivativeSize::ALL {
-            let _ = fs::remove_file(shared.derivative_path(&orphan, size));
+            let _ = fs::remove_file(shared.derivative_path(orphan, size));
         }
-        events.push(Event::Removed { id: orphan });
+        let _ = fs::remove_dir_all(shared.upload_dir(orphan));
+        events.push(Event::Removed { id: orphan.clone() });
+    }
+    if let Some(previous) = previous.filter(|previous| !removed.contains(previous))
+        && let Some(photo) = shared.catalog().photo(&previous)?
+        && photo.source_count == 0
+    {
+        events.push(Event::Detached { photo });
     }
     Ok(())
 }
@@ -868,6 +990,18 @@ fn read_hashed_source(path: &Path) -> Result<(PhotoId, SourceExif)> {
     let id = PhotoId::from_hash(hasher.finalize());
     file.rewind()?;
     let exif = read_source_exif_reader(&mut BufReader::new(&mut file))?;
+    ensure_unchanged(path, &file, &opened, before)
+        .context("Original changed while reading metadata")?;
+    Ok((id, exif))
+}
+
+/// Fails when `path` no longer names the opened `file`, or the file changed while it was read.
+fn ensure_unchanged(
+    path: &Path,
+    file: &fs::File,
+    opened: &fs::Metadata,
+    before: SourceStamp,
+) -> Result<()> {
     let current = fs::metadata(path)?;
     let after = file.metadata()?;
     anyhow::ensure!(
@@ -876,9 +1010,9 @@ fn read_hashed_source(path: &Path) -> Result<(PhotoId, SourceExif)> {
             && opened.len() == after.len()
             && opened.modified()? == after.modified()?
             && SourceStamp::read(path)? == before,
-        "Original changed while reading metadata"
+        "The file changed while it was read"
     );
-    Ok((id, exif))
+    Ok(())
 }
 
 fn remove_copy(shared: &Shared, path: &Path) {

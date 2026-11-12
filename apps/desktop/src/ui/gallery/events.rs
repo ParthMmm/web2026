@@ -132,9 +132,14 @@ impl Gallery {
                 DerivativeSize::Desktop => self.preview_failed(&id, message),
                 DerivativeSize::Mobile => {}
             },
-            Event::MetadataUpdated { photo: record } => {
+            Event::MetadataUpdated { photo: record } | Event::Detached { photo: record } => {
                 if let Some(photo) = self.photo_mut(&record.id) {
                     photo.record = record;
+                }
+            }
+            Event::CloudChanged { id, state } => {
+                if let Some(photo) = self.photo_mut(&id) {
+                    photo.record.cloud = state;
                 }
             }
             Event::FilmMetadataFinished => {}
