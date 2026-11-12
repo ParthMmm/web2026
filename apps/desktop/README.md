@@ -1,6 +1,6 @@
 # Photo prototype
 
-Local-only macOS photo library built with [Rune](https://github.com/anomalyco/rune) and rune-kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). There is no authentication, upload, editing, or public publishing yet.
+A macOS photo library built with [Rune](https://github.com/anomalyco/rune) and rune-kit. It implements the persistent local library from [issue #5](https://github.com/ParthMmm/web2026/issues/5) on top of the performance gate from [issue #3](https://github.com/ParthMmm/web2026/issues/3). It uploads photos to the photo API in `apps/api` as private drafts (see [Upload](#upload)). Editing and publishing from the window are not built yet.
 
 ## Run on macOS
 
@@ -45,19 +45,63 @@ Selecting a folder imports JPEGs from all nested subfolders. Photos library pack
 
 ## The library
 
-The library lives in `~/Library/Application Support/dev.parth.photo-prototype/library`; set `PHOTO_LIBRARY_DIR` to use another one. It contains a SQLite catalog (`catalog.sqlite`) and generated `derivatives/`. Originals are only read, never modified, moved, or uploaded.
+The library lives in `~/Library/Application Support/dev.parth.photo-prototype/library`; set `PHOTO_LIBRARY_DIR` to use another one. It contains a SQLite catalog (`catalog.sqlite`) and generated `derivatives/`. Originals are only read, never modified or moved.
 
 - **Identity and duplicates.** A photo's identity is the BLAKE3 hash of its bytes. Importing the same bytes from another path adds a known location instead of a second photo. The inspector shows "Found in N places". Re-importing a known, unchanged path (same size and modification time) skips hashing entirely.
-- **Missing and moved originals.** On open, sources that no longer exist are flagged. The grid marks a photo whose every known original is missing, and the inspector explains how to reconnect it: import the file from its new location. Existing previews stay available. If a file's content changes in place, it becomes a new photo. The old photo is removed once none of its sources still hold its bytes.
+- **Missing and moved originals.** On open, sources that no longer exist are flagged. The grid marks a photo whose every known original is missing, and the inspector explains how to reconnect it: import the file from its new location. Existing previews stay available. If a file's content changes in place, it becomes a new photo. The old photo is removed once none of its sources still hold its bytes, unless it is in the cloud.
 - **Failures.** Each failed file is recorded with a readable reason, for example "Not a readable JPEG" or "The JPEG is incomplete or damaged". A later successful import clears the record. Failures persist across launches until retried or cleared.
 - **Derivatives.** libvips produces WebP renditions at 480 px (grid), 1200 px (mobile), and 2400 px (desktop) on the long edge, never upscaled. Renditions apply EXIF orientation, are converted to sRGB from the embedded ICC profile, and carry no metadata: no EXIF, GPS, ICC, or XMP chunks. The grid rendition is made during import. The larger ones are prepared in the background and on demand for the viewer. Recipe version 1 uses quality 82, which is provisional. A changed recipe version or a missing file is regenerated.
 - **Metadata.** ISO, exposure time, aperture, focal length, camera, lens, and capture time (with its UTC offset, when recorded) are read locally from EXIF and stored in the catalog. GPS and serial numbers are ignored. Malformed metadata never fails an import.
+
+## Upload
+
+The app uploads photos to the photo API (`apps/api`) as private drafts. Only the owner can see a draft. Publishing is modelled but not yet wired to the window.
+
+`PHOTO_API_URL` sets the API's address. `PHOTO_API_TOKEN` sets the owner token. Without it, the app reads the Keychain item with service `dev.parth.photo-prototype` and account `owner-token`, which you can add with this command (it asks for the token):
+
+```sh
+security add-generic-password -s dev.parth.photo-prototype -a owner-token -w
+```
+
+With no address or token, the inspector says the app is not connected, and the app stays a local library. The token never reaches the catalog, a log, or an error message.
+
+- **Actions.** **File ▸ Upload Photo** (⌘U) or the inspector's **Upload** button uploads the selected photo. **Upload All Photos** (⇧⌘U) uploads every photo that is only in the library and retries each failure that a retry can fix. **Photos Not Uploaded…**, or the sidebar's **Not uploaded** row, lists each failure with its reason, and **Retry all** retries them.
+- **States.** The catalog keeps one cloud state per photo: Local, Queued, Uploading (with the files the server still lacks), Draft, or Failed with a reason. Publishing, Published, and Unpublishing are in the model for the coming publish actions; nothing sets them yet. A tile in the cloud carries a mark with its own icon and an accessible label, so no state depends on colour. The status bar counts the run, then sums it up, for example "Uploaded 16 photos as private drafts · 1 failed".
+- **Steps.** A photo's cloud identity is the SHA-256 of its original. The app computes it in the same pass as the BLAKE3 identity, with the same changed-file checks. To prepare a photo, the app copies its three WebP renditions to `uploads/<photo>/`, so the files the manifest describes cannot change, and records the manifest. A transfer lane then calls `begin`, sends each file the server reports missing, and calls `finalize`. Each call is safe to repeat. The staged copies are deleted when the photo becomes a draft.
+- **Recovery.** The app records each state before the network call that depends on it. After a restart, it prepares queued photos again and resumes uploading photos from the server's answer to `begin`. So a lost response never sends a second upload or loses a finished one. Timeouts, lost connections, and 5xx answers retry after 2 s, doubling up to 60 s, five attempts in all. Then the photo fails as unavailable, and a retry starts again. A 401 tells you to check the token. A manifest conflict or a rejected finalize stops that photo, because a retry would send the same files. A retry always sends whole files.
+- **Changed originals.** If an original goes missing or changes before its bytes are sent, the upload fails and says what to do. If a photo in the cloud has its original changed in place, the photo stays in the library, detached from that path, so its cloud record is kept.
+
+Two transfer lanes do the network work, apart from the two image lanes, so an upload never holds an encoder or delays a preview.
+
+Upload tests (`tests/upload.rs`) run the library against an in-process fake API (`tests/support/mod.rs`) that follows the Worker's contract and injects faults. They cover:
+
+- the whole path to a draft, and the state after a reopen;
+- a restart mid-upload, which sends the original only once;
+- a lost answer to a PUT and to `finalize`;
+- 503 answers that recover, and 503 answers that reach the cap and then a retry;
+- a 401, and a rejected `finalize`;
+- a photo queued twice;
+- an original that changes or goes missing before the upload, and one that changes after it is prepared;
+- previews served while uploads run;
+- a photo in the cloud whose original changes in place;
+- a library with no API set up.
+
+`upload-check` imports JPEGs into a new library, uploads them through the library, asks the API with its own client whether each photo is a draft of its original, then reopens the catalog to confirm the drafts persisted. Run it only against a local Worker:
+
+```sh
+cd apps/api && bun install --frozen-lockfile && OWNER_TOKEN=<32 or more characters> PORT=8791 bun scripts/serve.ts
+# In another shell, from the repository root:
+PHOTO_API_URL=http://127.0.0.1:8791 PHOTO_API_TOKEN=<the same token> \
+  cargo run --locked --manifest-path apps/desktop/Cargo.toml --bin upload-check -- /tmp/upload-check-library /path/to/jpegs
+```
+
+Schema v4 adds the `uploads` table and a photo's detached source.
 
 ## Processing and memory bounds
 
 The grid virtualizes rows. Columns follow the window width (square tiles, at least the zoom's width, 6 px apart), and the inspector collapses below 760 px. Encoded renditions stay on disk. Decoded images go through `rune::ImageCache`, held in two bounded slot lists (`src/ui/images.rs`): at most **160 thumbnail / 2 viewer entries** interactively (**64 / 2** in benchmark mode), with at most **4 / 1 in-flight decodes**. Only visible rows, plus one row each side, request thumbnails. A pending decode is never evicted, including one for a row that scrolled off-screen. Available thumbnails stay visible until the larger preview arrives. Image work stays off the UI thread.
 
-Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
+Two worker lanes allow at most two encoder processes. The background lane runs, in priority order: clearing failures, queuing and preparing uploads, scanning, importing, grid repairs, then larger web sizes. It waits while an interactive preview is pending or running. The interactive lane renders the selected photo's desktop rendition. The latest pending preview replaces older ones. A running background job is never cancelled midway through a write.
 
 Library tests (`tests/library.rs`) cover:
 
@@ -182,6 +226,8 @@ $B --script keys.json --snap stepped.png --at 1.5
 $B --tree tree.json --scene failures --at 1.5
 ```
 
+The upload scenes are `uploading`, `upload-draft`, `upload-failed`, `upload-failures`, and `not-connected`. In the demo library, Upload changes nothing and starts no thread.
+
 Render at `--at 1.5`: Rune animates elements in, so earlier frames show them half in. `cargo test --features desktop` also presses the real view (`src/ui/tests.rs`) and compares every scene's element tree with `goldens/<scene>.txt`. After a change you meant to make, rewrite them with `PHOTO_PROTOTYPE_UPDATE_GOLDENS=1 cargo test --features desktop goldens`, read the diff, and commit them with the change. A refactor rewrites none. `scripts/check` runs format, file size, clippy with no warnings, and every test and golden.
 
 A headless run moves the wall clock and the animation clock together, so anything driven by time (the poll's wakes, the performance panel's refresh) also needs a real window. The benchmark above is that check.
@@ -193,8 +239,8 @@ The window keeps the Library design from the ZUI build (#21), drawn with Rune an
 - **Shell.** One 44 pt title bar across the window: the sidebar toggle past the traffic lights, the grid's title where the grid starts, and the zoom slider, the Info and performance toggles, and **Import** at the trailing edge. Below it, the sidebar, the grid and the inspector. The sidebar has one destination per collection the library keeps, with its count, and the weight of the originals in its footer. The status bar is mono, shows what is in view and selected at rest, and owns transient import state, so no datum appears twice. Benchmark mode hides the sidebar, because the scripted scroll assumes a fixed column count.
 - **Planes.** The grid and the viewer sit on the opaque content plane (`#060606` dark, white light). The title bar, sidebar, inspector and status bar sit on the chrome plane, with a hairline between planes. The accent is red (`#E5483A` dark, `#C8372A` light) and marks only the primary action and progress.
 - **Tiles.** Square crops on a plate, 6 pt apart, with a selection ring set 3 pt outside the photo. Rune paints hover and press itself, so the pointer crossing tiles never re-runs the view. A photo whose original is missing turns grey and says so. The grid's scroll edges fade while content is hidden under them.
-- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, and a detail list that leaves out values the camera never wrote.
-- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheet slides in at the trailing edge and lists each file with its reason and path.
+- **Inspector.** 300 pt wide: the preview, the name and size, the camera-settings readout, the film chip, a cloud section with the photo's upload state and its Upload or Retry action, and a detail list that leaves out values the camera never wrote.
+- **Viewer and sheet.** The viewer is modal: the photo fitted whole, the camera settings in a pill over its lower edge, step buttons at its sides, and a filmstrip of neighbours below. Escape closes it, and focus returns to the window. The failures sheets slide in at the trailing edge. One lists each file that didn't import, and the other each photo that didn't upload, with its reason.
 - **Type and icons.** Geist and Geist Mono (OFL, `fonts/`), with tabular figures for counts, sizes and camera settings. Icons are Lucide, as SVG bodies (`src/ui/icons.rs`).
 - **Numbers from the kit.** Radii come from `k.radius`. Status words appear only for transient import state or when something went wrong.
 
@@ -204,6 +250,7 @@ The window keeps the Library design from the ZUI build (#21), drawn with Rune an
 - `src/ui/look.rs` holds the palette, the fonts and the text styles.
 - `src/ui/view/` has one file per window region: title bar, grid, inspector, viewer, and the failures sheet. `view/mod.rs` assembles them with the sidebar and the status bar.
 - `src/ui/view/parts.rs` holds pieces that take data and draw it (the exposure readout and pill, the film chip, the detail list). They hold no state.
+- `src/api.rs` is the one door to the photo API, `src/cloud.rs` holds the cloud state, and `src/library/upload.rs` prepares and sends uploads. `src/ui/gallery/upload.rs` holds the window's upload actions, and `src/ui/view/cloud.rs` draws the inspector's cloud section and the tile mark.
 - `src/ui/demo.rs` holds the demo library and the scenes, and `goldens/` each scene's element tree.
 
 ## Pipeline choice and remaining product work
@@ -216,7 +263,9 @@ Remaining product work:
 - Tune the WebP quality with real photos and settle on a final value.
 - Add derivative quota and cleanup of orphaned files.
 - Verify the grid tile names, selection state, and activation actions with VoiceOver. Rune exposes elements through AccessKit, but screen-reader behavior is unverified.
-- Add upload and publishing.
+- Wire Publish and Unpublish to the API's calls when they land. The cloud states already model them.
+- Stream originals from disk with the client's `put_file` instead of reading each one into memory.
+- Let a person cancel an upload, and upload several selected photos at once.
 
 Cargo also reports a future-incompatibility warning in upstream `block` 0.1.6. No budget was relaxed for the Rune port. See the saved [reference](../../docs/photo-gallery/references.md); the video was not inspected, so no visual requirements were inferred from it.
 
@@ -235,7 +284,7 @@ cargo run --locked --manifest-path apps/desktop/Cargo.toml --bin export-film-met
 
 The command drains pending film jobs and writes `{ "version": 1, "photos": [...] }` through an atomic file replacement. Each record contains only `id`, `capturedAt: null`, `state: { "_tag": "Draft" }`, and optional `filmSimulation`. It omits paths, local capture times, GPS, serial numbers, camera/lens details, and arbitrary EXIF/XMP. If any legacy photo remains unchecked because its originals are missing or changed, export fails without writing an incomplete file. Reconnect or reimport those originals, then retry.
 
-This is a handoff to the API contract probe. Upload, cloud persistence, and a public gallery remain future work.
+This is a handoff to the API contract probe. Uploads have their own path; see [Upload](#upload).
 
 On September 30, 2026, all 94 authorized `japan-v2` JPEGs imported without failures. Extraction matched ExifTool's 22 Classic Chrome and four Astia values; the remaining 68 records omitted film simulation. All 94 exported records survived the local HTTP probe and Rust client round-trip. Original SHA-256 hashes stayed unchanged, and all 94 derivatives contained no EXIF, XMP, or ICC chunks. A copied v1 catalog of 223 `japan25` photos migrated and completed its absent-metadata backfill in 4.60 seconds; a repeated export took 0.17 seconds. These timings measure the CLI backfill and export. Local evidence remains under `benchmarks/local/film-simulation-20260930`.
 
