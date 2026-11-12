@@ -82,7 +82,7 @@ export const startWorkerd = async (
     modules,
     modulesRoot: ROOT,
     port,
-    r2Buckets: ["Private"],
+    r2Buckets: ["Private", "Public"],
   });
   const db = await miniflare.getD1Database("Db");
   for (const file of readdirSync(MIGRATIONS).toSorted()) {
