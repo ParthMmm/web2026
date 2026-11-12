@@ -5,8 +5,19 @@ import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 import expressiveCode from "astro-expressive-code";
 import { defineConfig } from "astro/config";
+import { loadEnv } from "vite";
 
 const FONT_FILE = /\.woff2?$/u;
+
+/* Until PUBLIC_GALLERY_URL is set, /photos/ only says the gallery is not
+   connected, carries noindex, and nothing links to it, so it stays out of
+   the sitemap too. */
+const { PUBLIC_GALLERY_URL = "" } = loadEnv(
+  process.env.NODE_ENV ?? "production",
+  process.cwd(),
+  "PUBLIC_"
+);
+const galleryConnected = PUBLIC_GALLERY_URL.trim() !== "";
 
 // https://astro.build/config
 export default defineConfig({
@@ -30,7 +41,10 @@ export default defineConfig({
       themes: ["github-dark-default"],
       useDarkModeMediaQuery: false,
     }),
-    sitemap(),
+    sitemap({
+      filter: (page) =>
+        galleryConnected || new URL(page).pathname !== "/photos/",
+    }),
     react(),
   ],
   output: "static",

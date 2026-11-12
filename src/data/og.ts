@@ -22,6 +22,11 @@ export const ogCards = {
     title: "Hey! I'm Parth.",
     tone: "green",
   },
+  photos: {
+    description: "Photographs, newest first.",
+    title: "Photos",
+    tone: "orange",
+  },
   projects: {
     description: "Möte, Versos, Orbis, Beacon, and Auriom.",
     title: "Projects",
