@@ -13,6 +13,8 @@ export default Alchemy.Stack(
   { providers: Cloudflare.providers(), state: Alchemy.localState() },
   Effect.gen(function* site() {
     const website = yield* Cloudflare.Website.StaticSite("Website", {
+      // Without this an unknown address gets a 404 with an empty body.
+      assets: { notFoundHandling: "404-page" },
       command: "bun run build",
       dev: { command: "bun run dev" },
       domain: {

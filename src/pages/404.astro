@@ -1,0 +1,30 @@
+---
+import Chapter from "../components/Chapter.astro";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="Page not found — Parth Mangrola"
+  description="There is no page at this address."
+  noindex
+>
+  <Chapter label="Not found" heading="h1">
+    <p class="message">There is no page at this address.</p>
+    <p class="message"><a href="/">Go to the home page</a></p>
+  </Chapter>
+</Layout>
+
+<style>
+  /* Same size, leading and ink as the lede on the home page. */
+  .message {
+    margin: 0;
+    max-width: 34rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--color-ink-2);
+  }
+
+  .message + .message {
+    margin-block-start: 0.75rem;
+  }
+</style>
