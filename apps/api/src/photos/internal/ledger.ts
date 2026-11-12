@@ -98,10 +98,11 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
       execute: ({ manifest, nowMillis, photoId }) => sql`
         INSERT INTO photo (photo_id, manifest, created_at)
         VALUES (${photoId}, ${manifest}, ${nowMillis})
-        ON CONFLICT (photo_id) DO UPDATE SET manifest = CASE
-          WHEN photo.finalized_at IS NULL THEN excluded.manifest
-          ELSE photo.manifest
-        END
+        ON CONFLICT (photo_id) DO UPDATE SET
+          finalized_at = CASE
+            WHEN photo.manifest = excluded.manifest THEN photo.finalized_at
+          END,
+          manifest = excluded.manifest
         RETURNING ${columns}`,
     });
 

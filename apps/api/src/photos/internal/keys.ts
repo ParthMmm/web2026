@@ -15,3 +15,7 @@ export const finalKey = (
   kind: VariantKind,
   sha256: Sha256
 ): BlobKey => BlobKey.make(`${FINAL_PREFIX}${photoId}/${kind}-${sha256}`);
+
+/** Every final object of one photo, whichever manifest it was promoted for. */
+export const finalPrefix = (photoId: PhotoId): string =>
+  `${FINAL_PREFIX}${photoId}/`;

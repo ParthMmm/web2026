@@ -13,6 +13,8 @@ Every call needs `Authorization: Bearer <OWNER_TOKEN>`. Every call is safe to re
 | `photos.put` | `PUT /v1/photos/{photoId}/{kind}` with the raw bytes and `Content-Length` | 204 |
 | `photos.finalize` | `POST /v1/photos/{photoId}/finalize` | `Draft` view |
 
+`begin` with a new manifest for a `Draft` reopens it for upload, so the desktop can send re-rendered derivatives. Objects it already holds under the new manifest count as uploaded. The next `finalize` removes the objects of the old manifest.
+
 `photoId` is the SHA-256 of the original. The manifest declares the size and SHA-256 of each object, and the width and height of each derivative. `kind` is `original`, `w480`, `w1200` or `w2400`.
 
 The Worker never trusts a declared hash. It passes the hash to R2 with each write, and R2 refuses bytes that do not match before it stores them. `finalize` reads each WebP header, refuses metadata, animation and wrong dimensions, then copies the objects from `staging/` to `photos/`. R2 checks that copy too. One D1 row per photo holds the manifest and the time it became a draft. Each write is one statement, because D1 has no transactions.
