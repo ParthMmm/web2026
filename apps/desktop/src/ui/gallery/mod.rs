@@ -171,6 +171,8 @@ pub struct Gallery {
     handle: Option<AppHandle<Self>>,
     pending_imports: Vec<PendingImport>,
     session_failures: usize,
+    /// Photos assets the picker could not load, said once the import they came with ends.
+    photos_note: Option<String>,
 }
 
 impl Gallery {
@@ -243,6 +245,7 @@ impl Gallery {
             handle: None,
             pending_imports: Vec::new(),
             session_failures: 0,
+            photos_note: None,
         }
     }
 

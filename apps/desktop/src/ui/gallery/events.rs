@@ -103,6 +103,9 @@ impl Gallery {
             Event::ImportFinished { summary } => {
                 self.progress = None;
                 self.status = format::import_summary(&summary);
+                if let Some(note) = self.photos_note.take() {
+                    self.status = format!("{} · {note}", self.status);
+                }
             }
             Event::Removed { id } => self.remove(&id),
             Event::Ready {

@@ -2,7 +2,10 @@
 //! files that didn't import.
 
 use super::{Gallery, LibraryState};
-use crate::{photos, ui::open_panel};
+use crate::{
+    photos,
+    ui::{format, open_panel},
+};
 use std::path::PathBuf;
 
 /// An import asked for before the library finished opening.
@@ -74,8 +77,18 @@ impl Gallery {
             handle.update(move |gallery: &mut Gallery, _| {
                 gallery.picking = false;
                 match result {
-                    Ok(Ok(paths)) if paths.is_empty() => {}
-                    Ok(Ok(paths)) => gallery.import(paths, true),
+                    Ok(Ok(picked)) => {
+                        let note = picked
+                            .failures
+                            .first()
+                            .map(|reason| format::photos_not_loaded(picked.failures.len(), reason));
+                        if picked.copies.is_empty() {
+                            gallery.status = note.unwrap_or_default();
+                        } else {
+                            gallery.photos_note = note;
+                            gallery.import(picked.copies, true);
+                        }
+                    }
                     Ok(Err(error)) => {
                         gallery.status = format!("Couldn't import from Photos: {error}");
                     }
