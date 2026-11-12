@@ -111,6 +111,14 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Tests.** `tests/site/orbis-player.test.ts`: playback stops at the end; Play on a finished set restarts it; and over all 4,096 six-event sequences the player is never playing at or past the end, and only a tick while playing moves it.
 - **Checked in Chrome** on the new build with the same fast clock: at the end the button reads "Play", the bars stop, and the status reads "Saved at 1:59:33 for every device". Pause, resume and cue seeking behave as before.
 
+#### S10. A new page silently borrows the home page's share card (fixed)
+
+- **Evidence.** `ogImagePath("/projects/not-written-yet/")` returned `/og/index.png`. A page's card comes from a hand-kept table in `src/data/og.ts`, separate from `src/data/site.ts` and the Markdown. A page missing from the table shipped with the home page's image and alt text in its link previews, with no warning. Adding a project means editing three or four files, and this one fails quietly.
+- **Fix.** A missing card throws, with the path and the fix in the message. I removed one card to check, and the build stopped with: ``No share card for /projects/auriom/. Its link previews would have no image of their own. Fix: add "projects/auriom" to `ogCards` in src/data/og.ts.`` The `Layout` component lost its `image` and `imageAlt` props, which no page passed.
+- **Checked.** The `<head>` of five existing pages is identical to the baseline build.
+- **Test.** `tests/site/og.test.ts`.
+- **Left.** The table itself. The cards for the seven write-ups could be derived from `site.ts` if each record carried its tone, which would remove the table's duplicate titles. That is a data-model change to make together with S13.
+
 ### Worker: `now.parthm.dev`
 
 The Worker is deployed and polls three sources every minute, and every 15 seconds while a socket is open. No page on `main` reads it yet (`wip/now-playing-masthead` does). It had no tests, and CI did not typecheck it.
