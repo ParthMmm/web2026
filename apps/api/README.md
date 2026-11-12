@@ -24,9 +24,9 @@ Errors are tagged JSON bodies. `fixtures/contract.json` holds one of each, and t
 - `src/photos/photos.ts`: the `Photos` module, with `begin`, `get`, `store` and `finalize`.
 - `src/photos/blobs.ts`: the `Blobs` port. `blobs-r2.ts` is the Worker adapter. `blobs-memory.ts` is the test adapter.
 - `src/photos/internal/`: object keys, the D1 ledger and the WebP header reader. Only `src/photos` may import it.
-- `src/photos/infra.ts`: the private R2 bucket, with a 7-day expiry on `staging/`, and the D1 database. Both are retained in the `prod` stage.
+- `src/photos/infra.ts`: the private R2 bucket, with a 7-day expiry on `staging/`, the public R2 bucket and the D1 database. All three are retained in the `prod` stage.
 - `src/http/`: the HttpApi contract, the handlers, owner auth and the request log.
-- `src/worker.ts` and `alchemy.run.ts`: the `PhotosApi` Worker in the `web2026-photos` stack. The stack also declares the `Public` bucket that publishing (#9) will use.
+- `src/worker.ts` and `alchemy.run.ts`: the `PhotosApi` Worker in the `web2026-photos` stack.
 - `client/`: the hand-written Rust client and the smoke binary.
 
 ## Local checks

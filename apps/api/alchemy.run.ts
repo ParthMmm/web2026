@@ -2,7 +2,7 @@ import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Alchemy from "alchemy";
 import { Effect } from "effect";
 
-import { PublicBucket } from "./src/publishing/public-bucket.ts";
+import { PublicBucket } from "./src/photos/infra.ts";
 import PhotosApi from "./src/worker.ts";
 
 export default Alchemy.Stack(
