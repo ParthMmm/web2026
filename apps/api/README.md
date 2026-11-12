@@ -107,6 +107,10 @@ bun run smoke
 
 No check deploys or needs Cloudflare credentials.
 
+## Deploy
+
+`bun run deploy` deploys the `prod` stage and asks before it applies the plan. Always name a stage: `alchemy deploy` and `alchemy destroy` with no `--stage` act on `live_$USER`, where the bucket and the database are not retained. `tests/deploy-stage.test.ts` fails when a script here or in the repo root leaves the stage out.
+
 ## Cloud proof
 
 Run this by hand on a throwaway stage. Alchemy's `default` profile can authenticate. Keep Cloudflare credentials out of this directory. Create an ignored `.env` with a fresh `OWNER_TOKEN` of at least 32 random characters and mode 0600. See `.env.example`.
