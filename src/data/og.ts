@@ -85,12 +85,19 @@ export const isOgSlug = (slug: string): slug is OgSlug =>
 const toSlug = (pathname: string): string =>
   pathname.replaceAll(/^\/+|\/+$/gu, "") || "index";
 
+/* A missing card stops the build. The old fallback, the home page's card,
+   let a new page ship with the wrong link preview and say nothing. */
 const resolve = (pathname: string): OgSlug => {
   const slug = toSlug(pathname);
-  return isOgSlug(slug) ? slug : "index";
+  if (!isOgSlug(slug)) {
+    throw new Error(
+      `No share card for ${pathname}. Its link previews would have no image of their own. Fix: add "${slug}" to \`ogCards\` in src/data/og.ts.`
+    );
+  }
+  return slug;
 };
 
-/** The generated card for a page, falling back to the homepage card. */
+/** The generated card for a page. Throws when the page has none. */
 export const ogImagePath = (pathname: string): string =>
   `/og/${resolve(pathname)}.png`;
 

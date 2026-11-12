@@ -5,52 +5,52 @@ import "../styles/global.css";
 import { SEO } from "astro-seo";
 import Footer from "../components/Footer.astro";
 import Masthead from "../components/Masthead.astro";
-import { ogImageAlt as cardAlt, ogImagePath } from "../data/og";
+import { ogImageAlt, ogImagePath } from "../data/og";
 
 interface Props {
 	title: string;
 	description: string;
-	image?: string;
-	/** Short description of the share image for screen readers and link previews. */
-	imageAlt?: string;
 	/** For a page with no address of its own, such as the not-found page:
-	    keeps it out of search results and gives it no canonical or share URL. */
+	    keeps it out of search results and gives it no canonical or share tags. */
 	noindex?: boolean;
 }
 
-const { title, description, image, imageAlt, noindex = false } = Astro.props;
+const { title, description, noindex = false } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
-/* Link unfurlers don't resolve relative URLs, so the image must be absolute. */
-const ogImage = new URL(image ?? ogImagePath(Astro.url.pathname), Astro.site).toString();
-const ogImageAlt = imageAlt ?? cardAlt(Astro.url.pathname);
-const share = {
-	openGraph: {
-		basic: {
-			image: ogImage,
-			title,
-			type: "website",
-			url: canonicalURL.toString(),
+
+const shareTags = () => {
+	/* Link unfurlers don't resolve relative URLs, so the image must be absolute. */
+	const image = new URL(ogImagePath(Astro.url.pathname), Astro.site).toString();
+	const imageAlt = ogImageAlt(Astro.url.pathname);
+	return {
+		openGraph: {
+			basic: {
+				image,
+				title,
+				type: "website",
+				url: canonicalURL.toString(),
+			},
+			image: {
+				alt: imageAlt,
+				height: 630,
+				type: "image/png",
+				width: 1200,
+			},
+			optional: {
+				description,
+				siteName: "Parth Mangrola",
+			},
 		},
-		image: {
-			alt: ogImageAlt,
-			height: 630,
-			type: "image/png",
-			width: 1200,
-		},
-		optional: {
+		twitter: {
+			card: "summary_large_image" as const,
+			creator: "@parthmangrola",
 			description,
-			siteName: "Parth Mangrola",
+			image,
+			imageAlt,
+			site: "@parthmangrola",
+			title,
 		},
-	},
-	twitter: {
-		card: "summary_large_image" as const,
-		creator: "@parthmangrola",
-		description,
-		image: ogImage,
-		imageAlt: ogImageAlt,
-		site: "@parthmangrola",
-		title,
-	},
+	};
 };
 ---
 
@@ -62,7 +62,7 @@ const share = {
       description={description}
       noindex={noindex}
       canonical={noindex ? null : canonicalURL.toString()}
-      {...(noindex ? {} : share)}
+      {...(noindex ? {} : shareTags())}
       extend={{
         meta: [
           { name: "author", content: "Parth Mangrola" },
