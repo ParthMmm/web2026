@@ -41,7 +41,7 @@ const versions = await Promise.all(
 );
 const { Content } = versions.at(-1) ?? versions[0];
 
-const record = projects.find((project) => project.url === `/projects/${slug}`);
+const record = projects.find((project) => project.url === `/projects/${slug}/`);
 const title = record?.title ?? latest.data.title;
 const description = record?.description ?? latest.data.description;
 const site = record?.site;
@@ -57,7 +57,7 @@ const jsonLd = {
 	description,
 	name: title,
 	operatingSystem: latest.data.operatingSystem,
-	url: site ?? new URL(`/projects/${slug}`, profile.site).toString(),
+	url: site ?? new URL(`/projects/${slug}/`, profile.site).toString(),
 };
 ---
 
@@ -65,7 +65,7 @@ const jsonLd = {
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   <Article
     section="Projects"
-    sectionUrl="/projects"
+    sectionUrl="/projects/"
     {title}
     {description}
     url={site}

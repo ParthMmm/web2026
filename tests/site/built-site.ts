@@ -14,6 +14,8 @@ export interface Page {
 
 export interface BuiltSite {
   dir: string;
+  /** The URL path of every file the host can serve as it is. */
+  files: Set<string>;
   pages: Page[];
   /** Every stylesheet file, and every inline `<style>` block, by where it is. */
   stylesheets: Map<string, string>;
@@ -45,6 +47,7 @@ const build = (): BuiltSite => {
     .map((file) => ({ html: readFileSync(file, "utf-8"), url: toUrl(file) }));
   return {
     dir: OUT,
+    files: new Set(files.map(toUrl)),
     pages,
     stylesheets: new Map([
       ...files

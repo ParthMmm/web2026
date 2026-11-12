@@ -35,10 +35,14 @@ export default defineConfig({
   ],
   output: "static",
   redirects: {
-    "/projects/mana-margherita": "/projects/mote",
-    "/projects/tracklister": "/projects/versos",
+    "/projects/mana-margherita": "/projects/mote/",
+    "/projects/tracklister": "/projects/versos/",
   },
   site: "https://www.parthm.dev",
+  // The host serves a page at its directory URL and answers the slashless
+  // form with a 307. Building, linking and the dev server all use the slash,
+  // so a link that would redirect in production is a 404 in dev.
+  trailingSlash: "always",
   vite: {
     build: {
       // Vite inlines any asset under 4 kB as base64. Four Geist Mono files

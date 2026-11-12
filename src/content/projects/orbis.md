@@ -22,7 +22,7 @@ it started as a library for one listener on one home server. now it's for a smal
    - downloads are scheduled fairly across people, and everyone who saved the same set shares one audio file
 3. **listen**
    - the native apps stream it with the system media frameworks. Now Playing, the Lock Screen, and CarPlay work like any other audio app
-   - sets with a tracklist from [Versos](/projects/versos) show each track as a cue, and tapping one seeks to it
+   - sets with a tracklist from [Versos](/projects/versos/) show each track as a cue, and tapping one seeks to it
 4. **resume**
    - the queue and every playback position live in the API, so a second device picks up exactly where the first one stopped
 
