@@ -145,53 +145,60 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
     inspector-header	group	inspector-header	-	-	-	900,44,300,44	#00000000	-	1.00
      #0	text	-	-	Info	-	916,58.5,22,15	#00000000	#9a9a9aff	1.00
     inspector-scroll	group	inspector-scroll	-	-	-	900,88,300,708	#00000000	-	1.00
-     inspector-content	group	inspector-content	-	-	-	900,88,300,583.4	#00000000	-	1.00
+     inspector-content	group	inspector-content	-	-	-	900,88,300,635.4	#00000000	-	1.00
       inspector-preview	group	inspector-preview	-	-	-	912,100,276,184	#141414ff	-	1.00
        #0	group	-	-	-	-	912,100,276,184	#00000000	-	1.00
       #1	group	-	-	-	-	912,296,276,33.9	#00000000	-	1.00
        #0	text	-	-	DSCF4521 - the harbour wall at low tide, second attempt with the 23mm.JPG	-	916,296,268,17.5	#00000000	#edededff	1.00
        #1	text	-	-	6240 × 4160 · 9.8 MB	-	916,315.5,268,14.4	#00000000	#7f7f7fff	1.00
-      exposure-readout	group	exposure-readout	Exposure	-	-	912,341.9,276,45.5	#161616ff	-	1.00
-       #0	group	-	-	-	-	912,341.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	f/2.8	-	927.5,349.9,38,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	APERTURE	-	923.5,367.5,46,11.9	#00000000	#9a9a9aff	1.00
-       #1	group	-	-	-	-	981,341.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	1/125 s	-	989,349.9,53,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	SHUTTER	-	995.5,367.5,40,11.9	#00000000	#9a9a9aff	1.00
-       #2	group	-	-	-	-	1050,341.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	400	-	1073,349.9,23,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	ISO	-	1075.5,367.5,18,11.9	#00000000	#9a9a9aff	1.00
-       #3	group	-	-	-	-	1119,341.9,69,45.5	#00000000	-	1.00
-        #0	text	-	-	56 mm	-	1134.5,349.9,38,15.6	#00000000	#edededff	1.00
-        #1	text	-	-	FOCAL	-	1139,367.5,29,11.9	#00000000	#9a9a9aff	1.00
-      details	group	details	-	-	-	912,399.4,276,260	#00000000	-	1.00
-       #0	group	-	-	-	-	912,399.4,276,260	#00000000	-	1.00
-        #0	group	-	-	-	-	912,399.4,276,30	#00000000	-	1.00
-         #0	text	-	-	Film	-	912,404.4,72,20	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,404.4,192,20	#00000000	-	1.00
-          #0	group	-	-	-	-	996,404.4,192,20	#00000000	-	1.00
-           film-chip	group	film-chip	-	-	-	996,404.4,122,20	#00000000	-	1.00
-            #0	group	-	-	-	-	1003,411.4,6,6	#9a9a9aff	-	1.00
-            #1	text	-	-	CLASSIC NEGATIVE	-	1015,408.1,96,12.5	#00000000	#edededff	1.00
-        #1	group	-	-	-	-	912,429.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Camera	-	912,434.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,434.4,192,15	#00000000	-	1.00
-          #0	text	-	-	FUJIFILM X-T5	-	996,434.4,192,15	#00000000	#edededff	1.00
-        #2	group	-	-	-	-	912,454.4,276,40	#00000000	-	1.00
-         #0	text	-	-	Lens	-	912,459.4,72,30	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,459.4,192,30	#00000000	-	1.00
-          #0	text	-	-	XF23mmF1.4 R LM WR with a very long adapter name for testing	-	996,459.4,192,30	#00000000	#edededff	1.00
-        #3	group	-	-	-	-	912,494.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Taken	-	912,499.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,499.4,192,15	#00000000	-	1.00
-          #0	text	-	-	2026-08-11 11:21 (UTC+01:00)	-	996,499.4,192,15	#00000000	#edededff	1.00
-        #4	group	-	-	-	-	912,519.4,276,25	#00000000	-	1.00
-         #0	text	-	-	Copies	-	912,524.4,72,15	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,524.4,192,15	#00000000	-	1.00
-          #0	text	-	-	Found in 12 places	-	996,524.4,192,15	#00000000	#edededff	1.00
-        #5	group	-	-	-	-	912,544.4,276,115	#00000000	-	1.00
-         #0	text	-	-	Original	-	912,549.4,72,105	#00000000	#7f7f7fff	1.00
-         #1	group	-	-	-	-	996,549.4,192,105	#00000000	-	1.00
-          #0	text	-	-	/Users/demo/Pictures/Exports/2026/October/A weekend walking the coast from Porto down to Aveiro, mostly in the rain/DSCF4521 - the harbour wall at low tide, second attempt with the 23mm.JPG	-	996,549.4,192,105	#00000000	#9a9a9aff	1.00
+      cloud	group	cloud	-	-	-	912,341.9,276,40	#00000000	-	1.00
+       cloud-state	group	cloud-state	-	-	-	922,351.9,256,20	#00000000	-	1.00
+        #0	icon	-	-	-	-	922,354.9,14,14	#00000000	#9a9a9aff	1.00
+        #1	text	-	-	Only in this library	-	944,351.9,148,20	#00000000	#edededff	1.00
+        upload-photo	button	upload-photo	Upload	-	Upload as a private draft (⌘U)	1100,351.9,78,20	#131313ff	-	1.00
+         icon	icon	icon	-	-	-	1110,354.9,14,14	#00000000	#edededff	1.00
+         label	text	label	-	Upload	-	1130,355.9,38,12	#00000000	#edededff	1.00
+      exposure-readout	group	exposure-readout	Exposure	-	-	912,393.9,276,45.5	#161616ff	-	1.00
+       #0	group	-	-	-	-	912,393.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	f/2.8	-	927.5,401.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	APERTURE	-	923.5,419.5,46,11.9	#00000000	#9a9a9aff	1.00
+       #1	group	-	-	-	-	981,393.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	1/125 s	-	989,401.9,53,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	SHUTTER	-	995.5,419.5,40,11.9	#00000000	#9a9a9aff	1.00
+       #2	group	-	-	-	-	1050,393.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	400	-	1073,401.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	ISO	-	1075.5,419.5,18,11.9	#00000000	#9a9a9aff	1.00
+       #3	group	-	-	-	-	1119,393.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	56 mm	-	1134.5,401.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	FOCAL	-	1139,419.5,29,11.9	#00000000	#9a9a9aff	1.00
+      details	group	details	-	-	-	912,451.4,276,260	#00000000	-	1.00
+       #0	group	-	-	-	-	912,451.4,276,260	#00000000	-	1.00
+        #0	group	-	-	-	-	912,451.4,276,30	#00000000	-	1.00
+         #0	text	-	-	Film	-	912,456.4,72,20	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,456.4,192,20	#00000000	-	1.00
+          #0	group	-	-	-	-	996,456.4,192,20	#00000000	-	1.00
+           film-chip	group	film-chip	-	-	-	996,456.4,122,20	#00000000	-	1.00
+            #0	group	-	-	-	-	1003,463.4,6,6	#9a9a9aff	-	1.00
+            #1	text	-	-	CLASSIC NEGATIVE	-	1015,460.1,96,12.5	#00000000	#edededff	1.00
+        #1	group	-	-	-	-	912,481.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Camera	-	912,486.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,486.4,192,15	#00000000	-	1.00
+          #0	text	-	-	FUJIFILM X-T5	-	996,486.4,192,15	#00000000	#edededff	1.00
+        #2	group	-	-	-	-	912,506.4,276,40	#00000000	-	1.00
+         #0	text	-	-	Lens	-	912,511.4,72,30	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,511.4,192,30	#00000000	-	1.00
+          #0	text	-	-	XF23mmF1.4 R LM WR with a very long adapter name for testing	-	996,511.4,192,30	#00000000	#edededff	1.00
+        #3	group	-	-	-	-	912,546.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Taken	-	912,551.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,551.4,192,15	#00000000	-	1.00
+          #0	text	-	-	2026-08-11 11:21 (UTC+01:00)	-	996,551.4,192,15	#00000000	#edededff	1.00
+        #4	group	-	-	-	-	912,571.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Copies	-	912,576.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,576.4,192,15	#00000000	-	1.00
+          #0	text	-	-	Found in 12 places	-	996,576.4,192,15	#00000000	#edededff	1.00
+        #5	group	-	-	-	-	912,596.4,276,115	#00000000	-	1.00
+         #0	text	-	-	Original	-	912,601.4,72,105	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,601.4,192,105	#00000000	-	1.00
+          #0	text	-	-	/Users/demo/Pictures/Exports/2026/October/A weekend walking the coast from Porto down to Aveiro, mostly in the rain/DSCF4521 - the harbour wall at low tide, second attempt with the 23mm.JPG	-	996,601.4,192,105	#00000000	#9a9a9aff	1.00
   status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
    status	text	status	-	24 photos · 1 selected	-	14,800.8,1172,14.4	#00000000	#9a9a9aff	1.00

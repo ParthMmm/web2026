@@ -8,7 +8,7 @@ use super::super::{
     icons,
     look::Look,
 };
-use super::GRID_KEY;
+use super::{GRID_KEY, cloud::tile_mark};
 use rune::{
     Color, El, GrowthSpec, PopupItem, PopupMenu, ScrollSpec, SurfaceFit, TextStyle, Tx, col, el,
     icon, row, text,
@@ -206,6 +206,7 @@ fn tile(s: &Gallery, photo: &GalleryPhoto, look: &Look, layout: GridLayout) -> E
         .fill(look.plate)
         .children(content)
         .children(badge)
+        .children(tile_mark(photo, look, layout.tile_width))
         .child(hit)
         .children(ring)
 }

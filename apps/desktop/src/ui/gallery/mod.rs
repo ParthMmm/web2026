@@ -3,6 +3,7 @@
 
 mod events;
 mod import;
+mod upload;
 
 use super::{
     benchmark::{self, Benchmark, Totals},
@@ -12,6 +13,7 @@ use super::{
 };
 use crate::{
     ImportFailure, Library, LibraryOptions, PhotoId, PhotoRecord,
+    api::{Config, Connection},
     grid::{self, Movement},
 };
 use import::PendingImport;
@@ -24,6 +26,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+pub(super) use upload::UploadRun;
 
 const THUMBNAIL_CACHE_LIMIT: usize = 160;
 const BENCHMARK_THUMBNAIL_CACHE_LIMIT: usize = 64;
@@ -107,6 +110,7 @@ pub(super) enum Overlay {
     None,
     Viewer,
     Failures,
+    UploadFailures,
 }
 
 /// The performance panel's line, and when `poll` last read it from the
@@ -153,6 +157,10 @@ pub struct Gallery {
     /// The grid's zoom: the smallest width a tile may take.
     pub(super) min_tile_width: f32,
     pub(super) progress: Option<(usize, usize)>,
+    /// Whether uploads can run, and why not.
+    pub(super) connection: Connection,
+    /// The uploads since the queue was last empty.
+    pub(super) uploads: Option<UploadRun>,
     pub(super) status: String,
     pub(super) picking: bool,
     /// The performance panel's line while it shows.
@@ -202,6 +210,7 @@ impl Gallery {
     /// the first one selected, and no library on disk.
     pub(super) fn demo() -> Self {
         let mut gallery = Self::blank(LibraryState::Demo, PathBuf::new(), Rc::default(), None);
+        gallery.connection = demo::connection();
         gallery.photos = demo::photos();
         gallery.selected = gallery.photos.first().map(|photo| photo.record.id.clone());
         gallery.request_preview();
@@ -231,6 +240,10 @@ impl Gallery {
             inspector_hidden: false,
             min_tile_width: DEFAULT_TILE_WIDTH,
             progress: None,
+            connection: Connection::NotConnected {
+                reason: "Opening the library".into(),
+            },
+            uploads: None,
             status: String::new(),
             picking: false,
             performance: None,
@@ -256,10 +269,17 @@ impl Gallery {
             demo::decode(self);
             return;
         };
-        let options = LibraryOptions::new(self.library_root.clone())
-            .prepare_web_sizes(self.benchmark.is_none());
+        let benchmarking = self.benchmark.is_some();
+        let options =
+            LibraryOptions::new(self.library_root.clone()).prepare_web_sizes(!benchmarking);
         std::thread::spawn(move || {
-            let opened = events::open_library(options);
+            // A benchmark measures the library alone, so it never uploads.
+            let cloud = if benchmarking {
+                Err("Uploads are off while benchmarking".into())
+            } else {
+                Config::from_environment()
+            };
+            let opened = events::open_library(options.cloud(cloud));
             handle.update(move |gallery: &mut Self, tx| gallery.library_opened(opened, tx));
         });
     }

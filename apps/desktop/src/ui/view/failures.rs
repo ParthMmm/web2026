@@ -1,4 +1,5 @@
-//! The sheet that lists files that could not be imported, at the window's trailing edge.
+//! The sheets that list what didn't make it, at the window's trailing edge: files that could
+//! not be imported, and photos whose upload stopped.
 
 use super::super::{gallery::Gallery, look::Look};
 use crate::catalog::file_name;
@@ -10,45 +11,96 @@ const SHEET_PADDING: f32 = 16.0;
 
 pub(super) fn failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
     let empty = s.failures.is_empty();
-    let list: El = if empty {
-        text("Every file was imported.")
-            .font(look.ty.ui)
-            .color(look.muted)
+    let entries = s.failures.iter().map(|failure| {
+        entry(
+            look,
+            file_name(&failure.path),
+            failure.message.clone(),
+            Some(failure.path.display().to_string()),
+        )
+    });
+    let list = list(look, "Every file was imported.", entries);
+    let actions = vec![
+        Button::new("Clear list")
+            .variant(ButtonVariant::Ghost)
+            .disabled(empty)
+            .on_press(|s: &mut Gallery| s.clear_failures())
+            .build(look)
+            .key("clear-failures"),
+        Button::new("Retry all")
+            .disabled(empty)
+            .on_press(|s: &mut Gallery| s.retry_failures())
+            .build(look)
+            .key("retry-failures"),
+    ];
+    sheet(look, "", "Not imported", list, actions, layer);
+}
+
+pub(super) fn upload_failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
+    let retryable = s
+        .upload_failures()
+        .any(|(_, failure)| failure.retry_helps());
+    let entries = s.upload_failures().filter_map(|(id, failure)| {
+        let photo = s.photos.iter().find(|photo| &photo.record.id == id)?;
+        Some(entry(
+            look,
+            photo.record.file_name(),
+            failure.message(),
+            None,
+        ))
+    });
+    let list = list(look, "Every upload finished.", entries);
+    let actions = vec![
+        Button::new("Retry all")
+            .disabled(!retryable || !s.is_connected())
+            .on_press(|s: &mut Gallery| s.retry_uploads())
+            .build(look)
+            .key("retry-uploads"),
+    ];
+    sheet(look, "upload-", "Not uploaded", list, actions, layer);
+}
+
+/// One file or photo: its name, what went wrong, and where it is.
+fn entry(look: &Look, name: String, message: String, path: Option<String>) -> El {
+    col()
+        .w_full()
+        .gap(4.0)
+        .child(
+            text(name)
+                .font(TextStyle::new(13.0, 500.0))
+                .color(look.fg)
+                .truncate(),
+        )
+        .child(text(message).font(look.ty.ui).color(look.muted).wrap())
+        .children(path.map(|path| text(path).font(look.ty.small).color(look.muted).wrap()))
+}
+
+fn list(look: &Look, none: &'static str, entries: impl Iterator<Item = El>) -> El {
+    let entries: Vec<El> = entries.collect();
+    if entries.is_empty() {
+        text(none).font(look.ty.ui).color(look.muted)
     } else {
-        col()
-            .w_full()
-            .gap(16.0)
-            .children(s.failures.iter().map(|failure| {
-                col()
-                    .w_full()
-                    .gap(4.0)
-                    .child(
-                        text(file_name(&failure.path))
-                            .font(TextStyle::new(13.0, 500.0))
-                            .color(look.fg)
-                            .truncate(),
-                    )
-                    .child(
-                        text(failure.message.clone())
-                            .font(look.ty.ui)
-                            .color(look.muted)
-                            .wrap(),
-                    )
-                    .child(
-                        text(failure.path.display().to_string())
-                            .font(look.ty.small)
-                            .color(look.muted)
-                            .wrap(),
-                    )
-            }))
-    };
+        col().w_full().gap(16.0).children(entries)
+    }
+}
+
+/// A modal sheet titled `title`, with `list` and `actions`. `prefix` keeps each sheet's keys
+/// apart.
+fn sheet(
+    look: &Look,
+    prefix: &str,
+    title: &'static str,
+    list: El,
+    actions: Vec<El>,
+    layer: &mut Vec<El>,
+) {
     let header = row()
-        .key("failure-header")
+        .key(format!("{prefix}failure-header"))
         .w_full()
         .padding(SHEET_PADDING)
         .center_y()
         .child(
-            text("Not imported")
+            text(title)
                 .font(TextStyle::new(15.0, 600.0))
                 .color(look.fg)
                 .grow(1.0),
@@ -60,32 +112,18 @@ pub(super) fn failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
                 .help("Close (Esc)")
                 .on_press(|s: &mut Gallery| s.close_overlay())
                 .build(look)
-                .key("close-failures"),
+                .key(format!("close-{prefix}failures")),
         );
     let actions = row()
-        .key("failure-actions")
+        .key(format!("{prefix}failure-actions"))
         .w_full()
         .gap(8.0)
         .padding(SHEET_PADDING)
         .justify_end()
         .border_sides([1.0, 0.0, 0.0, 0.0], look.rule)
-        .child(
-            Button::new("Clear list")
-                .variant(ButtonVariant::Ghost)
-                .disabled(empty)
-                .on_press(|s: &mut Gallery| s.clear_failures())
-                .build(look)
-                .key("clear-failures"),
-        )
-        .child(
-            Button::new("Retry all")
-                .disabled(empty)
-                .on_press(|s: &mut Gallery| s.retry_failures())
-                .build(look)
-                .key("retry-failures"),
-        );
+        .children(actions);
     layer.push(
-        el().key("failures-scrim")
+        el().key(format!("{prefix}failures-scrim"))
             .absolute(0.0, 0.0)
             .w_full()
             .h_full()
@@ -95,9 +133,9 @@ pub(super) fn failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
     );
     layer.push(
         col()
-            .key("failures-sheet")
+            .key(format!("{prefix}failures-sheet"))
             .role("dialog")
-            .label("Not imported")
+            .label(title)
             .pin(None, Some(0.0), Some(0.0), Some(0.0))
             .w(SHEET_WIDTH)
             .fill(look.c.surface_raised_base)
@@ -113,7 +151,7 @@ pub(super) fn failures(s: &Gallery, look: &Look, layer: &mut Vec<El>) {
             .child(header)
             .child(
                 col()
-                    .key("failure-list")
+                    .key(format!("{prefix}failure-list"))
                     .w_full()
                     .grow(1.0)
                     .min_h(0.0)
