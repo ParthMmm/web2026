@@ -12,6 +12,8 @@ import {
   readOrbis,
   unavailable,
 } from "./sources";
+import type { StoredTopSong } from "./top-song";
+import { fromStored, observe, toStored } from "./top-song";
 
 /** Every source is optional: an empty value turns it off. */
 export interface Env {
@@ -28,17 +30,10 @@ export interface Env {
   ORBIS_USERNAME: string;
 }
 
-interface LatestSong {
-  id: string;
-  since: number;
-}
-
 const ROOM = "parth";
 const MESSAGE_KEY = "message";
 const LATEST_SONG_KEY = "appleMusicLatest";
 const LIVE_POLL_MS = 15_000;
-/** Apple Music can list a song a little after it starts playing. */
-const APPLE_MUSIC_GRACE_MS = 60_000;
 const TOKEN_REFRESH_MARGIN_SECONDS = 60;
 
 const idle: NowPlayingMessage = { playing: null };
@@ -142,10 +137,7 @@ export class NowPlaying extends DurableObject<Env> {
     return readLastfm({ apiKey: LASTFM_API_KEY, user: LASTFM_USER });
   }
 
-  /**
-   * Apple Music's history has no play times, so a song counts as playing for its
-   * own length after it first reaches the top of the list.
-   */
+  /** The song at the top of Apple Music's history, when `observe` counts it as playing. */
   private async appleMusic(): Promise<Answer<Track>> {
     const {
       APPLE_MUSIC_KEY_ID: keyId,
@@ -184,17 +176,14 @@ export class NowPlaying extends DurableObject<Env> {
       return recent;
     }
     const song = recent.value;
-    const now = Date.now();
-    const latest = await this.ctx.storage.get<LatestSong>(LATEST_SONG_KEY);
-    if (latest?.id !== song.id) {
-      // The first song this object ever sees may be from yesterday, so it starts undated.
-      const since = latest === undefined ? 0 : now;
-      await this.ctx.storage.put(LATEST_SONG_KEY, { id: song.id, since });
-      return since === 0 ? nothing : found(toTrack(song));
+    const known = fromStored(
+      await this.ctx.storage.get<StoredTopSong>(LATEST_SONG_KEY)
+    );
+    const next = observe(known, song, Date.now());
+    if (next.known !== known) {
+      await this.ctx.storage.put(LATEST_SONG_KEY, toStored(next.known));
     }
-    return now - latest.since > song.durationMs + APPLE_MUSIC_GRACE_MS
-      ? nothing
-      : found(toTrack(song));
+    return next.playing ? found(toTrack(song)) : nothing;
   }
 }
 
