@@ -5,9 +5,11 @@ import { HttpRouter } from "effect/http";
 
 import { photosApp } from "./http/handlers.ts";
 import { r2Blobs } from "./photos/blobs-r2.ts";
-import { Blobs } from "./photos/blobs.ts";
-import { PhotoDatabase, PrivateBucket } from "./photos/infra.ts";
+import { Blobs, PublicBlobs } from "./photos/blobs.ts";
+import { PhotoDatabase, PrivateBucket, PublicBucket } from "./photos/infra.ts";
 import { Photos } from "./photos/photos.ts";
+import { PublicGallery } from "./photos/public-gallery.ts";
+import { Publishing } from "./photos/publishing.ts";
 
 const MIN_TOKEN_CHARS = 32;
 
@@ -28,13 +30,22 @@ export default Cloudflare.Worker(
     workersDev: { enabled: true, previewsEnabled: false },
   },
   Effect.gen(function* makeWorker() {
-    const bucket = yield* Cloudflare.R2.ReadWriteBucket(PrivateBucket);
+    const privateBucket = yield* Cloudflare.R2.ReadWriteBucket(PrivateBucket);
+    const publicBucket = yield* Cloudflare.R2.ReadWriteBucket(PublicBucket);
     const database = yield* Cloudflare.D1.QueryDatabase(PhotoDatabase);
     const ownerToken = yield* OwnerToken;
-    const photos = Photos.layer.pipe(
-      Layer.provide([Layer.succeed(Blobs, r2Blobs(bucket)), D1Layer(database)])
+    const publicBlobs = Layer.succeed(PublicBlobs, r2Blobs(publicBucket));
+    const owner = Layer.mergeAll(Photos.layer, Publishing.layer).pipe(
+      Layer.provide([
+        Layer.succeed(Blobs, r2Blobs(privateBucket)),
+        publicBlobs,
+        D1Layer(database),
+      ])
     );
-    return { fetch: HttpRouter.toHttpEffect(photosApp(photos, ownerToken)) };
+    const gallery = PublicGallery.layer.pipe(Layer.provide(publicBlobs));
+    return {
+      fetch: HttpRouter.toHttpEffect(photosApp(owner, gallery, ownerToken)),
+    };
   }).pipe(
     Effect.provide(
       Layer.mergeAll(

@@ -7,18 +7,23 @@ import { Cause, Effect, Exit, Layer } from "effect";
 import { Digest } from "effect/crypto";
 
 import { r2Blobs } from "../../src/photos/blobs-r2.ts";
-import { Blobs } from "../../src/photos/blobs.ts";
+import { Blobs, PublicBlobs } from "../../src/photos/blobs.ts";
 import { Photos } from "../../src/photos/photos.ts";
+import { PublicGallery } from "../../src/photos/public-gallery.ts";
+import { Publishing } from "../../src/photos/publishing.ts";
 import { blobsContract, contractKey } from "../support/blobs-contract.ts";
 import { photosScenarios } from "./scenarios.ts";
 
 interface Env {
   readonly Private: R2Bucket;
+  readonly Public: R2Bucket;
   readonly Db: D1Database;
 }
 
 // SAFETY: makeHelpers reads only `LogicalId` from the bucket resource, to find the binding in env.
 const privateBucket = { LogicalId: "Private" } as Cloudflare.R2.Bucket;
+// SAFETY: as above, for the public bucket.
+const publicBucket = { LogicalId: "Public" } as Cloudflare.R2.Bucket;
 
 const run = async (effect: Effect.Effect<void, unknown>) => {
   const exit = await Effect.runPromiseExit(effect);
@@ -49,8 +54,17 @@ export default {
 
     const scenario = photosScenarios.find((entry) => entry.name === name);
     if (url.pathname === "/photos" && scenario !== undefined) {
-      const photos = Photos.layer.pipe(
+      const publicBlobs = Layer.succeed(
+        PublicBlobs,
+        r2Blobs(makeReadWrite(makeHelpers(env, publicBucket)))
+      );
+      const photos = Layer.mergeAll(
+        Photos.layer,
+        Publishing.layer,
+        PublicGallery.layer
+      ).pipe(
         Layer.provideMerge(blobs),
+        Layer.provideMerge(publicBlobs),
         Layer.provide(D1Client.layer({ db: env.Db })),
         Layer.provideMerge(Digest.layerWebCrypto)
       );

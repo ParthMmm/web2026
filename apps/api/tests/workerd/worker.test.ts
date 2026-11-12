@@ -26,3 +26,12 @@ it("an authenticated request for an unknown photo is a 404", async () => {
   expect(response.status).toBe(404);
   expect(await response.json()).toMatchObject({ _tag: "PhotoNotFound" });
 });
+
+it("the bundled Worker serves the public gallery without a token from the public bucket", async () => {
+  const response = await workerd.dispatchFetch(
+    "http://photos.test/gallery/v1.json"
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("access-control-allow-origin")).toBe("*");
+  expect(await response.json()).toMatchObject({ photos: [], version: 1 });
+});
