@@ -28,9 +28,10 @@ it("keeps photos/internal reachable only from inside src/photos and the parser's
   expect(offenders(allowed, "/internal/")).toEqual([]);
 });
 
-it("builds blob keys only in the key scheme and the port's contract suite", () => {
+it("builds blob keys only in the key scheme, the R2 adapter's list and the port's contract suite", () => {
   const allowed = new Set([
     path.join("src", "photos", "internal", "keys.ts"),
+    path.join("src", "photos", "blobs-r2.ts"),
     path.join("tests", "support", "blobs-contract.ts"),
   ]);
   expect(offenders((file) => allowed.has(file), "BlobKey.make(")).toEqual([]);

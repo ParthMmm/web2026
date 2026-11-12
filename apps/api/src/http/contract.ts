@@ -20,10 +20,15 @@ import {
   MAX_OBJECT_BYTES,
   PhotoAlreadyDraft,
   PhotoId,
+  PageLimit,
+  PhotoDetails,
   PhotoManifestConflict,
+  PhotoNotDraft,
   PhotoNotFound,
+  PhotoPage,
   PhotoView,
   photoIdOf,
+  Published,
   StorageUnavailable,
   VariantKindSchema,
 } from "../photos/domain.ts";
@@ -69,6 +74,16 @@ export const PhotosGroup = HttpApiGroup.make("photos")
       payload: BeginRequest,
       success: PhotoView,
     }),
+    HttpApiEndpoint.get("list", "/v1/photos", {
+      error: [StorageUnavailable],
+      query: {
+        after: Schema.optionalKey(PhotoId),
+        limit: Schema.optionalKey(
+          Schema.NumberFromString.pipe(Schema.decodeTo(PageLimit))
+        ),
+      },
+      success: PhotoPage,
+    }),
     HttpApiEndpoint.get("get", "/v1/photos/:photoId", {
       error: [PhotoNotFound, StorageUnavailable],
       params: PhotoParams,
@@ -97,6 +112,17 @@ export const PhotosGroup = HttpApiGroup.make("photos")
         FinalizeRejected,
         StorageUnavailable,
       ],
+      params: PhotoParams,
+      success: PhotoView,
+    }),
+    HttpApiEndpoint.post("publish", "/v1/photos/:photoId/publish", {
+      error: [PhotoNotFound, PhotoNotDraft, StorageUnavailable],
+      params: PhotoParams,
+      payload: PhotoDetails,
+      success: Published,
+    }),
+    HttpApiEndpoint.post("unpublish", "/v1/photos/:photoId/unpublish", {
+      error: [PhotoNotFound, PhotoNotDraft, StorageUnavailable],
       params: PhotoParams,
       success: Draft,
     })

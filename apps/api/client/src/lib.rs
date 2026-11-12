@@ -1,6 +1,7 @@
+use bytes::Bytes;
 use reqwest::{blocking, header, redirect::Policy};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::time::Duration;
+use std::{fs::File, path::Path, time::Duration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -64,6 +65,19 @@ pub struct BeginRequest {
     pub photo_id: String,
 }
 
+/// What a visitor sees beside a published photo. `captured_at` is the camera's local date-time as
+/// text, with no zone. The API limits `alt` to 300 characters, `captured_at` to 40 and `film` to 64.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub captured_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub film: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "_tag", rename_all_fields = "camelCase")]
 pub enum PhotoView {
@@ -77,6 +91,76 @@ pub enum PhotoView {
         manifest: Manifest,
         photo_id: String,
     },
+    Published {
+        details: PhotoDetails,
+        finalized_at: String,
+        manifest: Manifest,
+        photo_id: String,
+        published_at: String,
+    },
+    /// Public removal started and has not finished. Another `unpublish` finishes it.
+    Unpublishing {
+        details: PhotoDetails,
+        finalized_at: String,
+        manifest: Manifest,
+        photo_id: String,
+    },
+}
+
+impl PhotoView {
+    pub fn photo_id(&self) -> &str {
+        match self {
+            PhotoView::Uploading { photo_id, .. }
+            | PhotoView::Draft { photo_id, .. }
+            | PhotoView::Published { photo_id, .. }
+            | PhotoView::Unpublishing { photo_id, .. } => photo_id,
+        }
+    }
+}
+
+/// One page of `list`. Pass `next` as `after` to read the following page; it is `None` on the last.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhotoPage {
+    pub next: Option<String>,
+    pub photos: Vec<PhotoView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GallerySize {
+    pub height: u32,
+    /// Relative to the gallery base, such as `https://host/gallery/`.
+    pub path: String,
+    pub width: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GallerySizes {
+    pub w480: GallerySize,
+    pub w1200: GallerySize,
+    pub w2400: GallerySize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryPhoto {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub captured_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub film: Option<String>,
+    pub id: String,
+    pub published_at: String,
+    pub sizes: GallerySizes,
+}
+
+/// The public gallery manifest, version 1.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryManifest {
+    pub generated_at: String,
+    pub photos: Vec<GalleryPhoto>,
+    pub version: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +207,9 @@ pub enum ApiError {
     PhotoAlreadyDraft {
         photo_id: String,
     },
+    PhotoNotDraft {
+        photo_id: String,
+    },
     LengthMismatch {
         expected: u64,
         kind: Kind,
@@ -144,6 +231,9 @@ pub enum ApiError {
 pub enum ClientError {
     #[error(transparent)]
     Transport(#[from] reqwest::Error),
+    #[error(transparent)]
+    File(#[from] std::io::Error),
+
     #[error("HTTP {status}: {error:?}")]
     Http {
         status: u16,
@@ -172,8 +262,6 @@ impl Client {
             http: blocking::Client::builder()
                 .default_headers(headers)
                 .redirect(Policy::none())
-                // The Worker can refuse an upload before reading its body and close the connection; never reuse one.
-                .pool_max_idle_per_host(0)
                 .timeout(Duration::from_secs(120))
                 .build()?,
             base,
@@ -184,36 +272,34 @@ impl Client {
         format!("{}{path}", self.base.as_str().trim_end_matches('/'))
     }
 
-    pub fn begin(&self, manifest: &Manifest) -> Result<PhotoView, ClientError> {
-        let request = BeginRequest {
-            manifest: manifest.clone(),
-            photo_id: manifest.original.sha256.clone(),
-        };
-        decode(
-            self.http
-                .post(self.url("/v1/photos"))
-                .json(&request)
-                .send()?,
-        )
+    /// Sends a request, and sends it once more on a new connection if the connection dropped
+    /// before any response. The Worker can refuse an upload before it reads the body and close
+    /// the connection, and a pooled connection can close between requests. Every call is safe to
+    /// repeat, so one retry is safe.
+    fn send(
+        &self,
+        request: impl Fn() -> Result<blocking::RequestBuilder, ClientError>,
+    ) -> Result<blocking::Response, ClientError> {
+        match request()?.send() {
+            Err(error) if is_dropped_connection(&error) => Ok(request()?.send()?),
+            result => Ok(result?),
+        }
     }
 
-    pub fn get(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .get(self.url(&format!("/v1/photos/{photo_id}")))
-                .send()?,
-        )
-    }
-
-    /// Sends one whole object. The body is a slice, so reqwest sets Content-Length, which the
-    /// Worker requires before it streams the body to storage.
-    pub fn put(&self, photo_id: &str, kind: Kind, body: &[u8]) -> Result<(), ClientError> {
-        let response = self
-            .http
-            .put(self.url(&format!("/v1/photos/{photo_id}/{}", kind.as_str())))
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .body(body.to_vec())
-            .send()?;
+    fn put_body(
+        &self,
+        photo_id: &str,
+        kind: Kind,
+        body: impl Fn() -> Result<blocking::Body, ClientError>,
+    ) -> Result<(), ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/{}", kind.as_str()));
+        let response = self.send(|| {
+            Ok(self
+                .http
+                .put(&url)
+                .header(header::CONTENT_TYPE, "application/octet-stream")
+                .body(body()?))
+        })?;
         if response.status().is_success() {
             Ok(())
         } else {
@@ -221,13 +307,111 @@ impl Client {
         }
     }
 
-    pub fn finalize(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .post(self.url(&format!("/v1/photos/{photo_id}/finalize")))
-                .send()?,
-        )
+    pub fn begin(&self, manifest: &Manifest) -> Result<PhotoView, ClientError> {
+        let request = BeginRequest {
+            manifest: manifest.clone(),
+            photo_id: manifest.original.sha256.clone(),
+        };
+        decode(self.send(|| Ok(self.http.post(self.url("/v1/photos")).json(&request)))?)
     }
+
+    pub fn get(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}"));
+        decode(self.send(|| Ok(self.http.get(&url)))?)
+    }
+
+    /// Sends one whole object from memory. A `Vec<u8>` or `Bytes` moves in without a copy. The
+    /// length is known, so reqwest sets Content-Length, which the Worker requires before it
+    /// streams the body to storage.
+    pub fn put(
+        &self,
+        photo_id: &str,
+        kind: Kind,
+        body: impl Into<Bytes>,
+    ) -> Result<(), ClientError> {
+        let body = body.into();
+        self.put_body(photo_id, kind, || Ok(body.clone().into()))
+    }
+
+    /// Streams one whole object from a file, with Content-Length set from its size on disk.
+    pub fn put_file(&self, photo_id: &str, kind: Kind, path: &Path) -> Result<(), ClientError> {
+        self.put_body(photo_id, kind, || {
+            let file = File::open(path)?;
+            let length = file.metadata()?.len();
+            Ok(blocking::Body::sized(file, length))
+        })
+    }
+
+    pub fn finalize(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/finalize"));
+        decode(self.send(|| Ok(self.http.post(&url)))?)
+    }
+
+    /// Publishes a draft, or replaces the details of a published photo.
+    pub fn publish(
+        &self,
+        photo_id: &str,
+        details: &PhotoDetails,
+    ) -> Result<PhotoView, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/publish"));
+        decode(self.send(|| Ok(self.http.post(&url).json(details)))?)
+    }
+
+    pub fn unpublish(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/unpublish"));
+        decode(self.send(|| Ok(self.http.post(&url)))?)
+    }
+
+    /// One page of every photo in photo ID order. `limit` is 1 to 200; the API defaults to 100.
+    pub fn list(&self, after: Option<&str>, limit: Option<u32>) -> Result<PhotoPage, ClientError> {
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(after) = after {
+            query.push(("after", after.to_owned()));
+        }
+        if let Some(limit) = limit {
+            query.push(("limit", limit.to_string()));
+        }
+        decode(self.send(|| Ok(self.http.get(self.url("/v1/photos")).query(&query)))?)
+    }
+}
+
+/// Reads the public gallery the way a visitor does: no token.
+pub struct Gallery {
+    http: blocking::Client,
+    base: String,
+}
+
+impl Gallery {
+    /// `base_url` is the gallery base, such as `https://host/gallery/`.
+    pub fn new(base_url: &str) -> anyhow::Result<Self> {
+        reqwest::Url::parse(base_url)?;
+        let base = base_url.trim_end_matches('/').to_owned();
+        Ok(Self {
+            http: blocking::Client::builder()
+                .redirect(Policy::none())
+                .timeout(Duration::from_secs(60))
+                .build()?,
+            base,
+        })
+    }
+
+    pub fn manifest(&self) -> Result<GalleryManifest, ClientError> {
+        decode(self.http.get(format!("{}/v1.json", self.base)).send()?)
+    }
+
+    /// The bytes at a manifest `path`, or the HTTP status when there are none.
+    pub fn fetch(&self, path: &str) -> Result<Vec<u8>, ClientError> {
+        let response = self.http.get(format!("{}/{path}", self.base)).send()?;
+        if response.status().is_success() {
+            Ok(response.bytes()?.to_vec())
+        } else {
+            Err(failure(response))
+        }
+    }
+}
+
+fn is_dropped_connection(error: &reqwest::Error) -> bool {
+    !error.is_timeout() && (error.is_request() || error.is_connect())
 }
 
 fn failure(response: blocking::Response) -> ClientError {

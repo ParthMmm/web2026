@@ -8,7 +8,7 @@ import { SqlClient } from "effect/sql";
 import { makeMemoryBlobs } from "../src/photos/blobs-memory.ts";
 import type { BlobKey } from "../src/photos/blobs.ts";
 import { variantKinds } from "../src/photos/domain.ts";
-import type { Manifest, PhotoId, VariantKind } from "../src/photos/domain.ts";
+import type { PhotoId, VariantKind } from "../src/photos/domain.ts";
 import { Photos } from "../src/photos/photos.ts";
 import type { Bodies } from "./support/fixture.ts";
 import {
@@ -343,25 +343,73 @@ it.effect(
 );
 
 it.effect(
-  "begin refuses a different manifest for a draft with PhotoManifestConflict",
+  "begin with a re-rendered manifest reopens a draft, and the next finalize removes the superseded objects",
   () => {
-    const { layer } = harness();
+    const { layer, objects } = harness();
     return Effect.gen(function* run() {
       const photos = yield* Photos;
-      const { bodies, manifest, photoId } = yield* fixture();
-      yield* photos.begin(manifest);
-      yield* uploadAll(photoId, bodies);
-      const draft = yield* photos.finalize(photoId);
+      const first = yield* fixture();
+      yield* photos.begin(first.manifest);
+      yield* uploadAll(first.photoId, first.bodies);
+      yield* photos.finalize(first.photoId);
 
-      const other: Manifest = {
-        ...manifest,
-        w480: { ...manifest.w480, height: 319 },
-      };
-      expect(yield* Effect.flip(photos.begin(other))).toMatchObject({
-        _tag: "PhotoManifestConflict",
-        photoId,
+      const rerendered = yield* declare({
+        ...first.bodies,
+        w480: webp("VP8L", ...EDGES.w480),
       });
-      expect(yield* photos.get(photoId)).toEqual(draft);
+      expect(yield* photos.begin(rerendered.manifest)).toMatchObject({
+        _tag: "Uploading",
+        manifest: rerendered.manifest,
+        missing: ["w480"],
+      });
+      yield* uploadAll(first.photoId, rerendered.bodies, ["w480"]);
+      const draft = yield* photos.finalize(first.photoId);
+
+      expect(draft).toMatchObject({
+        _tag: "Draft",
+        manifest: rerendered.manifest,
+      });
+      expect(keysUnder(objects, `photos/${first.photoId}/`).toSorted()).toEqual(
+        variantKinds
+          .map(
+            (kind) =>
+              `photos/${first.photoId}/${kind}-${rerendered.manifest[kind].sha256}`
+          )
+          .toSorted()
+      );
+      expect(keysUnder(objects, "staging/")).toEqual([]);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "a finalize whose cleanup of superseded objects fails still returns the draft, and finalize again removes them",
+  () => {
+    const { faults, layer, objects } = harness();
+    return Effect.gen(function* run() {
+      const photos = yield* Photos;
+      const first = yield* fixture();
+      yield* photos.begin(first.manifest);
+      yield* uploadAll(first.photoId, first.bodies);
+      yield* photos.finalize(first.photoId);
+      const rerendered = yield* declare({
+        ...first.bodies,
+        w2400: webp("VP8L", ...EDGES.w2400),
+      });
+      yield* photos.begin(rerendered.manifest);
+      yield* uploadAll(first.photoId, rerendered.bodies, ["w2400"]);
+
+      faults.failNext("list");
+      const draft = yield* photos.finalize(first.photoId);
+      expect(draft._tag).toBe("Draft");
+      expect(keysUnder(objects, `photos/${first.photoId}/`)).toHaveLength(
+        variantKinds.length + 1
+      );
+
+      expect(yield* photos.finalize(first.photoId)).toEqual(draft);
+      expect(keysUnder(objects, `photos/${first.photoId}/`)).toHaveLength(
+        variantKinds.length
+      );
     }).pipe(Effect.provide(layer));
   }
 );
@@ -568,3 +616,63 @@ it.effect(
     }).pipe(Effect.provide(layer));
   }
 );
+
+it.effect(
+  "list pages through every photo in photo ID order, with each one's current view",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* run() {
+      const photos = yield* Photos;
+      const declared = [];
+      for (const seed of [1, 2, 3, 4, 5]) {
+        declared.push(yield* declare(validBodies(seed)));
+      }
+      for (const { manifest } of declared) {
+        yield* photos.begin(manifest);
+      }
+      const [first] = declared;
+      if (first === undefined) {
+        return;
+      }
+      yield* uploadAll(first.photoId, first.bodies);
+      const draft = yield* photos.finalize(first.photoId);
+      const ids = declared.map(({ photoId }) => photoId).toSorted();
+
+      const pages = [];
+      let after: PhotoId | undefined;
+      do {
+        const page = yield* photos.list({ after, limit: 2 });
+        pages.push(page.photos.map((view) => view.photoId));
+        after = page.next ?? undefined;
+      } while (after !== undefined);
+
+      expect(pages).toEqual([ids.slice(0, 2), ids.slice(2, 4), ids.slice(4)]);
+      const all = yield* photos.list({});
+      expect(all.next).toBe(null);
+      expect(all.photos.map((view) => view.photoId)).toEqual(ids);
+      expect(all.photos).toContainEqual(draft);
+      expect(all.photos).toContainEqual(
+        expect.objectContaining({ _tag: "Uploading", missing: variantKinds })
+      );
+      expect(yield* photos.list({ after: ids.at(-1) })).toEqual({
+        next: null,
+        photos: [],
+      });
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect("list sets next only when more photos follow", () => {
+  const { layer } = harness();
+  return Effect.gen(function* run() {
+    const photos = yield* Photos;
+    for (const seed of [1, 2]) {
+      yield* photos.begin((yield* declare(validBodies(seed))).manifest);
+    }
+    const page = yield* photos.list({ limit: 2 });
+    expect(page.photos).toHaveLength(2);
+    expect(page.next).toBe(null);
+    const one = yield* photos.list({ limit: 1 });
+    expect(one.next).toBe(one.photos[0]?.photoId);
+  }).pipe(Effect.provide(layer));
+});
