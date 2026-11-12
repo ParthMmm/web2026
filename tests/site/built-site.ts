@@ -35,6 +35,8 @@ const toUrl = (file: string): string => {
 const build = (): BuiltSite => {
   const result = Bun.spawnSync(["bunx", "astro", "build", "--outDir", OUT], {
     cwd: ROOT,
+    // `bun test` sets NODE_ENV=test, and Astro then builds as if for dev.
+    env: { ...process.env, NODE_ENV: "production" },
     stderr: "pipe",
     stdout: "pipe",
   });
