@@ -85,3 +85,12 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Cause.** `Versions.astro` had `[role="tabpanel"]:focus-visible { outline: none; }`, which cancelled the site's own global focus ring.
 - **Fix.** Deleted the rule. The panel now gets the same 2px green ring as every other control, on keyboard focus only. A pointer user never sees it.
 - **Test.** `tests/site/focus.test.ts`: no rule in any built stylesheet removes the outline from a `:focus` or `:focus-visible` selector.
+
+#### S7. A dead link shows a blank white page (fixed, needs a deploy to confirm)
+
+- **Evidence.** Production: `curl https://www.parthm.dev/nope` returns `404` with a 0-byte body. A visitor who follows a stale link sees an empty browser window, with no way back to the site.
+- **Cause.** The site had no `404` page, and the static-asset config left `notFoundHandling` at its default, `"none"`.
+- **Fix.** `src/pages/404.astro` renders the normal masthead and footer, an `h1` "Not found", one sentence and a link home. It uses the existing `Chapter` and the same type as the home page lede. `alchemy.run.ts` sets `assets: { notFoundHandling: "404-page" }`. `Layout` takes `noindex`, which also drops the canonical and share tags, because the page has no address of its own.
+- **Checked.** axe-core reports 0 violations on the page. The `<head>` of the existing pages is byte-identical before and after the `Layout` change.
+- **Tests.** `tests/site/not-found.test.ts`: the build has a `404.html` with an `h1` and a home link inside `main`; it is `noindex` and absent from the sitemap.
+- **To confirm after the next deploy.** `curl -i https://www.parthm.dev/nope` must return `404` with the page. The `alchemy.run.ts` line is typechecked but I could not run it: I did not deploy.

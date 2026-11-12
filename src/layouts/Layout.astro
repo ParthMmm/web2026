@@ -13,13 +13,45 @@ interface Props {
 	image?: string;
 	/** Short description of the share image for screen readers and link previews. */
 	imageAlt?: string;
+	/** For a page with no address of its own, such as the not-found page:
+	    keeps it out of search results and gives it no canonical or share URL. */
+	noindex?: boolean;
 }
 
-const { title, description, image, imageAlt } = Astro.props;
+const { title, description, image, imageAlt, noindex = false } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 /* Link unfurlers don't resolve relative URLs, so the image must be absolute. */
 const ogImage = new URL(image ?? ogImagePath(Astro.url.pathname), Astro.site).toString();
 const ogImageAlt = imageAlt ?? cardAlt(Astro.url.pathname);
+const share = {
+	openGraph: {
+		basic: {
+			image: ogImage,
+			title,
+			type: "website",
+			url: canonicalURL.toString(),
+		},
+		image: {
+			alt: ogImageAlt,
+			height: 630,
+			type: "image/png",
+			width: 1200,
+		},
+		optional: {
+			description,
+			siteName: "Parth Mangrola",
+		},
+	},
+	twitter: {
+		card: "summary_large_image" as const,
+		creator: "@parthmangrola",
+		description,
+		image: ogImage,
+		imageAlt: ogImageAlt,
+		site: "@parthmangrola",
+		title,
+	},
+};
 ---
 
 <html lang="en">
@@ -28,34 +60,9 @@ const ogImageAlt = imageAlt ?? cardAlt(Astro.url.pathname);
     <SEO
       title={title}
       description={description}
-      canonical={canonicalURL.toString()}
-      openGraph={{
-        basic: {
-          title,
-          type: "website",
-          image: ogImage,
-          url: canonicalURL.toString(),
-        },
-        image: {
-          alt: ogImageAlt,
-          width: 1200,
-          height: 630,
-          type: "image/png",
-        },
-        optional: {
-          siteName: "Parth Mangrola",
-          description,
-        },
-      }}
-      twitter={{
-        card: "summary_large_image",
-        site: "@parthmangrola",
-        creator: "@parthmangrola",
-        title,
-        description,
-        image: ogImage,
-        imageAlt: ogImageAlt,
-      }}
+      noindex={noindex}
+      canonical={noindex ? null : canonicalURL.toString()}
+      {...(noindex ? {} : share)}
       extend={{
         meta: [
           { name: "author", content: "Parth Mangrola" },
