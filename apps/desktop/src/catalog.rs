@@ -16,7 +16,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 /// Content identity: the BLAKE3 hash of the original's bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -194,6 +194,14 @@ impl Catalog {
                 ALTER TABLE photos ADD COLUMN film_simulation TEXT;
                 ALTER TABLE photos ADD COLUMN film_metadata_checked INTEGER NOT NULL DEFAULT 0;
                 PRAGMA user_version = 2;
+                COMMIT;",
+            )?;
+        }
+        if version < 3 {
+            connection.execute_batch(
+                "BEGIN;
+                ALTER TABLE import_failures ADD COLUMN owned INTEGER NOT NULL DEFAULT 0;
+                PRAGMA user_version = 3;
                 COMMIT;",
             )?;
         }
@@ -414,13 +422,26 @@ impl Catalog {
         Ok(())
     }
 
-    pub fn record_failure(&mut self, path: &Path, message: &str) -> Result<()> {
+    /// `owned` marks a copy the app made, which nothing else refers to.
+    pub fn record_failure(&mut self, path: &Path, message: &str, owned: bool) -> Result<()> {
         self.connection.execute(
-            "INSERT INTO import_failures (path, message, failed_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT (path) DO UPDATE SET message = excluded.message, failed_at = excluded.failed_at",
-            params![path_bytes(path), message, unix_now()],
+            "INSERT INTO import_failures (path, message, failed_at, owned) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (path) DO UPDATE SET message = excluded.message,
+                failed_at = excluded.failed_at, owned = excluded.owned",
+            params![path_bytes(path), message, unix_now(), owned],
         )?;
         Ok(())
+    }
+
+    /// Every failed path, with whether the app owns the file.
+    pub fn failure_paths(&self) -> Result<Vec<(PathBuf, bool)>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT path, owned FROM import_failures ORDER BY path")?;
+        let rows = statement
+            .query_map([], |row| Ok((path_from_row(row, 0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
     }
 
     pub fn clear_failure(&mut self, path: &Path) -> Result<()> {

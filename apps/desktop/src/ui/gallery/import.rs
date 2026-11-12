@@ -100,13 +100,12 @@ impl Gallery {
     }
 
     pub(in crate::ui) fn retry_failures(&mut self) {
-        let paths = self
-            .failures
-            .iter()
-            .map(|failure| failure.path.clone())
-            .collect::<Vec<_>>();
-        if !paths.is_empty() {
-            self.import(paths, false);
+        if let LibraryState::Open(library) = &self.library
+            && !self.failures.is_empty()
+        {
+            library.retry_failures();
+            self.progress.get_or_insert((0, 0));
+            self.status = "Importing…".into();
         }
         self.close_overlay();
     }
