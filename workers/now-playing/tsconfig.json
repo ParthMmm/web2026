@@ -12,5 +12,11 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["worker.ts", "sources.ts", "message.ts", "apple-music-token.ts"]
+  "include": [
+    "worker.ts",
+    "sources.ts",
+    "top-song.ts",
+    "message.ts",
+    "apple-music-token.ts"
+  ]
 }
