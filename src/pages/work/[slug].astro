@@ -1,0 +1,31 @@
+---
+import type { GetStaticPaths } from "astro";
+import { getCollection, render } from "astro:content";
+import Article from "../../components/Article.astro";
+import ContentWrapper from "../../components/ContentWrapper.astro";
+import { work } from "../../data/site";
+import Layout from "../../layouts/Layout.astro";
+
+export const getStaticPaths = (async () => {
+	const entries = await getCollection("work");
+	return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}) satisfies GetStaticPaths;
+
+const { slug } = Astro.params;
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+/* The home page, the index and the share card read `work` in data/site.ts,
+   so the write-up takes its title and description from there too. */
+const record = work.find((item) => item.url === `/work/${slug}/`);
+const title = record?.title ?? entry.data.title;
+const description = record?.description ?? entry.data.description;
+---
+
+<Layout title={`${title} — Parth Mangrola`} {description}>
+  <Article section="Work" sectionUrl="/work/" {title} {description}>
+    <ContentWrapper>
+      <Content />
+    </ContentWrapper>
+  </Article>
+</Layout>
