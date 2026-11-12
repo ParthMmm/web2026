@@ -164,6 +164,12 @@ export const mountGallery = (root: HTMLElement): void => {
       link.href = `#${photo.id}`;
       link.append(tileImage(base, photo, index));
       link.addEventListener("click", (event) => {
+        /* A modified click opens the shareable link in a new tab as usual. */
+        const modified =
+          event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+        if (modified || event.button !== 0) {
+          return;
+        }
         event.preventDefault();
         open(index);
       });
