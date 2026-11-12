@@ -1,6 +1,7 @@
+use bytes::Bytes;
 use reqwest::{blocking, header, redirect::Policy};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::time::Duration;
+use std::{fs::File, path::Path, time::Duration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -230,6 +231,8 @@ pub enum ApiError {
 pub enum ClientError {
     #[error(transparent)]
     Transport(#[from] reqwest::Error),
+    #[error(transparent)]
+    File(#[from] std::io::Error),
 
     #[error("HTTP {status}: {error:?}")]
     Http {
@@ -259,8 +262,6 @@ impl Client {
             http: blocking::Client::builder()
                 .default_headers(headers)
                 .redirect(Policy::none())
-                // The Worker can refuse an upload before reading its body and close the connection; never reuse one.
-                .pool_max_idle_per_host(0)
                 .timeout(Duration::from_secs(120))
                 .build()?,
             base,
@@ -271,36 +272,34 @@ impl Client {
         format!("{}{path}", self.base.as_str().trim_end_matches('/'))
     }
 
-    pub fn begin(&self, manifest: &Manifest) -> Result<PhotoView, ClientError> {
-        let request = BeginRequest {
-            manifest: manifest.clone(),
-            photo_id: manifest.original.sha256.clone(),
-        };
-        decode(
-            self.http
-                .post(self.url("/v1/photos"))
-                .json(&request)
-                .send()?,
-        )
+    /// Sends a request, and sends it once more on a new connection if the connection dropped
+    /// before any response. The Worker can refuse an upload before it reads the body and close
+    /// the connection, and a pooled connection can close between requests. Every call is safe to
+    /// repeat, so one retry is safe.
+    fn send(
+        &self,
+        request: impl Fn() -> Result<blocking::RequestBuilder, ClientError>,
+    ) -> Result<blocking::Response, ClientError> {
+        match request()?.send() {
+            Err(error) if is_dropped_connection(&error) => Ok(request()?.send()?),
+            result => Ok(result?),
+        }
     }
 
-    pub fn get(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .get(self.url(&format!("/v1/photos/{photo_id}")))
-                .send()?,
-        )
-    }
-
-    /// Sends one whole object. The body is a slice, so reqwest sets Content-Length, which the
-    /// Worker requires before it streams the body to storage.
-    pub fn put(&self, photo_id: &str, kind: Kind, body: &[u8]) -> Result<(), ClientError> {
-        let response = self
-            .http
-            .put(self.url(&format!("/v1/photos/{photo_id}/{}", kind.as_str())))
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .body(body.to_vec())
-            .send()?;
+    fn put_body(
+        &self,
+        photo_id: &str,
+        kind: Kind,
+        body: impl Fn() -> Result<blocking::Body, ClientError>,
+    ) -> Result<(), ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/{}", kind.as_str()));
+        let response = self.send(|| {
+            Ok(self
+                .http
+                .put(&url)
+                .header(header::CONTENT_TYPE, "application/octet-stream")
+                .body(body()?))
+        })?;
         if response.status().is_success() {
             Ok(())
         } else {
@@ -308,12 +307,44 @@ impl Client {
         }
     }
 
+    pub fn begin(&self, manifest: &Manifest) -> Result<PhotoView, ClientError> {
+        let request = BeginRequest {
+            manifest: manifest.clone(),
+            photo_id: manifest.original.sha256.clone(),
+        };
+        decode(self.send(|| Ok(self.http.post(self.url("/v1/photos")).json(&request)))?)
+    }
+
+    pub fn get(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}"));
+        decode(self.send(|| Ok(self.http.get(&url)))?)
+    }
+
+    /// Sends one whole object from memory. A `Vec<u8>` or `Bytes` moves in without a copy. The
+    /// length is known, so reqwest sets Content-Length, which the Worker requires before it
+    /// streams the body to storage.
+    pub fn put(
+        &self,
+        photo_id: &str,
+        kind: Kind,
+        body: impl Into<Bytes>,
+    ) -> Result<(), ClientError> {
+        let body = body.into();
+        self.put_body(photo_id, kind, || Ok(body.clone().into()))
+    }
+
+    /// Streams one whole object from a file, with Content-Length set from its size on disk.
+    pub fn put_file(&self, photo_id: &str, kind: Kind, path: &Path) -> Result<(), ClientError> {
+        self.put_body(photo_id, kind, || {
+            let file = File::open(path)?;
+            let length = file.metadata()?.len();
+            Ok(blocking::Body::sized(file, length))
+        })
+    }
+
     pub fn finalize(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .post(self.url(&format!("/v1/photos/{photo_id}/finalize")))
-                .send()?,
-        )
+        let url = self.url(&format!("/v1/photos/{photo_id}/finalize"));
+        decode(self.send(|| Ok(self.http.post(&url)))?)
     }
 
     /// Publishes a draft, or replaces the details of a published photo.
@@ -322,20 +353,13 @@ impl Client {
         photo_id: &str,
         details: &PhotoDetails,
     ) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .post(self.url(&format!("/v1/photos/{photo_id}/publish")))
-                .json(details)
-                .send()?,
-        )
+        let url = self.url(&format!("/v1/photos/{photo_id}/publish"));
+        decode(self.send(|| Ok(self.http.post(&url).json(details)))?)
     }
 
     pub fn unpublish(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
-        decode(
-            self.http
-                .post(self.url(&format!("/v1/photos/{photo_id}/unpublish")))
-                .send()?,
-        )
+        let url = self.url(&format!("/v1/photos/{photo_id}/unpublish"));
+        decode(self.send(|| Ok(self.http.post(&url)))?)
     }
 
     /// One page of every photo in photo ID order. `limit` is 1 to 200; the API defaults to 100.
@@ -347,7 +371,7 @@ impl Client {
         if let Some(limit) = limit {
             query.push(("limit", limit.to_string()));
         }
-        decode(self.http.get(self.url("/v1/photos")).query(&query).send()?)
+        decode(self.send(|| Ok(self.http.get(self.url("/v1/photos")).query(&query)))?)
     }
 }
 
@@ -384,6 +408,10 @@ impl Gallery {
             Err(failure(response))
         }
     }
+}
+
+fn is_dropped_connection(error: &reqwest::Error) -> bool {
+    !error.is_timeout() && (error.is_request() || error.is_connect())
 }
 
 fn failure(response: blocking::Response) -> ClientError {

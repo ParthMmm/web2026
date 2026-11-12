@@ -1,5 +1,7 @@
 use std::{collections::HashMap, path::Path};
 
+use bytes::Bytes;
+
 use photo_upload_client::{
     ApiError, Client, ClientError, Gallery, Kind, Manifest, PhotoDetails, PhotoView, Problem,
 };
@@ -18,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let manifest: Manifest = serde_json::from_slice(&std::fs::read(dir.join("manifest.json"))?)?;
     let bodies = Kind::ALL
         .iter()
-        .map(|&kind| Ok((kind, std::fs::read(dir.join(kind.as_str()))?)))
+        .map(|&kind| Ok((kind, Bytes::from(std::fs::read(dir.join(kind.as_str()))?))))
         .collect::<anyhow::Result<HashMap<_, _>>>()?;
     let photo_id = manifest.original.sha256.clone();
 
@@ -46,16 +48,16 @@ fn main() -> anyhow::Result<()> {
         },
     )?;
 
-    let mut tampered = bodies[&Kind::W480].clone();
+    let mut tampered = bodies[&Kind::W480].to_vec();
     if let Some(last) = tampered.last_mut() {
         *last ^= 0xff;
     }
     expect_error(
-        client.put(&photo_id, Kind::W480, &tampered),
+        client.put(&photo_id, Kind::W480, tampered),
         422,
         &ApiError::HashMismatch { kind: Kind::W480 },
     )?;
-    let short = &bodies[&Kind::W480][1..];
+    let short = bodies[&Kind::W480].slice(1..);
     expect_error(
         client.put(&photo_id, Kind::W480, short),
         422,
@@ -82,9 +84,9 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     for kind in Kind::ALL {
-        client.put(&photo_id, kind, &bodies[&kind])?;
+        client.put_file(&photo_id, kind, &dir.join(kind.as_str()))?;
     }
-    client.put(&photo_id, Kind::Original, &bodies[&Kind::Original])?;
+    client.put(&photo_id, Kind::Original, bodies[&Kind::Original].clone())?;
     anyhow::ensure!(
         matches!(client.get(&photo_id)?, PhotoView::Uploading { missing, .. } if missing.is_empty()),
         "Expected nothing missing after every upload"
@@ -100,7 +102,7 @@ fn main() -> anyhow::Result<()> {
         "A duplicate finalize changed the draft"
     );
     expect_error(
-        client.put(&photo_id, Kind::W480, &bodies[&Kind::W480]),
+        client.put(&photo_id, Kind::W480, bodies[&Kind::W480].clone()),
         409,
         &ApiError::PhotoAlreadyDraft {
             photo_id: photo_id.clone(),
