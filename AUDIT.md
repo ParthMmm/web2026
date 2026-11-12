@@ -46,3 +46,13 @@ Each finding has an ID, its evidence, a status, and the reason. Status is one of
 - **Fix.** `astro.config.mjs` sets `vite.build.assetsInlineLimit` to keep `.woff` and `.woff2` as files. Everything else keeps Vite's default.
 - **Result.** Shared stylesheet: 24,269 to 10,109 bytes gzip (58% smaller). No visual change: the same `@font-face` rules load the same files on demand.
 - **Test.** `tests/site/stylesheets.test.ts`, "no stylesheet embeds a font".
+
+#### S2. Tailwind turned the site's own class names and prose into utilities (fixed)
+
+- **Evidence.** In Chrome, `getComputedStyle(document.querySelector(".pairings .table")).display` was `"table"`. The Möte figure has `<span class="table">` with its own scoped rule; Tailwind's scanner read the same word and emitted `.table{display:table}`. The built stylesheet held 173 utility classes. Pages use one (`sr-only`). The rest came from words in Markdown and comments (`prose`, `hidden`, `fixed`, `filter`, `shadow`, …), from the typography plugin (12.6 kB of `.prose` rules, used nowhere), and from the shadcn `button.tsx` that no page renders.
+- **Cause.** Tailwind scans every source file by default. The site styles itself with scoped CSS and uses Tailwind only for the reset, the theme tokens and `sr-only`.
+- **Fix.** `global.css` imports Tailwind with `source(none)` and names `sr-only` in `@source inline()`. Both `@theme` blocks are now `static`, because an unscanned Tailwind drops any token it cannot see in use. My first attempt missed that, and 11 tokens (`--color-ink-1`, `--text-display`, …) vanished from the build; the third test below now guards it.
+- **Result.** Shared stylesheet: 10,109 to 5,366 bytes gzip. With S1, 24,269 to 5,366 (78% smaller).
+- **No visual change, proven.** I dumped the computed style of every element and pseudo-element on all 10 pages, at 390 and 1280 px, light and dark, for the old and new builds, and compared them. The only differences are the four `.table` spans: `display` goes from `table` to `block`. They are grid items of a fixed 1.5rem column, so their boxes do not move.
+- **Tests.** `tests/site/stylesheets.test.ts`: "Tailwind generates no utility under a class name a component styles itself" and "every custom property a page reads without a fallback is defined". I planted both bugs (the old import; `@theme` without `static`) and each test failed.
+- **Trade-off.** A Tailwind utility typed into an `.astro` file now does nothing until it is named in `@source`. The comment at the top of `global.css` says so. Undo by deleting `source(none)`.

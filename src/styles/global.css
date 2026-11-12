@@ -1,4 +1,14 @@
-@import "tailwindcss";
+/* Tailwind supplies the reset, the theme tokens and one utility. The pages
+   style themselves with scoped CSS, so Tailwind must not scan them: it reads
+   any word as a class name, and `class="table"` in the Möte figure came back
+   as `display: table`. To use a utility, name it in `@source inline()`. To
+   render a shadcn component, add `@source "../components/ui";`.
+
+   Unscanned, Tailwind cannot see which tokens the scoped CSS reads, so both
+   `@theme` blocks are `static`: every token is emitted whether or not
+   Tailwind finds a use for it. */
+@import "tailwindcss" source(none);
+@source inline("sr-only");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
@@ -19,7 +29,7 @@
    scale steps; components should reach for those, not raw steps.
    --------------------------------------------------------------- */
 
-@theme {
+@theme static {
   --font-sans: "Inter Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
   --color-green-50: oklch(0.975 0.02 148);
@@ -196,7 +206,7 @@
   --sidebar-ring: var(--color-green-500);
 }
 
-@theme inline {
+@theme inline static {
   --font-heading: var(--font-sans);
 
   --color-background: var(--background);
