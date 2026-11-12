@@ -34,9 +34,12 @@ export const webp = (
     out[20] = 0x2f;
     view.setUint32(21, (width - 1) | ((height - 1) << 14), true);
   } else {
+    view.setUint32(16, 10, true);
     out[20] = flags;
     view.setUint32(24, width - 1, true);
     view.setUint32(27, height - 1, true);
+    out.set(ascii(flags === VP8X_ANIMATION ? "ANMF" : "VP8 "), 30);
+    view.setUint32(34, totalBytes - 38, true);
   }
   return out;
 };

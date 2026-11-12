@@ -44,7 +44,14 @@ export const blobsContract: readonly BlobsCase[] = [
         const expected = yield* expectFor(bytes);
         yield* blobs.put(key("a"), chunked(bytes, 4096), expected);
         strictEqual(yield* blobs.holds(key("a"), expected), true);
-        deepStrictEqual(yield* blobs.prefix(key("a"), 16), bytes.slice(0, 16));
+        deepStrictEqual(
+          yield* blobs.range(key("a"), 0, 16),
+          bytes.slice(0, 16)
+        );
+        deepStrictEqual(
+          yield* blobs.range(key("a"), 69_990, 64),
+          bytes.slice(69_990)
+        );
       }),
   },
   {
@@ -61,7 +68,7 @@ export const blobsContract: readonly BlobsCase[] = [
           .put(key("b"), Stream.make(bytes), wrong)
           .pipe(Effect.flip);
         strictEqual(failure._tag, "BlobRejected");
-        strictEqual(yield* blobs.prefix(key("b"), 1), null);
+        strictEqual(yield* blobs.range(key("b"), 0, 1), null);
       }),
   },
   {
@@ -78,7 +85,7 @@ export const blobsContract: readonly BlobsCase[] = [
           )
         );
         strictEqual(Exit.isFailure(exit), true);
-        strictEqual(yield* blobs.prefix(key("c"), 1), null);
+        strictEqual(yield* blobs.range(key("c"), 0, 1), null);
       }),
   },
   {
@@ -119,7 +126,7 @@ export const blobsContract: readonly BlobsCase[] = [
           .copy(key("from"), key("to-bad"), { ...expected, sha256: WRONG_SHA })
           .pipe(Effect.flip);
         strictEqual(bad._tag, "BlobRejected");
-        strictEqual(yield* blobs.prefix(key("to-bad"), 1), null);
+        strictEqual(yield* blobs.range(key("to-bad"), 0, 1), null);
 
         const missing = yield* blobs
           .copy(key("absent"), key("to-2"), expected)
