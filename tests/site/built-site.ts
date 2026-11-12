@@ -2,7 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dir, "../..");
-const OUT = path.join(ROOT, "node_modules/.cache/site-test");
+const CACHE = path.join(ROOT, "node_modules/.cache");
+
+/** The fixture gallery the browser smoke check serves (tests/fixtures/gallery). */
+export const FIXTURE_GALLERY_URL = "http://127.0.0.1:8787/gallery";
 
 const INLINE_STYLE = /<style[^>]*>(?<css>[\s\S]*?)<\/style>/gu;
 
@@ -27,16 +30,25 @@ const walk = (dir: string): string[] =>
     return entry.isDirectory() ? walk(file) : [file];
   });
 
-const toUrl = (file: string): string => {
-  const relative = `/${path.relative(OUT, file).split(path.sep).join("/")}`;
+const toUrl = (out: string, file: string): string => {
+  const relative = `/${path.relative(out, file).split(path.sep).join("/")}`;
   return relative.replace(/index\.html$/u, "");
 };
 
-const build = (): BuiltSite => {
+const build = (galleryUrl: string): BuiltSite => {
+  const OUT = path.join(
+    CACHE,
+    galleryUrl === "" ? "site-test" : "site-test-gallery"
+  );
   const result = Bun.spawnSync(["bunx", "astro", "build", "--outDir", OUT], {
     cwd: ROOT,
-    // `bun test` sets NODE_ENV=test, and Astro then builds as if for dev.
-    env: { ...process.env, NODE_ENV: "production" },
+    env: {
+      ...process.env,
+      // `bun test` sets NODE_ENV=test, and Astro then builds as if for dev.
+      NODE_ENV: "production",
+      // Set even when empty, so a developer's own .env cannot change the build.
+      PUBLIC_GALLERY_URL: galleryUrl,
+    },
     stderr: "pipe",
     stdout: "pipe",
   });
@@ -44,18 +56,19 @@ const build = (): BuiltSite => {
     throw new Error(`astro build failed:\n${result.stderr.toString()}`);
   }
   const files = walk(OUT);
+  const toUrlIn = (file: string) => toUrl(OUT, file);
   const pages = files
     .filter((file) => file.endsWith(".html"))
-    .map((file) => ({ html: readFileSync(file, "utf-8"), url: toUrl(file) }));
+    .map((file) => ({ html: readFileSync(file, "utf-8"), url: toUrlIn(file) }));
   return {
     dir: OUT,
-    files: new Set(files.map(toUrl)),
+    files: new Set(files.map(toUrlIn)),
     pages,
     stylesheets: new Map([
       ...files
         .filter((file) => file.endsWith(".css"))
         .map((file): [string, string] => [
-          toUrl(file),
+          toUrlIn(file),
           readFileSync(file, "utf-8"),
         ]),
       ...pages.flatMap((page) =>
@@ -70,10 +83,13 @@ const build = (): BuiltSite => {
   };
 };
 
-let built: BuiltSite | undefined;
+const built = new Map<string, BuiltSite>();
 
-/** The production build, made once per test run. */
-export const builtSite = (): BuiltSite => {
-  built ??= build();
-  return built;
+/** The production build, made once per test run for each gallery address.
+    With no address the build is the one production gets today: the gallery
+    is not connected. */
+export const builtSite = (galleryUrl = ""): BuiltSite => {
+  const site = built.get(galleryUrl) ?? build(galleryUrl);
+  built.set(galleryUrl, site);
+  return site;
 };
