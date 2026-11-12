@@ -1021,3 +1021,25 @@ fn replacing_a_source_during_render_cannot_commit_metadata_under_the_previous_ha
     let catalog = photo_prototype::catalog::Catalog::open(&root.join("catalog.sqlite")).unwrap();
     assert!(catalog.photos().unwrap().is_empty());
 }
+
+#[test]
+fn an_import_that_finds_no_jpegs_still_finishes() {
+    let temp = tempfile::tempdir().unwrap();
+    let empty = temp.path().join("empty-folder");
+    std::fs::create_dir_all(&empty).unwrap();
+    std::fs::write(empty.join("notes.txt"), b"no photos here").unwrap();
+    let library = open(&temp.path().join("library"));
+
+    library.import(vec![empty]);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let summary = loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match library.recv_timeout(remaining) {
+            Ok(Event::ImportFinished { summary }) => break summary,
+            Ok(_) => {}
+            Err(_) => panic!("the import never reported that it finished"),
+        }
+    };
+    assert_eq!(summary, ImportSummary::default());
+}

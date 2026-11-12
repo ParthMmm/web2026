@@ -590,7 +590,7 @@ fn scan(shared: &Shared, request: ImportRequest) -> Vec<Event> {
 
 fn finish_if_idle(queue: &mut Queue) -> Option<Event> {
     let idle = queue.requests.is_empty() && queue.sources.is_empty();
-    if !idle || queue.total == 0 {
+    if !idle {
         return None;
     }
     let summary = std::mem::take(&mut queue.summary);
