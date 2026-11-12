@@ -88,6 +88,20 @@ export const aspectRatio = (photo: Photo): number => {
   return Math.round((width / height) * 1000) / 1000;
 };
 
+/* The grid sets rows of equal height and stretches each row to the column,
+   so a tile is its aspect ratio times a row and a bit. These row heights
+   match `--row` in PhotoGallery.astro; the column is the spine's measure. */
+const ROW_REM = { narrow: 11, wide: 15 };
+const ROW_STRETCH = 1.5;
+
+/** `sizes` for a grid tile. */
+export const tileSizes = (photo: Photo): string => {
+  const ratio = aspectRatio(photo);
+  const wide = ROW_REM.wide * ROW_STRETCH;
+  const narrow = ROW_REM.narrow * ROW_STRETCH;
+  return `(min-width: 48rem) min(60rem, ${ratio} * ${wide}rem), min(100vw - 3rem, ${ratio} * ${narrow}rem)`;
+};
+
 /** `sizes` for the larger view. It fits the photo inside the viewport less
     the dialog's margins and its caption bar, so its width is capped by the
     viewport's width or, for a tall photo, by its height. Keep the two

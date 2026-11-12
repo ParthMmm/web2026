@@ -1,8 +1,13 @@
 ---
 import { profile } from "../data/site";
+import { galleryBase } from "../lib/gallery";
 import ThemeIcon from "./ThemeIcon.astro";
 
 const isHome = Astro.url.pathname === "/";
+/* The link appears once PUBLIC_GALLERY_URL is set, so production does not
+   point anyone at a gallery that cannot load. */
+const showPhotos = galleryBase(import.meta.env.PUBLIC_GALLERY_URL) !== null;
+const onPhotos = Astro.url.pathname === "/photos/";
 ---
 
 <header class="masthead">
@@ -15,7 +20,18 @@ const isHome = Astro.url.pathname === "/";
       </a>
     )
   }
-  <ThemeIcon />
+  <div class="end">
+    {
+      showPhotos && (
+        <nav aria-label="Site">
+          <a href="/photos/" class="nav-link" aria-current={onPhotos ? "page" : undefined}>
+            Photos
+          </a>
+        </nav>
+      )
+    }
+    <ThemeIcon />
+  </div>
 </header>
 <hr class="rule" />
 
@@ -43,5 +59,23 @@ const isHome = Astro.url.pathname === "/";
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
     text-decoration-color: var(--color-primary-quiet);
+  }
+
+  .end {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  /* A second nameplate, a rung quieter: it is a way out, not the title. */
+  .nav-link {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-ink-3);
+  }
+
+  .nav-link[aria-current="page"] {
+    color: var(--color-ink-1);
+    text-decoration-color: var(--color-highlight);
   }
 </style>
