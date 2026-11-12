@@ -81,11 +81,12 @@ const current = cues.findLast((cue) => cue.at <= set.position);
 <script>
   import { clock } from "../../lib/clock";
   import { onVisibility } from "../../lib/figure";
+  import type { Player, PlayerEvent } from "./orbis-player";
+  import { positionOf, step } from "./orbis-player";
 
   for (const root of document.querySelectorAll<HTMLElement>("[data-orbis]")) {
     const length = Number(root.dataset.length);
-    let position = Number(root.dataset.position);
-    let playing = false;
+    let player: Player = { _tag: "Paused", position: Number(root.dataset.position) };
     let visible = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     let shown: HTMLElement | undefined;
@@ -108,6 +109,8 @@ const current = cues.findLast((cue) => cue.at <= set.position);
     };
 
     const render = (smooth = true) => {
+      const position = positionOf(player, length);
+      const playing = player._tag === "Playing";
       root.style.setProperty("--progress", String(position / length));
       root.toggleAttribute("data-playing", playing);
       if (elapsed) {
@@ -134,39 +137,35 @@ const current = cues.findLast((cue) => cue.at <= set.position);
     };
 
     /* Playback advances in real time, and only while the figure is on screen. */
-    const tick = () => {
+    const schedule = (onSecond: () => void) => {
       clearInterval(timer);
-      if (playing && visible) {
-        timer = setInterval(() => {
-          position = Math.min(position + 1, length);
-          render();
-        }, 1000);
+      if (player._tag === "Playing" && visible) {
+        timer = setInterval(onSecond, 1000);
       }
     };
 
-    play?.addEventListener("click", () => {
-      playing = !playing;
-      say(playing ? "Playing" : `Saved at ${clock(position)} for every device`);
+    const send = (event: PlayerEvent) => {
+      const next = step(player, event, length);
+      ({ player } = next);
+      if (next.say !== null) {
+        say(next.say);
+      }
       render();
-      tick();
-    });
-
-    const playFrom = (at: number) => {
-      position = at;
-      playing = true;
-      say(`Playing from ${clock(position)}`);
-      render();
-      tick();
+      /* A press or a seek restarts the second; a tick only stops it, at the end. */
+      if (event._tag !== "Tick" || player._tag !== "Playing") {
+        schedule(() => send({ _tag: "Tick" }));
+      }
     };
 
+    play?.addEventListener("click", () => send({ _tag: "Toggle" }));
     for (const cue of cues) {
-      cue.addEventListener("click", () => playFrom(Number(cue.dataset.cue)));
+      cue.addEventListener("click", () => send({ _tag: "Seek", at: Number(cue.dataset.cue) }));
     }
 
     render(false);
     onVisibility(root, (isVisible) => {
       visible = isVisible;
-      tick();
+      schedule(() => send({ _tag: "Tick" }));
     });
   }
 </script>
