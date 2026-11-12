@@ -1,3 +1,7 @@
+// The window's press tests run the fake API from `tests/support`, which names this crate.
+#[cfg(all(test, feature = "desktop"))]
+extern crate self as photo_prototype;
+
 pub mod api;
 pub mod catalog;
 pub mod cloud;
@@ -12,4 +16,7 @@ pub mod ui;
 
 pub use catalog::{ImportFailure, PhotoId, PhotoRecord};
 pub use derivative::DerivativeSize;
-pub use library::{Event, ImportOutcome, ImportSummary, Library, LibraryOptions, UploadRetry};
+pub use library::{
+    DESCRIPTION_LIMIT, Event, ImportOutcome, ImportSummary, Library, LibraryOptions, UploadRetry,
+    clean_description, single_line,
+};

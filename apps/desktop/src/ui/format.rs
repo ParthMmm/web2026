@@ -3,7 +3,7 @@
 use super::gallery::UploadRun;
 use crate::{
     ImportSummary,
-    cloud::{CloudState, ObjectKind},
+    cloud::{CloudState, CloudStep, ObjectKind},
 };
 
 const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
@@ -84,8 +84,71 @@ pub(super) fn cloud_state(state: &CloudState) -> String {
         CloudState::Publishing { .. } => "Publishing…".into(),
         CloudState::Published { .. } => "Published".into(),
         CloudState::Unpublishing { .. } => "Unpublishing…".into(),
-        CloudState::Failed { .. } => "Upload failed".into(),
+        CloudState::Failed { step, .. } => match step {
+            CloudStep::Upload => "Upload failed",
+            CloudStep::Publish => "Publish failed",
+            CloudStep::Unpublish => "Unpublish failed",
+        }
+        .into(),
     }
+}
+
+/// What stopped, as the start of a sentence.
+pub(super) fn failed_step(step: CloudStep) -> &'static str {
+    match step {
+        CloudStep::Upload => "Couldn't upload",
+        CloudStep::Publish => "Couldn't publish",
+        CloudStep::Unpublish => "Couldn't unpublish",
+    }
+}
+
+/// What the status bar says when a publish or unpublish of `name` ends, if anything.
+pub(super) fn publish_outcome(
+    before: &CloudState,
+    after: &CloudState,
+    name: &str,
+) -> Option<String> {
+    Some(match (before, after) {
+        (CloudState::Publishing { .. }, CloudState::Published { .. }) => {
+            format!("Published {name}")
+        }
+        (CloudState::Unpublishing { .. }, CloudState::Draft { .. }) => {
+            format!("Unpublished {name}. It is a private draft again")
+        }
+        (
+            CloudState::Publishing { .. } | CloudState::Unpublishing { .. },
+            CloudState::Failed { step, .. },
+        ) => format!("{} {name}", failed_step(*step)),
+        _ => return None,
+    })
+}
+
+/// The status bar's words while photos are being published or unpublished.
+pub(super) fn publishing_status(
+    publishing: usize,
+    unpublishing: usize,
+    connected: bool,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if publishing > 0 {
+        parts.push(format!(
+            "Publishing {}…",
+            count(publishing, "photo", "photos")
+        ));
+    }
+    if unpublishing > 0 {
+        parts.push(format!(
+            "Unpublishing {}…",
+            count(unpublishing, "photo", "photos")
+        ));
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    if !connected {
+        parts.push("not connected".into());
+    }
+    Some(parts.join(" · "))
 }
 
 /// One sentence describing a finished import run.

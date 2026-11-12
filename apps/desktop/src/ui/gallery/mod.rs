@@ -1,9 +1,10 @@
 //! The gallery's state: the library, its photos in grid order, the selection and its large
 //! preview, what covers the window, and the decoded images the view draws.
 
+mod cloud;
+mod description;
 mod events;
 mod import;
-mod upload;
 
 use super::{
     benchmark::{self, Benchmark, Totals},
@@ -16,6 +17,8 @@ use crate::{
     api::{Config, Connection},
     grid::{self, Movement},
 };
+pub(super) use cloud::{UploadRun, failure_of};
+pub(super) use description::{DescriptionEdit, description_length};
 use import::PendingImport;
 use rune::{AppHandle, ImageCache, Tx, Waker};
 use std::{
@@ -26,7 +29,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-pub(super) use upload::UploadRun;
 
 const THUMBNAIL_CACHE_LIMIT: usize = 160;
 const BENCHMARK_THUMBNAIL_CACHE_LIMIT: usize = 64;
@@ -110,7 +112,7 @@ pub(super) enum Overlay {
     None,
     Viewer,
     Failures,
-    UploadFailures,
+    CloudFailures,
 }
 
 /// The performance panel's line, and when `poll` last read it from the
@@ -161,6 +163,8 @@ pub struct Gallery {
     pub(super) connection: Connection,
     /// The uploads since the queue was last empty.
     pub(super) uploads: Option<UploadRun>,
+    /// The selected photo's description as the inspector edits it.
+    pub(super) description: DescriptionEdit,
     pub(super) status: String,
     pub(super) picking: bool,
     /// The performance panel's line while it shows.
@@ -217,6 +221,26 @@ impl Gallery {
         gallery
     }
 
+    /// The gallery on an open library, as the window shows it once the library lands, for
+    /// press tests whose presses run real calls against a fixture service.
+    #[cfg(test)]
+    pub(super) fn with_library(library: crate::Library) -> Self {
+        let mut gallery = Self::blank(
+            LibraryState::Opening,
+            library.root().to_path_buf(),
+            Rc::default(),
+            None,
+        );
+        gallery.failures = library.failures().to_vec();
+        gallery.connection = library.connection().clone();
+        let records = library.current_photos().expect("the catalog reads");
+        gallery.photos = events::gallery_photos(&library, &records);
+        gallery.resume_uploads();
+        gallery.library = LibraryState::Open(library);
+        gallery.selected = gallery.photos.first().map(|photo| photo.record.id.clone());
+        gallery
+    }
+
     fn blank(
         library: LibraryState,
         library_root: PathBuf,
@@ -244,6 +268,7 @@ impl Gallery {
                 reason: "Opening the library".into(),
             },
             uploads: None,
+            description: DescriptionEdit::default(),
             status: String::new(),
             picking: false,
             performance: None,
@@ -317,13 +342,15 @@ impl Gallery {
     }
 
     pub(super) fn select_index(&mut self, index: usize, tx: &mut Tx) {
-        let Some(photo) = self.photos.get(index) else {
+        let Some(id) = self.photos.get(index).map(|photo| photo.record.id.clone()) else {
             return;
         };
-        if self.selected.as_ref() == Some(&photo.record.id) {
+        if self.selected.as_ref() == Some(&id) {
             return;
         }
-        self.selected = Some(photo.record.id.clone());
+        // Moving on keeps what was written for the photo left behind.
+        self.save_description();
+        self.selected = Some(id);
         self.request_preview();
         tx.scroll_into_view(row_key(&self.photos, index, self.layout().columns));
     }

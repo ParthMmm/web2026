@@ -1,17 +1,20 @@
 //! Uploading photos as private drafts. The background lane marks a photo queued, then
 //! prepares it: it hashes the original with SHA-256 and copies the three web sizes into the
 //! photo's upload folder, so the bytes the manifest declares never change under it. The
-//! transfer lanes then ask the server what it still misses, stream each missing object from
-//! disk, and finalize. Every call is safe to repeat, so a lost answer costs one more call, never
+//! transfer lanes (`transfer.rs`) then ask the server what it still misses, stream each missing
+//! object from disk, and finalize. Every call is safe to repeat, so a lost answer costs one more call, never
 //! a second upload. The catalog holds each state before the call that follows it, and the state
 //! an upload ends in is the one the server reports: a photo another run published stays
 //! published.
 
-use super::{Event, Shared, ensure_derivative, ensure_unchanged};
+use super::{
+    Event, Shared, ensure_derivative, ensure_unchanged,
+    transfer::{CHANGING_ANSWER, Transfer, record},
+};
 use crate::{
     api::{Api, CallError, Derivative, Manifest, ObjectKind, Original, PhotoView},
     catalog::{PhotoId, SourceStamp},
-    cloud::{CloudId, CloudState, UploadFailure},
+    cloud::{CloudFailure, CloudId, CloudState, CloudStep},
     derivative::DerivativeSize,
 };
 use anyhow::Context;
@@ -21,13 +24,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     sync::mpsc::SyncSender,
-    time::{Duration, Instant},
 };
-
-const CHANGING_ANSWER: &str = "the server kept changing its answer";
-
-/// At most this many uploads send at once. Each streams one object from disk at a time.
-pub(super) const TRANSFER_LANES: usize = 2;
 
 /// The web sizes the API takes, and the derivative each one is.
 const RENDITIONS: [(ObjectKind, DerivativeSize); 3] = [
@@ -35,74 +32,6 @@ const RENDITIONS: [(ObjectKind, DerivativeSize); 3] = [
     (ObjectKind::W1200, DerivativeSize::Mobile),
     (ObjectKind::W2400, DerivativeSize::Desktop),
 ];
-
-/// How a transfer that failed for a reason that may pass is tried again: up to `attempts`
-/// times in all, waiting `first_wait`, then twice as long each time, never longer than
-/// `longest_wait`.
-#[derive(Clone, Copy, Debug)]
-pub struct UploadRetry {
-    pub attempts: u32,
-    pub first_wait: Duration,
-    pub longest_wait: Duration,
-}
-
-impl Default for UploadRetry {
-    fn default() -> Self {
-        Self {
-            attempts: 5,
-            first_wait: Duration::from_secs(2),
-            longest_wait: Duration::from_secs(60),
-        }
-    }
-}
-
-impl UploadRetry {
-    fn wait(&self, attempt: u32) -> Duration {
-        self.first_wait
-            .saturating_mul(1 << attempt.min(16))
-            .min(self.longest_wait)
-    }
-}
-
-/// A prepared photo waiting for a transfer lane.
-pub(super) struct Transfer {
-    id: PhotoId,
-    due: Instant,
-    /// Tries that already failed for a reason that may pass.
-    failed_tries: u32,
-}
-
-impl Transfer {
-    pub(super) fn now(id: PhotoId) -> Self {
-        Self {
-            id,
-            due: Instant::now(),
-            failed_tries: 0,
-        }
-    }
-}
-
-/// Marks each photo that can upload as queued. A photo already queued, uploading or in the
-/// cloud is skipped, so asking twice uploads once.
-pub(super) fn queue(shared: &Shared, ids: Vec<PhotoId>) -> Vec<Event> {
-    let mut events = Vec::new();
-    for id in ids {
-        let mut catalog = shared.catalog();
-        let eligible = catalog.contains_photo(&id).unwrap_or(false)
-            && catalog
-                .cloud_state(&id)
-                .is_ok_and(|state| state.can_upload());
-        if eligible && catalog.set_cloud_state(&id, &CloudState::Queued).is_ok() {
-            drop(catalog);
-            shared.queue().prepares.push_back(id.clone());
-            events.push(Event::CloudChanged {
-                id,
-                state: CloudState::Queued,
-            });
-        }
-    }
-    events
-}
 
 /// Hashes the original and stages the web sizes, then hands the photo to a transfer lane.
 pub(super) fn prepare(shared: &Shared, id: &PhotoId) -> Vec<Event> {
@@ -135,13 +64,14 @@ pub(super) fn prepare(shared: &Shared, id: &PhotoId) -> Vec<Event> {
         CloudState::Failed {
             cloud_id: None,
             failure,
+            step: CloudStep::Upload,
         },
     )]
 }
 
 /// The manifest this photo's upload declares. A retry keeps the earlier manifest while its
 /// staged copies still match it, so the server sees the same upload again.
-fn prepared_manifest(shared: &Shared, id: &PhotoId) -> Result<Manifest, UploadFailure> {
+fn prepared_manifest(shared: &Shared, id: &PhotoId) -> Result<Manifest, CloudFailure> {
     let folder = shared.upload_dir(id);
     let (original_sha256, original_bytes) = hash_original(shared, id)?;
     if let Ok(Some(manifest)) = shared.catalog().manifest(id)
@@ -176,8 +106,8 @@ fn prepared_manifest(shared: &Shared, id: &PhotoId) -> Result<Manifest, UploadFa
     })
 }
 
-fn renditions_failed(error: &anyhow::Error) -> UploadFailure {
-    UploadFailure::Renditions {
+fn renditions_failed(error: &anyhow::Error) -> CloudFailure {
+    CloudFailure::Renditions {
         message: format!("{error:#}"),
     }
 }
@@ -203,14 +133,14 @@ fn stage(rendered: &Path, staged: &Path) -> anyhow::Result<Derivative> {
 
 /// The original's SHA-256 and length, from a source that still holds the imported bytes. The
 /// file must not change while it is read, as for any import.
-fn hash_original(shared: &Shared, id: &PhotoId) -> Result<(String, u64), UploadFailure> {
+fn hash_original(shared: &Shared, id: &PhotoId) -> Result<(String, u64), CloudFailure> {
     let paths = shared
         .catalog()
         .photo_source_paths(id)
-        .map_err(|_| UploadFailure::OriginalMissing)?;
+        .map_err(|_| CloudFailure::OriginalMissing)?;
     let present: Vec<PathBuf> = paths.into_iter().filter(|path| path.is_file()).collect();
     if present.is_empty() {
-        return Err(UploadFailure::OriginalMissing);
+        return Err(CloudFailure::OriginalMissing);
     }
     present
         .iter()
@@ -220,7 +150,7 @@ fn hash_original(shared: &Shared, id: &PhotoId) -> Result<(String, u64), UploadF
                 .filter(|(blake3, ..)| blake3 == id)
                 .map(|(_, sha256, bytes)| (sha256, bytes))
         })
-        .ok_or(UploadFailure::OriginalChanged)
+        .ok_or(CloudFailure::OriginalChanged)
 }
 
 /// BLAKE3 and SHA-256 in one read, with the same changed-file checks as an import.
@@ -268,14 +198,14 @@ fn object_path(
     id: &PhotoId,
     kind: ObjectKind,
     manifest: &Manifest,
-) -> Result<PathBuf, UploadFailure> {
+) -> Result<PathBuf, CloudFailure> {
     if kind != ObjectKind::Original {
         return staged_copy(&shared.upload_dir(id), kind, manifest);
     }
     let paths = shared
         .catalog()
         .photo_source_paths(id)
-        .map_err(|_| UploadFailure::OriginalMissing)?;
+        .map_err(|_| CloudFailure::OriginalMissing)?;
     let mut present = false;
     for path in paths {
         let Ok((sha256, _)) = sha256_file(&path) else {
@@ -287,9 +217,9 @@ fn object_path(
         }
     }
     Err(if present {
-        UploadFailure::OriginalChanged
+        CloudFailure::OriginalChanged
     } else {
-        UploadFailure::OriginalMissing
+        CloudFailure::OriginalMissing
     })
 }
 
@@ -297,117 +227,42 @@ fn staged_copy(
     folder: &Path,
     kind: ObjectKind,
     manifest: &Manifest,
-) -> Result<PathBuf, UploadFailure> {
+) -> Result<PathBuf, CloudFailure> {
     let (_, sha256) = manifest.facts(kind);
     let path = staged_path(folder, kind);
     sha256_file(&path)
         .ok()
         .filter(|(found, _)| found == sha256)
         .map(|_| path)
-        .ok_or_else(|| UploadFailure::Renditions {
+        .ok_or_else(|| CloudFailure::Renditions {
             message: format!("the prepared {} copy is gone or changed", kind.as_str()),
         })
 }
 
-/// One transfer lane: takes the next due photo and uploads it, until the library closes.
-pub(super) fn run_transfers(shared: &Shared, api: &Api, sender: &SyncSender<Event>) {
-    while let Some(transfer) = next_transfer(shared) {
-        transfer_one(shared, api, sender, transfer);
-    }
-}
-
-fn next_transfer(shared: &Shared) -> Option<Transfer> {
-    let mut queue = shared.queue();
-    loop {
-        if queue.stopped {
-            return None;
-        }
-        let now = Instant::now();
-        let next = queue
-            .transfers
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, transfer)| transfer.due)
-            .map(|(index, transfer)| (index, transfer.due));
-        queue = match next {
-            Some((index, due)) if due <= now => return Some(queue.transfers.swap_remove(index)),
-            Some((_, due)) => {
-                shared
-                    .wake
-                    .wait_timeout(queue, due - now)
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .0
-            }
-            None => shared
-                .wake
-                .wait(queue)
-                .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        };
-    }
-}
-
-fn transfer_one(shared: &Shared, api: &Api, sender: &SyncSender<Event>, transfer: Transfer) {
-    let id = transfer.id.clone();
-    let Ok(Some(manifest)) = shared.catalog().manifest(&id) else {
-        // Never prepared: prepare it again.
-        let _ = sender.send(record(shared, &id, CloudState::Queued));
-        shared.queue().prepares.push_back(id);
+/// Sends a prepared upload and returns the state the server reports once it is done. Returns
+/// `None` when the photo was never prepared, after handing it back to be prepared.
+pub(super) fn send_prepared(
+    shared: &Shared,
+    api: &Api,
+    sender: &SyncSender<Event>,
+    id: &PhotoId,
+) -> Option<Result<CloudState, CallError>> {
+    let Ok(Some(manifest)) = shared.catalog().manifest(id) else {
+        let _ = sender.send(record(shared, id, CloudState::Queued));
+        shared.queue().prepares.push_back(id.clone());
         shared.wake.notify_all();
-        return;
+        return None;
     };
     let cloud_id = CloudId::from_hex(&manifest.original.sha256);
-    let result = send(shared, api, sender, &id, &cloud_id, &manifest);
-    if shared.queue().stopped {
-        // The library closed mid-upload. The catalog keeps the last state, and the next
-        // open asks the server what is left.
-        return;
+    let result = send(shared, api, sender, id, &cloud_id, &manifest).map_err(|error| match error {
+        // The server forgot an upload it had begun; begin again.
+        CallError::NotFound => CallError::Transient("HTTP 404".into()),
+        other => other,
+    });
+    if result.is_ok() {
+        let _ = fs::remove_dir_all(shared.upload_dir(id));
     }
-    let state = match result {
-        Ok(state) => {
-            let _ = fs::remove_dir_all(shared.upload_dir(&id));
-            state
-        }
-        Err(error @ (CallError::Transient(_) | CallError::File(_) | CallError::AlreadyDraft)) => {
-            let message = match error {
-                CallError::Transient(message) => message,
-                CallError::File(message) => format!("couldn't read a file to send ({message})"),
-                _ => CHANGING_ANSWER.into(),
-            };
-            let failed_tries = transfer.failed_tries + 1;
-            if failed_tries < shared.upload_retry.attempts {
-                shared.queue().transfers.push(Transfer {
-                    due: Instant::now() + shared.upload_retry.wait(transfer.failed_tries),
-                    id,
-                    failed_tries,
-                });
-                shared.wake.notify_all();
-                return;
-            }
-            CloudState::Failed {
-                cloud_id: Some(cloud_id),
-                failure: UploadFailure::Unavailable {
-                    message: format!("{message}, {failed_tries} tries"),
-                },
-            }
-        }
-        Err(CallError::Stop(failure)) => CloudState::Failed {
-            cloud_id: Some(cloud_id),
-            failure,
-        },
-    };
-    let _ = sender.send(record(shared, &id, state));
-}
-
-/// Writes the state to the catalog and returns the event that reports it. A lane that
-/// outlives its library writes nothing, so it can't overwrite what a newer library recorded.
-fn record(shared: &Shared, id: &PhotoId, state: CloudState) -> Event {
-    if !shared.queue().stopped {
-        let _ = shared.catalog().set_cloud_state(id, &state);
-    }
-    Event::CloudChanged {
-        id: id.clone(),
-        state,
-    }
+    Some(result)
 }
 
 /// Begin, send what the server misses, finalize, and return the state the server reports once
@@ -437,7 +292,7 @@ fn send(
                 Ok(()) => {}
                 Err(CallError::AlreadyDraft) => continue 'round,
                 Err(
-                    error @ (CallError::File(_) | CallError::Stop(UploadFailure::Rejected { .. })),
+                    error @ (CallError::File(_) | CallError::Stop(CloudFailure::Rejected { .. })),
                 ) => {
                     // The file may have gone or changed while it streamed. If so, say that: the
                     // person can act on it, and a server refusal would only say to report it.

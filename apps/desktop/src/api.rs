@@ -1,12 +1,17 @@
 //! The one door to the photo API. Only this module talks to the network: it reads where the
-//! API is and the owner token, and turns each answer into what the upload worker does next.
+//! API is and the owner token, and turns each answer into what the transfer lanes do next.
 //! The token never reaches the catalog, a log or an error message.
 
-use crate::cloud::{CloudId, UploadFailure};
-use photo_upload_client::{ApiError, Client, ClientError, Problem};
+use crate::cloud::{CloudFailure, CloudId};
+use photo_upload_client::{ApiError, Client, ClientError, PhotoDetails, Problem};
 use std::{fmt, path::Path, process::Command};
 
-pub use photo_upload_client::{Derivative, Kind as ObjectKind, Manifest, Original, PhotoView};
+pub use photo_upload_client::{
+    Derivative, Kind as ObjectKind, Manifest, Original, PhotoDetails as Details, PhotoView,
+};
+
+/// The most photos one page of the list holds; the API's own limit.
+const LIST_PAGE: u32 = 200;
 
 const ADDRESS_VARIABLE: &str = "PHOTO_API_URL";
 const TOKEN_VARIABLE: &str = "PHOTO_API_TOKEN";
@@ -77,17 +82,19 @@ pub enum Connection {
     NotConnected { reason: String },
 }
 
-/// What a failed call means for the upload.
+/// What a failed call means for the work that made it.
 #[derive(Debug)]
 pub(crate) enum CallError {
     /// May pass: a transport error or a server that is briefly unavailable.
     Transient(String),
+    /// The server doesn't know the photo: an upload begins again, a publish stops.
+    NotFound,
     /// The photo became a draft before this write; ask the server again.
     AlreadyDraft,
     /// The local file to send couldn't be opened or read.
     File(String),
     /// Retrying the same call cannot help.
-    Stop(UploadFailure),
+    Stop(CloudFailure),
 }
 
 /// The photo API, for the upload workers.
@@ -121,6 +128,39 @@ impl Api {
     pub(crate) fn finalize(&self, id: &CloudId) -> Result<PhotoView, CallError> {
         self.client.finalize(id.as_str()).map_err(classify)
     }
+
+    /// Publishes a draft, or replaces a published photo's details.
+    pub(crate) fn publish(
+        &self,
+        id: &CloudId,
+        details: &PhotoDetails,
+    ) -> Result<PhotoView, CallError> {
+        self.client.publish(id.as_str(), details).map_err(classify)
+    }
+
+    pub(crate) fn unpublish(&self, id: &CloudId) -> Result<PhotoView, CallError> {
+        self.client.unpublish(id.as_str()).map_err(classify)
+    }
+
+    /// Every photo the server holds, read page by page, up to `max_pages` pages. The flag says
+    /// whether the list is complete, so a caller can tell a photo the server lacks from one on a
+    /// page it never read.
+    pub(crate) fn list(&self, max_pages: usize) -> Result<(Vec<PhotoView>, bool), CallError> {
+        let mut photos = Vec::new();
+        let mut after: Option<String> = None;
+        for _ in 0..max_pages {
+            let page = self
+                .client
+                .list(after.as_deref(), Some(LIST_PAGE))
+                .map_err(classify)?;
+            photos.extend(page.photos);
+            match page.next {
+                Some(next) => after = Some(next),
+                None => return Ok((photos, true)),
+            }
+        }
+        Ok((photos, false))
+    }
 }
 
 fn classify(error: ClientError) -> CallError {
@@ -139,25 +179,26 @@ fn classify(error: ClientError) -> CallError {
         ClientError::Http { status, error } => (status, error),
     };
     match (status, error) {
-        (401, _) => CallError::Stop(UploadFailure::Unauthorized),
+        (401, _) => CallError::Stop(CloudFailure::Unauthorized),
         (409, Some(ApiError::PhotoAlreadyDraft { .. })) => CallError::AlreadyDraft,
-        (409, _) => CallError::Stop(UploadFailure::Conflict),
-        // The server forgot an upload it had begun; begin again.
-        (404, _) | (408 | 429 | 500..=599, _) => CallError::Transient(format!("HTTP {status}")),
+        (409, Some(ApiError::PhotoNotDraft { .. })) => CallError::Stop(CloudFailure::NotDraft),
+        (409, _) => CallError::Stop(CloudFailure::Conflict),
+        (404, _) => CallError::NotFound,
+        (408 | 429 | 500..=599, _) => CallError::Transient(format!("HTTP {status}")),
         (_, Some(ApiError::FinalizeRejected { problems, .. })) => {
-            CallError::Stop(UploadFailure::Rejected {
+            CallError::Stop(CloudFailure::Rejected {
                 message: problems.iter().map(describe).collect::<Vec<_>>().join("; "),
             })
         }
-        (_, Some(ApiError::HashMismatch { kind })) => CallError::Stop(UploadFailure::Rejected {
+        (_, Some(ApiError::HashMismatch { kind })) => CallError::Stop(CloudFailure::Rejected {
             message: format!("{} doesn't match its checksum", kind.as_str()),
         }),
         (_, Some(ApiError::LengthMismatch { kind, .. })) => {
-            CallError::Stop(UploadFailure::Rejected {
+            CallError::Stop(CloudFailure::Rejected {
                 message: format!("{} has the wrong length", kind.as_str()),
             })
         }
-        _ => CallError::Stop(UploadFailure::Rejected {
+        _ => CallError::Stop(CloudFailure::Rejected {
             message: format!("HTTP {status}"),
         }),
     }
@@ -179,6 +220,20 @@ fn describe(problem: &Problem) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn publishing_an_unfinished_upload_stops_with_a_reason() {
+        let refused = ClientError::Http {
+            status: 409,
+            error: Some(ApiError::PhotoNotDraft {
+                photo_id: "ab".into(),
+            }),
+        };
+        assert!(matches!(
+            classify(refused),
+            CallError::Stop(CloudFailure::NotDraft)
+        ));
+    }
 
     #[test]
     fn a_local_file_error_is_not_blamed_on_the_server() {
