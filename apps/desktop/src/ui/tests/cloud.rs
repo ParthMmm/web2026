@@ -329,8 +329,8 @@ fn a_publish_in_drafts_takes_the_published_photos_out_of_the_selection() {
     until_each(&mut rt, &[0, 1], flow::is_published);
     assert_eq!(rt.state.shown_len(), 1, "Drafts shows the one draft left");
     assert_eq!(
-        text_in(&rt, "status"),
-        "1 photo · 1 selected",
+        rt.state.selection.len(),
+        1,
         "no hidden photo stays selected"
     );
     assert_eq!(
