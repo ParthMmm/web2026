@@ -108,7 +108,7 @@ fn poll(gallery: &mut Gallery, _clock: f64, tx: &mut Tx) -> bool {
 }
 
 /// What the menu bar shows that changes: what each View toggle will do, and which cloud
-/// commands the selection allows.
+/// commands the selection allows. The gallery rebuilds the bar when it changes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct MenuState {
     pub(super) sidebar_hidden: bool,
@@ -118,6 +118,10 @@ pub(super) struct MenuState {
     pub(super) upload: bool,
     pub(super) publish: bool,
     pub(super) unpublish: bool,
+    /// A selected photo is queued or uploading.
+    pub(super) cancel: bool,
+    /// Any photo is queued or uploading.
+    pub(super) cancel_all: bool,
 }
 
 /// The menu bar's own items, in the order the macOS Human Interface Guidelines
@@ -184,6 +188,25 @@ pub(super) fn menus(state: MenuState) -> Vec<MenuItem<Gallery>> {
         .id("upload-all")
         .menu("File")
         .key_equivalent(shortcut("cmd+shift+u")),
+        MenuItem::new(
+            if several {
+                "Cancel Uploads"
+            } else {
+                "Cancel Upload"
+            },
+            |gallery: &mut Gallery, _| {
+                gallery.cancel_selected();
+            },
+        )
+        .id("cancel-upload")
+        .enabled(state.cancel)
+        .menu("File"),
+        MenuItem::new("Cancel All Uploads", |gallery: &mut Gallery, _| {
+            gallery.cancel_all();
+        })
+        .id("cancel-all-uploads")
+        .enabled(state.cancel_all)
+        .menu("File"),
         MenuItem::separator().menu("File"),
         MenuItem::new(photos("Publish"), |gallery: &mut Gallery, _| {
             gallery.publish_selected();

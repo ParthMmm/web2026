@@ -4,7 +4,7 @@
 
 use super::{
     Event, Shared,
-    transfer::{CHANGING_ANSWER, Transfer},
+    transfer::{CHANGING_ANSWER, Claim, Transfer},
 };
 use crate::{
     api::{Api, CallError, Details},
@@ -39,17 +39,20 @@ pub(super) fn publish(
 /// seen here or finds the photo Published and publishes it again (`describe`).
 pub(super) fn record_published(
     shared: &Shared,
-    id: &PhotoId,
+    claim: &Claim,
     state: CloudState,
     sent: &Details,
 ) -> Option<Event> {
-    if shared.queue().stopped {
+    let id = &claim.id;
+    let mut queue = shared.queue();
+    if !claim.holds(&queue) {
         return None;
     }
     let mut catalog = shared.catalog();
     if details(&catalog, id) != *sent {
         drop(catalog);
-        shared.queue().transfers.push(Transfer::now(id.clone()));
+        queue.transfers.push(Transfer::now(id.clone()));
+        drop(queue);
         shared.wake.notify_all();
         return None;
     }
@@ -214,6 +217,7 @@ fn describe_error(error: CallError) -> String {
         CallError::NotFound => "HTTP 404".into(),
         CallError::AlreadyDraft => CHANGING_ANSWER.into(),
         CallError::Stop(failure) => failure.message(),
+        CallError::Paused => "the queue is paused".into(),
     }
 }
 

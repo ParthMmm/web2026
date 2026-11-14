@@ -8,7 +8,7 @@ mod transfer;
 mod upload;
 
 use crate::{
-    api::{Api, Config, Connection},
+    api::{Api, Config, Connection, TokenSource, read_token},
     catalog::{
         Catalog, DerivativeRecord, ImportFailure, NewPhoto, PhotoId, PhotoRecord, SourceStamp,
     },
@@ -19,7 +19,7 @@ use crate::{
 use anyhow::{Context, Result};
 pub use publish::{DESCRIPTION_LIMIT, clean_description, single_line};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs,
     io::{BufReader, Seek},
     os::unix::fs::MetadataExt,
@@ -31,8 +31,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use transfer::Transfer;
 pub use transfer::UploadRetry;
+use transfer::{CloudRequest, Transfer};
 
 /// Wakes the window's event loop, as Rune's `Waker` does.
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -83,11 +83,12 @@ impl EventSender {
 }
 
 /// Where a library lives, how much background work it does, and where it uploads.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct LibraryOptions {
     root: PathBuf,
     prepare_web_sizes: bool,
     cloud: Result<Config, String>,
+    token_source: TokenSource,
     upload_retry: UploadRetry,
 }
 
@@ -99,6 +100,7 @@ impl LibraryOptions {
             root: root.into(),
             prepare_web_sizes: false,
             cloud: Err("Not set up".into()),
+            token_source: Arc::new(read_token),
             upload_retry: UploadRetry::default(),
         }
     }
@@ -106,6 +108,13 @@ impl LibraryOptions {
     /// Uploads to the photo API `cloud` describes, or says why it can't.
     pub fn cloud(mut self, cloud: Result<Config, String>) -> Self {
         self.cloud = cloud;
+        self
+    }
+
+    /// Where a Retry reads the owner token again after the API refused it. By default
+    /// `PHOTO_API_TOKEN`, else the Keychain item.
+    pub fn token_source(mut self, source: TokenSource) -> Self {
+        self.token_source = source;
         self
     }
 
@@ -217,6 +226,13 @@ pub enum Event {
     CloudChecked {
         corrected: Result<usize, String>,
     },
+    /// The API refused the owner token. One photo failed with the reason; every other call
+    /// waits, in its state, until a Retry finds a new token or the library opens again.
+    CloudPaused,
+    /// A Retry found a new owner token, and the waiting calls run again with it.
+    CloudResumed,
+    /// A Retry found the same owner token, or none, so the calls still wait.
+    TokenUnchanged,
 }
 
 struct PendingSource {
@@ -243,8 +259,13 @@ struct Queue {
     retry_failures: bool,
     preview: Option<PhotoId>,
     preview_running: bool,
-    /// Steps the person asked for (upload, publish, unpublish), not yet in the catalog.
-    cloud_requests: Vec<(CloudStep, PhotoId)>,
+    /// Steps and cancels the person asked for, in order, not yet in the catalog.
+    cloud_requests: Vec<(CloudRequest, PhotoId)>,
+    /// How many times each photo's upload was cancelled. A lane's [`transfer::Claim`] holds
+    /// the count from when it took the photo, and records nothing once it differs.
+    cancelled: HashMap<PhotoId, u64>,
+    /// The API refused the owner token: no lane takes a transfer until a Retry finds a new one.
+    paused: bool,
     /// New descriptions, not yet in the catalog.
     descriptions: Vec<(PhotoId, String)>,
     /// Queued photos to hash and give their web sizes.
@@ -278,7 +299,7 @@ impl Queue {
 enum Job {
     ClearFailures,
     RetryFailures,
-    Ask(Vec<(CloudStep, PhotoId)>),
+    Ask(Vec<(CloudRequest, PhotoId)>),
     Describe(PhotoId, String),
     PrepareUpload(PhotoId),
     Scan(ImportRequest),
@@ -296,6 +317,9 @@ struct Shared {
     uploads: PathBuf,
     prepare_web_sizes: bool,
     upload_retry: UploadRetry,
+    /// The photo API the transfer lanes call, when connected.
+    api: Option<Arc<Api>>,
+    token_source: TokenSource,
 }
 
 impl Shared {
@@ -358,7 +382,7 @@ impl Library {
         let failures = catalog.failures()?;
         let api = options
             .cloud
-            .and_then(|config| Api::connect(&config).map(|api| (api, config.address)));
+            .and_then(|config| Api::connect(&config).map(|api| (Arc::new(api), config.address)));
         let connection = match &api {
             Ok((_, address)) => Connection::Connected {
                 address: address.clone(),
@@ -376,6 +400,8 @@ impl Library {
             uploads: options.root.join("uploads"),
             prepare_web_sizes: options.prepare_web_sizes,
             upload_retry: options.upload_retry,
+            api: api.as_ref().ok().map(|(api, _)| api.clone()),
+            token_source: options.token_source,
         });
         {
             let mut queue = shared.queue();
@@ -427,7 +453,6 @@ impl Library {
             .spawn(move || run_background(&background.0, &background.1))?;
         let uploads_enabled = api.is_ok();
         if let Ok((api, _)) = api {
-            let api = Arc::new(api);
             for lane in 0..transfer::TRANSFER_LANES {
                 let (shared, api, sender) = (shared.clone(), api.clone(), sender.clone());
                 std::thread::Builder::new()
@@ -549,14 +574,30 @@ impl Library {
         self.ask(CloudStep::Unpublish, ids);
     }
 
+    /// Stops each queued or uploading photo's upload and returns it to Local, deleting its
+    /// staged copies. A call already under way finishes or drops, and nothing it answers is
+    /// recorded. Other photos are left alone. Works without a connection.
+    pub fn cancel(&self, ids: Vec<PhotoId>) {
+        if ids.is_empty() {
+            return;
+        }
+        self.request(CloudRequest::Cancel, ids);
+    }
+
     fn ask(&self, step: CloudStep, ids: Vec<PhotoId>) {
-        if !self.uploads_enabled || ids.is_empty() {
+        if self.uploads_enabled {
+            self.request(CloudRequest::Start(step), ids);
+        }
+    }
+
+    fn request(&self, request: CloudRequest, ids: Vec<PhotoId>) {
+        if ids.is_empty() {
             return;
         }
         self.shared
             .queue()
             .cloud_requests
-            .extend(ids.into_iter().map(|id| (step, id)));
+            .extend(ids.into_iter().map(|id| (request, id)));
         self.shared.wake.notify_all();
     }
 
