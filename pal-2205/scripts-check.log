@@ -1,0 +1,5 @@
+ok    format
+ok    shape
+ok    clippy
+ok    test
+check exit 0

@@ -1,0 +1,40 @@
+PAL-2205 real-window check, PR #38 head 89d1f749b811bbf0868e4c7627ad532734ca2f1e
+MacBook (Apple silicon, macOS), 2026-11-14 05:38-05:41 UTC. Debug build of photo-desktop.
+PHOTO_LIBRARY_DIR = a scratch folder; one generated JPEG (vips gaussnoise).
+PHOTO_API_URL = http://127.0.0.1:8796, a proxy in front of a local Worker (apps/api, bun scripts/serve.ts, port 8795)
+with a random scratch owner token. The proxy holds each POST /v1/photos/<id>/publish for 8 s,
+so the window can go behind another window before the publish ends. Input came only from
+cua-driver (AXPress on the app's buttons, which does not front the app); reads are cua-driver
+get_window_state (accessibility tree + window image) and list_windows (z order).
+
+Run 1: window fully covered by a Finder window (Finder z 12 over photo-desktop z 11 the whole time)
+  05:39:13.145 proxy: POST .../publish (held 8000 ms)
+  05:39:21.222 proxy: answered POST .../publish: 200   (catalog: uploads.state = Published)
+  05:39:13 .. 05:39:59  app tree: "Publishing…" on every read
+  Rune by design builds no view or tree for a covered window: runtime/frame.rs:319 hidden_wake,
+  "poll and due timers run now; the view and layout wait, dirty, for the frame that shows the host".
+
+Part A: uncover without focus (Finder stays frontmost; the cover moves off most of the app window)
+  05:40:47.959 covered, frontmost Finder: Publishing… | Publishing 1 photo…
+  05:40:48.905 revealed, frontmost Finder: "Published" | Anyone can see it in the gallery. | Published PAL2205-test.jpg
+
+Part B: publish with the window behind a Finder window that covers part of it; Finder frontmost throughout
+  05:40:51.332 proxy: POST .../unpublish -> 200 (back to a draft)
+  05:40:53.631 proxy: POST .../publish (held 8000 ms)
+  05:40:54.539 frontmost: Finder | app: Publishing… | Publishing 1 photo…
+  05:40:55.905 frontmost: Finder | app: Publishing… | Publishing 1 photo…
+  05:40:57.076 frontmost: Finder | app: Publishing… | Publishing 1 photo…
+  05:40:58.894 frontmost: Finder | app: Publishing… | Publishing 1 photo…
+  05:41:00.943 frontmost: Finder | app: Publishing… | Publishing 1 photo…
+  05:41:01.701 proxy: answered POST .../publish: 200
+  05:41:02.723 frontmost: Finder | app: "Published" | Anyone can see it in the gallery. | Published PAL2205-test.jpg
+  05:41:04.325 .. 05:41:14.048 frontmost: Finder | app: "Published" (10 more reads)
+  end: Finder z 12 {x 40, y 120, 900 x 600}; photo-desktop z 11 {x 680, y 178, 1200 x 820}
+
+Files
+  b04-behind-finder-publishing.png  window image at 05:41:00.9, publish still held
+  b05-behind-finder-published.png   window image at 05:41:02.7, 1 s after the answer, no input
+  arrangement-finder-in-front.png   desktop crop at the end of part B: Finder in front of the app window
+  a0-covered-publishing.png         fully covered window's last drawn frame (run 1 state)
+  a1-revealed-published.png         first read after the cover moved off, Finder still frontmost
+  scripts-check.log                 scripts/check at 89d1f74 on the MacBook
