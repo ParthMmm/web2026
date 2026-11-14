@@ -235,7 +235,7 @@ impl CloudFailure {
                 format!("Couldn't prepare the web sizes ({message}). Retry to make them again.")
             }
             Self::Unauthorized => {
-                "The photo API refused the owner token. Update PHOTO_API_TOKEN or the Keychain item, reopen the app, then retry."
+                "The photo API refused the owner token. Update PHOTO_API_TOKEN or the Keychain item, then retry."
                     .into()
             }
             Self::Unavailable { message } => {

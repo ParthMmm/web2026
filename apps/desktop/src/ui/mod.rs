@@ -76,7 +76,7 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
             drag_regions: true,
         })
         .on_frame_encoded(move |frame| recorder.borrow_mut().record(frame));
-    for item in menus(false, false) {
+    for item in menus(MenuState::default()) {
         app = app.menu_item(item);
     }
     if benchmarking {
@@ -106,10 +106,31 @@ fn poll(gallery: &mut Gallery, _clock: f64, tx: &mut Tx) -> bool {
     gallery.poll(tx)
 }
 
+/// What the menu bar shows that changes: what each View toggle will do, and which photo
+/// actions apply to the selection. The gallery rebuilds the bar when it changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct MenuState {
+    pub(super) sidebar_hidden: bool,
+    pub(super) inspector_hidden: bool,
+    /// The selection is a draft, or a publish that stopped and can be retried.
+    pub(super) publish: bool,
+    /// The selection is published, or an unpublish that stopped and can be retried.
+    pub(super) unpublish: bool,
+    /// The selection is queued or uploading.
+    pub(super) cancel: bool,
+    /// Any photo is queued or uploading.
+    pub(super) cancel_all: bool,
+}
+
 /// The menu bar's own items, in the order the macOS Human Interface Guidelines
-/// give. A View toggle names what it will do, so the bar is rebuilt when one
-/// flips.
-pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuItem<Gallery>> {
+/// give. A View toggle names what it will do, and a photo action is on only
+/// when it applies, so the bar is rebuilt when either changes.
+pub(super) fn menus(state: MenuState) -> Vec<MenuItem<Gallery>> {
+    let MenuState {
+        sidebar_hidden,
+        inspector_hidden,
+        ..
+    } = state;
     let shortcut = |chord: &str| chord.parse().expect("menu shortcut parses");
     let show_hide = |hidden: bool, noun: &str| {
         if hidden {
@@ -156,19 +177,33 @@ pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuIte
         .id("upload-all")
         .menu("File")
         .key_equivalent(shortcut("cmd+shift+u")),
+        MenuItem::new("Cancel Upload", |gallery: &mut Gallery, _| {
+            gallery.cancel_selected();
+        })
+        .id("cancel-upload")
+        .menu("File")
+        .enabled(state.cancel),
+        MenuItem::new("Cancel All Uploads", |gallery: &mut Gallery, _| {
+            gallery.cancel_all();
+        })
+        .id("cancel-all-uploads")
+        .menu("File")
+        .enabled(state.cancel_all),
         MenuItem::separator().menu("File"),
         MenuItem::new("Publish Photo", |gallery: &mut Gallery, _| {
             gallery.publish_selected();
         })
         .id("publish")
         .menu("File")
-        .key_equivalent(shortcut("cmd+p")),
+        .key_equivalent(shortcut("cmd+p"))
+        .enabled(state.publish),
         MenuItem::new("Unpublish Photo", |gallery: &mut Gallery, _| {
             gallery.unpublish_selected();
         })
         .id("unpublish")
         .menu("File")
-        .key_equivalent(shortcut("cmd+shift+p")),
+        .key_equivalent(shortcut("cmd+shift+p"))
+        .enabled(state.unpublish),
         MenuItem::new("Cloud Problems…", |gallery: &mut Gallery, _| {
             gallery.open_cloud_failures();
         })

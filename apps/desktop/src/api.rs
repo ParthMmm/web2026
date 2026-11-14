@@ -4,7 +4,12 @@
 
 use crate::cloud::{CloudFailure, CloudId};
 use photo_upload_client::{ApiError, Client, ClientError, PhotoDetails, Problem};
-use std::{fmt, path::Path, process::Command};
+use std::{
+    fmt,
+    path::Path,
+    process::Command,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
+};
 
 pub use photo_upload_client::{
     Derivative, Kind as ObjectKind, Manifest, Original, PhotoDetails as Details, PhotoView,
@@ -19,7 +24,7 @@ const KEYCHAIN_SERVICE: &str = "dev.parth.photo-prototype";
 const KEYCHAIN_ACCOUNT: &str = "owner-token";
 
 /// The owner token. It has no `Display`, and its `Debug` hides the value.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Token(String);
 
 impl Token {
@@ -33,6 +38,10 @@ impl fmt::Debug for Token {
         f.write_str("Token(hidden)")
     }
 }
+
+/// Where the library reads the owner token again after the API refused it: by default
+/// [`read_token`]. Runs off the UI thread.
+pub type TokenSource = Arc<dyn Fn() -> Option<Token> + Send + Sync>;
 
 /// Where the API is, and the token that opens it.
 #[derive(Clone, Debug)]
@@ -49,20 +58,26 @@ impl Config {
             .ok()
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| format!("Set {ADDRESS_VARIABLE} to the photo API's address"))?;
-        let token = std::env::var(TOKEN_VARIABLE)
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .or_else(keychain_token)
-            .ok_or_else(|| {
-                format!(
-                    "Set {TOKEN_VARIABLE}, or add the Keychain item {KEYCHAIN_SERVICE} / {KEYCHAIN_ACCOUNT}"
-                )
-            })?;
+        let token = read_token().ok_or_else(|| {
+            format!(
+                "Set {TOKEN_VARIABLE}, or add the Keychain item {KEYCHAIN_SERVICE} / {KEYCHAIN_ACCOUNT}"
+            )
+        })?;
         Ok(Self {
             address: address.trim().to_owned(),
-            token: Token::new(token.trim()),
+            token,
         })
     }
+}
+
+/// The owner token from `PHOTO_API_TOKEN`, else the Keychain item. Runs `security`, so call
+/// it off the UI thread.
+pub fn read_token() -> Option<Token> {
+    std::env::var(TOKEN_VARIABLE)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(keychain_token)
+        .map(|token| Token::new(token.trim()))
 }
 
 fn keychain_token() -> Option<String> {
@@ -95,22 +110,80 @@ pub(crate) enum CallError {
     File(String),
     /// Retrying the same call cannot help.
     Stop(CloudFailure),
+    /// The queue paused after the API refused the owner token, so the call was not made.
+    Paused,
+    /// The API refused a token that a Retry has since replaced; the call may pass with the new
+    /// one.
+    Superseded,
 }
 
-/// The photo API, for the upload workers.
+/// The photo API, for the upload workers. The token can change while the lanes run: see
+/// [`Api::reauthorize`].
 pub(crate) struct Api {
-    client: Client,
+    address: String,
+    current: Mutex<Current>,
+}
+
+/// The token in use, its client, and how many times a new token replaced it, so a refusal can
+/// be told apart from one of a token already replaced.
+struct Current {
+    token: Token,
+    client: Arc<Client>,
+    generation: u64,
 }
 
 impl Api {
     pub(crate) fn connect(config: &Config) -> Result<Self, String> {
-        Client::new(&config.address, &config.token.0)
-            .map(|client| Self { client })
-            .map_err(|error| format!("Can't use {}: {error}", config.address))
+        let client = client(&config.address, &config.token)?;
+        Ok(Self {
+            address: config.address.clone(),
+            current: Mutex::new(Current {
+                token: config.token.clone(),
+                client: Arc::new(client),
+                generation: 0,
+            }),
+        })
+    }
+
+    /// Uses `token` for every later call. Returns whether it differs from the token in use;
+    /// the same token changes nothing.
+    pub(crate) fn reauthorize(&self, token: Token) -> Result<bool, String> {
+        let mut current = self.current();
+        if current.token == token {
+            return Ok(false);
+        }
+        current.client = Arc::new(client(&self.address, &token)?);
+        current.token = token;
+        current.generation += 1;
+        Ok(true)
+    }
+
+    fn current(&self) -> MutexGuard<'_, Current> {
+        self.current.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Runs `call` with the client in use. A refusal of a token that a newer one replaced while
+    /// the call ran is [`CallError::Superseded`], not a refusal of the token in use.
+    fn call<T>(
+        &self,
+        call: impl FnOnce(&Client) -> Result<T, ClientError>,
+    ) -> Result<T, CallError> {
+        let (client, generation) = {
+            let current = self.current();
+            (current.client.clone(), current.generation)
+        };
+        call(&client).map_err(|error| match classify(error) {
+            CallError::Stop(CloudFailure::Unauthorized)
+                if self.current().generation != generation =>
+            {
+                CallError::Superseded
+            }
+            error => error,
+        })
     }
 
     pub(crate) fn begin(&self, manifest: &Manifest) -> Result<PhotoView, CallError> {
-        self.client.begin(manifest).map_err(classify)
+        self.call(|client| client.begin(manifest))
     }
 
     /// Streams the file at `path` as one object, with its length from disk.
@@ -120,13 +193,11 @@ impl Api {
         kind: ObjectKind,
         path: &Path,
     ) -> Result<(), CallError> {
-        self.client
-            .put_file(id.as_str(), kind, path)
-            .map_err(classify)
+        self.call(|client| client.put_file(id.as_str(), kind, path))
     }
 
     pub(crate) fn finalize(&self, id: &CloudId) -> Result<PhotoView, CallError> {
-        self.client.finalize(id.as_str()).map_err(classify)
+        self.call(|client| client.finalize(id.as_str()))
     }
 
     /// Publishes a draft, or replaces a published photo's details.
@@ -135,32 +206,36 @@ impl Api {
         id: &CloudId,
         details: &PhotoDetails,
     ) -> Result<PhotoView, CallError> {
-        self.client.publish(id.as_str(), details).map_err(classify)
+        self.call(|client| client.publish(id.as_str(), details))
     }
 
     pub(crate) fn unpublish(&self, id: &CloudId) -> Result<PhotoView, CallError> {
-        self.client.unpublish(id.as_str()).map_err(classify)
+        self.call(|client| client.unpublish(id.as_str()))
     }
 
     /// Every photo the server holds, read page by page, up to `max_pages` pages. The flag says
     /// whether the list is complete, so a caller can tell a photo the server lacks from one on a
     /// page it never read.
     pub(crate) fn list(&self, max_pages: usize) -> Result<(Vec<PhotoView>, bool), CallError> {
-        let mut photos = Vec::new();
-        let mut after: Option<String> = None;
-        for _ in 0..max_pages {
-            let page = self
-                .client
-                .list(after.as_deref(), Some(LIST_PAGE))
-                .map_err(classify)?;
-            photos.extend(page.photos);
-            match page.next {
-                Some(next) => after = Some(next),
-                None => return Ok((photos, true)),
+        self.call(|client| {
+            let mut photos = Vec::new();
+            let mut after: Option<String> = None;
+            for _ in 0..max_pages {
+                let page = client.list(after.as_deref(), Some(LIST_PAGE))?;
+                photos.extend(page.photos);
+                match page.next {
+                    Some(next) => after = Some(next),
+                    None => return Ok((photos, true)),
+                }
             }
-        }
-        Ok((photos, false))
+            Ok((photos, false))
+        })
     }
+}
+
+/// The error names the address, never the token.
+fn client(address: &str, token: &Token) -> Result<Client, String> {
+    Client::new(address, &token.0).map_err(|error| format!("Can't use {address}: {error}"))
 }
 
 fn classify(error: ClientError) -> CallError {

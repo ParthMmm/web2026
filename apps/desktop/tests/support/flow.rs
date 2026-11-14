@@ -1,15 +1,16 @@
 //! The upload and publish workflow, driven through the library the way the window drives it:
 //! open a library against the fake API, import generated JPEGs, and wait for cloud states.
 
-use super::{FakeApi, TOKEN};
+use super::{FakeApi, Route, TOKEN};
 use image::{Rgb, RgbImage};
 use photo_prototype::{
     Event, ImportOutcome, Library, LibraryOptions, PhotoId, UploadRetry,
-    api::{Config, Token},
+    api::{Config, Token, TokenSource},
     cloud::{CloudFailure, CloudState},
 };
 use std::{
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -35,6 +36,41 @@ pub fn connected(root: &Path, api: &FakeApi, token: &str, retry: UploadRetry) ->
                 token: Token::new(token),
             }))
             .upload_retry(retry),
+    )
+    .unwrap()
+}
+
+/// Where a test keeps the owner token a Retry reads again, as the person would update
+/// `PHOTO_API_TOKEN` or the Keychain item.
+#[derive(Clone)]
+pub struct Keychain(Arc<Mutex<String>>);
+
+impl Keychain {
+    pub fn new(token: &str) -> Self {
+        Self(Arc::new(Mutex::new(token.to_owned())))
+    }
+
+    pub fn set(&self, token: &str) {
+        *self.0.lock().unwrap() = token.to_owned();
+    }
+
+    fn source(&self) -> TokenSource {
+        let keychain = self.0.clone();
+        Arc::new(move || Some(Token::new(keychain.lock().unwrap().clone())))
+    }
+}
+
+/// A library that opens with the token `keychain` holds now, and reads it again on a Retry.
+pub fn with_keychain(root: &Path, api: &FakeApi, keychain: &Keychain) -> Library {
+    let token = keychain.0.lock().unwrap().clone();
+    Library::open(
+        LibraryOptions::new(root)
+            .cloud(Ok(Config {
+                address: api.address().to_owned(),
+                token: Token::new(token),
+            }))
+            .token_source(keychain.source())
+            .upload_retry(quick_retry(4)),
     )
     .unwrap()
 }
@@ -157,6 +193,15 @@ pub fn until_held(api: &FakeApi) {
     let deadline = Instant::now() + TIMEOUT;
     while !api.holding() {
         assert!(Instant::now() < deadline, "the held call never arrived");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Waits until the API has answered `route` at least once, as a held call does once released.
+pub fn until_called(api: &FakeApi, route: Route) {
+    let deadline = Instant::now() + TIMEOUT;
+    while api.count(route) == 0 {
+        assert!(Instant::now() < deadline, "no call to {route:?} finished");
         std::thread::sleep(Duration::from_millis(5));
     }
 }

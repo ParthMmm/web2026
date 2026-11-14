@@ -168,7 +168,10 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
       cloud	group	cloud	-	-	-	912,341.9,276,133	#00000000	-	1.00
        cloud-state	group	cloud-state	-	-	-	922,351.9,256,20	#00000000	-	1.00
         #0	icon	-	-	-	-	922,354.9,14,14	#00000000	#9a9a9aff	1.00
-        #1	text	-	-	Uploading · 2 of 4 files	-	944,351.9,234,20	#00000000	#edededff	1.00
+        #1	text	-	-	Uploading · 2 of 4 files	-	944,351.9,149,20	#00000000	#edededff	1.00
+        cancel-upload	button	cancel-upload	Cancel	-	Stop the upload and keep the photo only in this library	1101,351.9,77,20	#131313ff	-	1.00
+         icon	icon	icon	-	-	-	1111,354.9,14,14	#00000000	#edededff	1.00
+         label	text	label	-	Cancel	-	1131,355.9,37,12	#00000000	#edededff	1.00
        photo-cloud-progress	progressbar	photo-cloud-progress	-	-	-	922,377.9,256,8	#00000000	-	1.00
         track	group	track	-	-	-	922,377.9,256,8	#191919ff	-	1.00
          fill	group	fill	-	-	-	922,377.9,128,8	#e5483aff	-	1.00

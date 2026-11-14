@@ -8,13 +8,13 @@ mod support;
 use super::{press, runtime, settle, shows, text_in};
 use crate::{
     Library,
-    cloud::{CloudState, CloudStep},
+    cloud::{CloudState, CloudStep, ObjectKind},
     ui::gallery::Gallery,
 };
 use rune::{PopupMenuError, Runtime};
 use std::time::{Duration, Instant};
 use support::{
-    FakeApi, Route, TOKEN,
+    Action, FakeApi, Route, TOKEN,
     flow::{self, Setup},
     unavailable,
 };
@@ -47,6 +47,15 @@ fn connected(count: u8, published: usize, attempts: u32) -> Connected {
         cloud_ids,
         _setup: setup,
     }
+}
+
+/// A window on `count` photos only in the library, the first one selected.
+fn local(count: u8) -> (Runtime<Gallery>, FakeApi, Setup) {
+    let api = FakeApi::start();
+    let setup = flow::setup(count);
+    let library = flow::open(&setup.root, &api);
+    flow::import(&library, &setup.sources);
+    (on(library), api, setup)
 }
 
 fn on(library: Library) -> Runtime<Gallery> {
@@ -191,4 +200,75 @@ fn the_tile_menu_publishes_a_draft_and_offers_no_unpublish() {
     rt.resolve_popup(Some("publish")).unwrap();
     until(&mut rt, flow::is_published);
     assert!(in_gallery(&api, &cloud_ids[0]).is_some());
+}
+
+fn select(rt: &mut Runtime<Gallery>, index: usize) {
+    let tile = rt.state.photos[index].key.clone();
+    press(rt, &format!("{tile}/hit"));
+}
+
+#[test]
+fn the_file_menu_offers_publish_and_unpublish_only_where_they_apply() {
+    let api = FakeApi::start();
+    let setup = flow::setup(3);
+    let library = flow::open(&setup.root, &api);
+    let ids = flow::import(&library, &setup.sources);
+    library.upload(ids[..2].to_vec());
+    flow::wait_all(&library, &ids[..2], flow::is_settled);
+    library.publish(vec![ids[0].clone()]);
+    flow::wait_for(&library, &ids[0], flow::is_published);
+    let mut rt = on(library);
+    let menu = |rt: &Runtime<Gallery>| (rt.state.menu.publish, rt.state.menu.unpublish);
+
+    assert_eq!(menu(&rt), (false, true), "a published photo");
+    select(&mut rt, 1);
+    assert_eq!(menu(&rt), (true, false), "a draft");
+    select(&mut rt, 2);
+    assert_eq!(menu(&rt), (false, false), "a photo only in the library");
+    assert!(!rt.state.menu.cancel);
+    select(&mut rt, 1);
+    press(&mut rt, "publish-photo");
+    until(&mut rt, flow::is_published);
+    assert_eq!(
+        menu(&rt),
+        (false, true),
+        "the menu follows the selected photo's state"
+    );
+}
+
+#[test]
+fn pressing_cancel_on_an_uploading_photo_shows_it_only_in_the_library() {
+    let (mut rt, api, setup) = local(1);
+    api.fault(Route::Put(ObjectKind::Original), Action::Hold, 1);
+    press(&mut rt, "upload-photo");
+    flow::until_held(&api);
+    until(&mut rt, |state| {
+        matches!(state, CloudState::Uploading { .. })
+    });
+    assert!(rt.state.menu.cancel && rt.state.menu.cancel_all);
+
+    press(&mut rt, "cancel-upload");
+    until(&mut rt, |state| *state == CloudState::Local);
+    assert!(text_in(&rt, "cloud").contains("Only in this library"));
+    assert!(shows(&rt, "upload-photo") && !shows(&rt, "cancel-upload"));
+    assert!(
+        text_in(&rt, "status").starts_with("Cancelled the upload of "),
+        "{}",
+        text_in(&rt, "status")
+    );
+    assert!(!rt.state.menu.cancel && !rt.state.menu.cancel_all);
+
+    api.release();
+    flow::until_called(&api, Route::Put(ObjectKind::Original));
+    for _ in 0..40 {
+        std::thread::sleep(WAIT_STEP);
+        rt.frame(0.05);
+    }
+    assert_eq!(
+        rt.state.selected_photo().unwrap().record.cloud,
+        CloudState::Local,
+        "the held call's answer is not recorded"
+    );
+    let id = rt.state.photos[0].record.id.clone();
+    assert!(!setup.root.join("uploads").join(id.as_str()).exists());
 }

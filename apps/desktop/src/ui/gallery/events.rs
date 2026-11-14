@@ -141,6 +141,9 @@ impl Gallery {
             }
             Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
             Event::CloudChecked { corrected } => self.cloud_checked(corrected),
+            Event::CloudPaused => self.cloud_paused(),
+            Event::CloudResumed => self.cloud_resumed(),
+            Event::TokenUnchanged => self.token_unchanged(),
             Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),
         }
