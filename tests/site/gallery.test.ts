@@ -4,11 +4,13 @@ import type { Photo } from "../../src/lib/gallery";
 import {
   altText,
   caption,
+  firstRowCount,
   galleryBase,
   idFromHash,
   sizesFor,
   srcset,
   step,
+  swipeStep,
   tileSizes,
 } from "../../src/lib/gallery";
 import { parseManifest } from "../../src/lib/gallery-manifest";
@@ -238,4 +240,54 @@ test("the gallery address is used only when it is set, without a trailing slash"
   expect(galleryBase("  ")).toBeNull();
   expect(galleryBase(`${BASE}/`)).toBe(BASE);
   expect(galleryBase("not a url")).toBeNull();
+});
+
+const START = { x: 200, y: 400 };
+
+test("a swipe to the left moves to the next photo", () => {
+  expect(swipeStep(START, { x: 120, y: 410 })).toBe(1);
+});
+
+test("a swipe to the right moves to the previous photo", () => {
+  expect(swipeStep(START, { x: 280, y: 390 })).toBe(-1);
+});
+
+test("a tap or a drag under the threshold does not move", () => {
+  expect(swipeStep(START, START)).toBe(0);
+  expect(swipeStep(START, { x: 170, y: 400 })).toBe(0);
+  expect(swipeStep(START, { x: 230, y: 400 })).toBe(0);
+});
+
+test("a mostly vertical drag does not move", () => {
+  expect(swipeStep(START, { x: 140, y: 700 })).toBe(0);
+  expect(swipeStep(START, { x: 260, y: 100 })).toBe(0);
+});
+
+/* 16px rem; a phone's column is its width less the page's 1.5rem margins. */
+const PHONE = { column: 342, rem: 16, viewport: 390 };
+const DESKTOP = { column: 960, rem: 16, viewport: 1440 };
+const WIDE = 1.5;
+const TALL = 0.667;
+
+test("the first row holds fewer wide photos on a phone than tall ones on a desktop", () => {
+  const wide = Array.from({ length: 12 }, () => WIDE);
+  const tall = Array.from({ length: 12 }, () => TALL);
+  /* 1.5 × 176px is 264px, so a second wide photo cannot fit beside it. */
+  expect(firstRowCount(wide, PHONE)).toBe(1);
+  /* 0.667 × 240px is 160px; six with five 8px gaps take 1000px > 960px. */
+  expect(firstRowCount(tall, DESKTOP)).toBe(5);
+});
+
+test("the first row follows the width and the shapes of the photos", () => {
+  const tall = Array.from({ length: 12 }, () => TALL);
+  const wide = Array.from({ length: 12 }, () => WIDE);
+  /* 0.667 × 176px is about 117px; two and a gap fit 342px, three do not. */
+  expect(firstRowCount(tall, PHONE)).toBe(2);
+  expect(firstRowCount(wide, DESKTOP)).toBe(2);
+  expect(firstRowCount([TALL, TALL, WIDE, TALL], DESKTOP)).toBe(4);
+});
+
+test("the first row holds one tile however wide it is, and none of none", () => {
+  expect(firstRowCount([10], PHONE)).toBe(1);
+  expect(firstRowCount([], PHONE)).toBe(0);
 });
