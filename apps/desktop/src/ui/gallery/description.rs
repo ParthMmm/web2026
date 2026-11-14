@@ -23,9 +23,9 @@ impl Gallery {
         }
     }
 
-    /// The edit the field changes, started from the selected photo's kept words.
+    /// The edit the field changes, started from the focused photo's kept words.
     pub(in crate::ui) fn description_mut(&mut self) -> &mut TextEdit {
-        let selected = self.selected_photo().map(|photo| {
+        let selected = self.focused_photo().map(|photo| {
             (
                 photo.record.id.clone(),
                 photo.record.description.clone().unwrap_or_default(),

@@ -1,4 +1,4 @@
-//! The window's cloud actions: Upload, Publish, Unpublish and Retry for the selected photo or
+//! The window's cloud actions: Upload, Publish, Unpublish and Retry for the selected photos or
 //! for every photo, each photo's state as the library reports it, and the words the status bar
 //! says about an upload run and each publish.
 
@@ -29,32 +29,45 @@ impl Gallery {
         matches!(self.connection, Connection::Connected { .. })
     }
 
-    /// Uploads the selected photo, or retries it.
+    /// Uploads each selected photo that is only in the library, or retries its upload. The
+    /// other selected photos are skipped.
     pub(in crate::ui) fn upload_selected(&mut self) {
         self.ask_selected(CloudStep::Upload);
     }
 
-    /// Publishes the selected draft, or retries its publish. Any unsaved description is saved
+    /// Publishes each selected draft, or retries its publish. Any unsaved description is saved
     /// first, so the publish carries it.
     pub(in crate::ui) fn publish_selected(&mut self) {
         self.save_description();
         self.ask_selected(CloudStep::Publish);
     }
 
-    /// Takes the selected photo out of the public gallery, or retries its unpublish.
+    /// Takes each selected published photo out of the public gallery, or retries its unpublish.
     pub(in crate::ui) fn unpublish_selected(&mut self) {
         self.ask_selected(CloudStep::Unpublish);
     }
 
-    /// Runs again the step that stopped for the selected photo, when a retry can help.
+    /// Runs again, for each selected photo, the step that stopped, when a retry can help.
     pub(in crate::ui) fn retry_selected(&mut self) {
-        let Some(step) = self
-            .selected_photo()
-            .and_then(|photo| photo.record.cloud.retry())
-        else {
-            return;
-        };
-        self.ask_selected(step);
+        let retries = self
+            .selected_photos()
+            .filter_map(|photo| Some((photo.record.cloud.retry()?, photo.record.id.clone())))
+            .collect();
+        self.ask_each(retries);
+    }
+
+    /// How many selected photos `step` can start from; a command is on when any can.
+    pub(in crate::ui) fn selected_for(&self, step: CloudStep) -> usize {
+        self.selected_photos()
+            .filter(|photo| photo.record.cloud.start(step).is_some())
+            .count()
+    }
+
+    /// How many selected photos a Retry can help.
+    pub(in crate::ui) fn selected_retries(&self) -> usize {
+        self.selected_photos()
+            .filter(|photo| photo.record.cloud.retry().is_some())
+            .count()
     }
 
     /// Uploads every photo that is only in the library, and retries the failed uploads a retry
@@ -70,10 +83,16 @@ impl Gallery {
 
     /// Retries every failure a retry can help, each with the step it needs.
     pub(in crate::ui) fn retry_cloud(&mut self) {
-        let retries: Vec<(CloudStep, PhotoId)> = self
+        let retries = self
             .cloud_failures()
             .filter_map(|(id, state)| Some((state.retry()?, id.clone())))
             .collect();
+        self.ask_each(retries);
+        self.close_overlay();
+    }
+
+    /// Asks for each retry with the step it needs.
+    fn ask_each(&mut self, retries: Vec<(CloudStep, PhotoId)>) {
         for step in CloudStep::ALL {
             let ids = retries
                 .iter()
@@ -82,7 +101,6 @@ impl Gallery {
                 .collect();
             self.ask(step, ids);
         }
-        self.close_overlay();
     }
 
     pub(in crate::ui) fn open_cloud_failures(&mut self) {
@@ -98,8 +116,8 @@ impl Gallery {
     }
 
     fn ask_selected(&mut self, step: CloudStep) {
-        let selected = self.selected.clone();
-        self.ask(step, selected.into_iter().collect());
+        let selected = self.selected_ids();
+        self.ask(step, selected);
     }
 
     /// Hands the photos among `ids` that can take `step` to the library. The library writes
@@ -154,6 +172,7 @@ impl Gallery {
             self.status = words;
         }
         photo.record.cloud = state;
+        self.refilter();
         if !self
             .photos
             .iter()

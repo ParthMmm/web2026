@@ -32,8 +32,8 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
    sidebar-pane	group	sidebar-pane	-	-	-	0,44,232,752	#0d0d0dff	-	1.00
     sidebar	group	sidebar	-	-	-	0,52,232,744	#00000000	-	1.00
      sidebar-scroll	group	sidebar-scroll	-	-	-	0,52,232,704	#00000000	-	1.00
-      sidebar-list	list	sidebar-list	Library	-	-	0,52,232,124	#00000000	-	1.00
-       library	group	library	Library	-	-	8,52,216,58	#00000000	-	1.00
+      sidebar-list	list	sidebar-list	Library	-	-	0,52,232,184	#00000000	-	1.00
+       library	group	library	Library	-	-	8,52,216,118	#00000000	-	1.00
         section-header	heading	section-header	Library	-	-	8,52,216,28	#00000000	-	1.00
          section-title	group	section-title	-	-	-	16,59,40,18	#00000000	-	1.00
           #0	text	-	-	Library	-	16,59,40,18	#00000000	#9a9a9aff	1.00
@@ -42,15 +42,23 @@ kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
          icon	icon	icon	-	-	-	16,88,16,16	#00000000	#edededff	1.00
          label	text	label	-	All photos	-	38,86,158,20	#00000000	#edededff	1.00
          detail	text	detail	-	24	-	202,90,14,12	#00000000	#7f7f7fff	1.00
-       attention	group	attention	Needs attention	-	-	8,110,216,58	#00000000	-	1.00
-        section-header	heading	section-header	Needs attention	-	-	8,110,216,28	#00000000	-	1.00
-         section-title	group	section-title	-	-	-	16,117,91,18	#00000000	-	1.00
-          #0	text	-	-	Needs attention	-	16,117,91,18	#00000000	#9a9a9aff	1.00
-         spacer	group	spacer	-	-	-	107,126,109,0	#00000000	-	1.00
-        cloud-problems	listitem	cloud-problems	Cloud problems	-	-	8,140,216,28	#00000000	-	1.00
-         icon	icon	icon	-	-	-	16,146,16,16	#00000000	#9a9a9aff	1.00
-         label	text	label	-	Cloud problems	-	38,144,165,20	#00000000	#9a9a9aff	1.00
-         detail	text	detail	-	3	-	209,148,7,12	#00000000	#7f7f7fff	1.00
+        drafts	listitem	drafts	Drafts	-	-	8,112,216,28	#00000000	-	1.00
+         icon	icon	icon	-	-	-	16,118,16,16	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Drafts	-	38,116,165,20	#00000000	#9a9a9aff	1.00
+         detail	text	detail	-	3	-	209,120,7,12	#00000000	#7f7f7fff	1.00
+        published	listitem	published	Published	-	-	8,142,216,28	#00000000	-	1.00
+         icon	icon	icon	-	-	-	16,148,16,16	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Published	-	38,146,165,20	#00000000	#9a9a9aff	1.00
+         detail	text	detail	-	2	-	209,150,7,12	#00000000	#7f7f7fff	1.00
+       attention	group	attention	Needs attention	-	-	8,170,216,58	#00000000	-	1.00
+        section-header	heading	section-header	Needs attention	-	-	8,170,216,28	#00000000	-	1.00
+         section-title	group	section-title	-	-	-	16,177,91,18	#00000000	-	1.00
+          #0	text	-	-	Needs attention	-	16,177,91,18	#00000000	#9a9a9aff	1.00
+         spacer	group	spacer	-	-	-	107,186,109,0	#00000000	-	1.00
+        cloud-problems	listitem	cloud-problems	Cloud problems	-	-	8,200,216,28	#00000000	-	1.00
+         icon	icon	icon	-	-	-	16,206,16,16	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Cloud problems	-	38,204,165,20	#00000000	#9a9a9aff	1.00
+         detail	text	detail	-	3	-	209,208,7,12	#00000000	#7f7f7fff	1.00
      sidebar-footer	group	sidebar-footer	-	-	-	0,756,232,40	#00000000	-	1.00
       library-size	group	library-size	-	-	-	8,764,216,24	#00000000	-	1.00
        #0	icon	-	-	-	-	16,769,14,14	#00000000	#7f7f7fff	1.00

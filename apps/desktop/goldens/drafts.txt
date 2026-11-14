@@ -1,0 +1,159 @@
+kit-root	group	kit-root	-	-	-	0,0,1200,820	#00000000	-	1.00
+ window	group	window	-	-	-	0,0,1200,820	#060606ff	-	1.00
+  title-bar	toolbar	title-bar	-	-	-	0,0,1200,44	#0d0d0dff	-	1.00
+   toggle-sidebar	button	toggle-sidebar	Hide sidebar (⌃⌘S)	-	Hide sidebar (⌃⌘S)	12,10,24,24	#ffffff1c	-	1.00
+    icon	icon	icon	-	-	-	16,14,16,16	#00000000	#edededff	1.00
+   title	group	title	-	-	-	248,12.6,63,18.8	#00000000	-	1.00
+    #0	text	-	-	Drafts	-	248,12.6,47,18.8	#00000000	#edededff	1.00
+    photo-count	text	photo-count	-	6	-	303,14.5,8,15	#00000000	#7f7f7fff	1.00
+   #2	group	-	-	-	-	311,22,563,0	#00000000	-	1.00
+   title-bar-commands	group	title-bar-commands	-	-	-	874,10,316,24	#00000000	-	1.00
+    zoom	group	zoom	-	-	-	874,10,132,24	#00000000	-	1.00
+     zoom-out	button	zoom-out	Smaller photos (⌘−)	-	Smaller photos (⌘−)	874,12,20,20	#00000000	-	1.00
+      icon	icon	icon	-	-	-	876,14,16,16	#00000000	#9a9a9aff	1.00
+     zoom-slider	slider	zoom-slider	Photo size	-	Photo size (⌘+ and ⌘−)	896,10,88,24	#00000000	-	1.00
+      #0	group	-	-	-	-	896,20,88,4	#ffffff24	-	1.00
+      #1	group	-	-	-	-	896,20,23.2,4	#9a9a9aff	-	1.00
+      zoom-knob	group	zoom-knob	-	-	-	913.2,16,12,12	#f2f2f2ff	-	1.00
+     zoom-in	button	zoom-in	Larger photos (⌘+)	-	Larger photos (⌘+)	986,12,20,20	#00000000	-	1.00
+      icon	icon	icon	-	-	-	988,14,16,16	#00000000	#9a9a9aff	1.00
+    toggle-info	button	toggle-info	Hide info (⌘I)	-	Hide info (⌘I)	1018,10,24,24	#ffffff1c	-	1.00
+     icon	icon	icon	-	-	-	1022,14,16,16	#00000000	#edededff	1.00
+    performance-toggle	button	performance-toggle	Show performance (⌥⌘P)	-	Show performance (⌥⌘P)	1048,10,24,24	#00000000	-	1.00
+     icon	icon	icon	-	-	-	1052,14,16,16	#00000000	#9a9a9aff	1.00
+    #3	group	-	-	-	-	1082,14,1,16	#ffffff14	-	1.00
+    import	group	import	-	-	-	1093,10,97,24	#e5483aff	-	1.00
+     import-files	button	import-files	Import	-	Import files or folders (⌘O)	1093,10,75,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1101,15,14,14	#00000000	#ffffffff	1.00
+      #1	text	-	-	Import	-	1119,12,41,20	#00000000	#ffffffff	1.00
+     import-more	button	import-more	More import sources	-	-	1168,10,22,24	#00000000	-	1.00
+      #0	icon	-	-	-	-	1173,16,12,12	#00000000	#ffffffff	1.00
+  panes	group	panes	-	-	-	0,44,1200,752	#00000000	-	1.00
+   sidebar-pane	group	sidebar-pane	-	-	-	0,44,232,752	#0d0d0dff	-	1.00
+    sidebar	group	sidebar	-	-	-	0,52,232,744	#00000000	-	1.00
+     sidebar-scroll	group	sidebar-scroll	-	-	-	0,52,232,704	#00000000	-	1.00
+      sidebar-list	list	sidebar-list	Library	-	-	0,52,232,126	#00000000	-	1.00
+       library	group	library	Library	-	-	8,52,216,118	#00000000	-	1.00
+        section-header	heading	section-header	Library	-	-	8,52,216,28	#00000000	-	1.00
+         section-title	group	section-title	-	-	-	16,59,40,18	#00000000	-	1.00
+          #0	text	-	-	Library	-	16,59,40,18	#00000000	#9a9a9aff	1.00
+         spacer	group	spacer	-	-	-	56,68,160,0	#00000000	-	1.00
+        all-photos	listitem	all-photos	All photos	-	-	8,82,216,28	#00000000	-	1.00
+         icon	icon	icon	-	-	-	16,88,16,16	#00000000	#9a9a9aff	1.00
+         label	text	label	-	All photos	-	38,86,158,20	#00000000	#9a9a9aff	1.00
+         detail	text	detail	-	24	-	202,90,14,12	#00000000	#7f7f7fff	1.00
+        drafts	listitem	drafts	Drafts	-	-	8,112,216,28	#ffffff1c	-	1.00
+         icon	icon	icon	-	-	-	16,118,16,16	#00000000	#edededff	1.00
+         label	text	label	-	Drafts	-	38,116,165,20	#00000000	#edededff	1.00
+         detail	text	detail	-	6	-	209,120,7,12	#00000000	#7f7f7fff	1.00
+        published	listitem	published	Published	-	-	8,142,216,28	#00000000	-	1.00
+         icon	icon	icon	-	-	-	16,148,16,16	#00000000	#9a9a9aff	1.00
+         label	text	label	-	Published	-	38,146,165,20	#00000000	#9a9a9aff	1.00
+         detail	text	detail	-	2	-	209,150,7,12	#00000000	#7f7f7fff	1.00
+     sidebar-footer	group	sidebar-footer	-	-	-	0,756,232,40	#00000000	-	1.00
+      library-size	group	library-size	-	-	-	8,764,216,24	#00000000	-	1.00
+       #0	icon	-	-	-	-	16,769,14,14	#00000000	#7f7f7fff	1.00
+       #1	group	-	-	-	-	38,764,158,24	#00000000	-	1.00
+        #0	text	-	-	275 MB of originals	-	38,764,158,12	#00000000	#9a9a9aff	1.00
+        #1	text	-	-	Left where they are, not copied	-	38,776,158,12	#00000000	#7f7f7fff	1.00
+   grid-region	group	grid-region	-	-	-	232,44,668,752	#060606ff	-	1.00
+    photo-grid	group	photo-grid	-	-	-	232,44,668,752	#00000000	-	1.00
+     grid-rows	group	grid-rows	-	-	-	232,44,668,428	#00000000	-	1.00
+      row-photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	group	row-photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	-	-	-	232,44,668,214	#00000000	-	1.00
+       photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	group	photo-21392e2bc7d63331f73629ef327528a4e93b07b10ce96b0189126801db1d02f4	-	-	-	248,50,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	248,50,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	430,56,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	434,60,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4700.JPG	-	-	248,50,208,208	#00000000	-	1.00
+        ring	group	ring	-	-	-	245,47,214,214	#00000000	-	1.00
+       photo-5bac7601870b32b3f0b4395ebe0f8d5f7362a863d50aeb32c7c80ecaf8284b90	group	photo-5bac7601870b32b3f0b4395ebe0f8d5f7362a863d50aeb32c7c80ecaf8284b90	-	-	-	462,50,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	462,50,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	644,56,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	648,60,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4714.JPG	-	-	462,50,208,208	#00000000	-	1.00
+       photo-4be184cbb7db42eb33e735fc86b1d60c1a9d961a485780c4ef2d82f8cab7e03a	group	photo-4be184cbb7db42eb33e735fc86b1d60c1a9d961a485780c4ef2d82f8cab7e03a	-	-	-	676,50,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	676,50,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	858,56,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	862,60,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4728.JPG	-	-	676,50,208,208	#00000000	-	1.00
+      row-photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	group	row-photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	-	-	-	232,258,668,214	#00000000	-	1.00
+       photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	group	photo-e0d63224a5d86579ecaa6dcf8ad2a4a35ecd0c232c8352441a3216fb5f6c08dc	-	-	-	248,264,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	248,264,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	430,270,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	434,274,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4735.JPG	-	-	248,264,208,208	#00000000	-	1.00
+       photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	group	photo-9b3641fa6a3d986253ecf5ab216c934a437bbd28200b65a05dfc1af27d99d138	-	-	-	462,264,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	462,264,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	644,270,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	648,274,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4742.JPG	-	-	462,264,208,208	#00000000	-	1.00
+       photo-1a3ca80b9f41c697ff853e5875b79db9b0c4cc5374c0c2a08325165cf6f888c2	group	photo-1a3ca80b9f41c697ff853e5875b79db9b0c4cc5374c0c2a08325165cf6f888c2	-	-	-	676,264,208,208	#141414ff	-	1.00
+        #0	group	-	-	-	-	676,264,208,208	#00000000	-	1.00
+        cloud-mark	img	cloud-mark	Private draft	-	-	858,270,20,20	#3838389e	-	1.00
+         #0	icon	-	-	-	-	862,274,12,12	#00000000	#f7f7f7ff	1.00
+        hit	button	hit	DSCF4749.JPG	-	-	676,264,208,208	#00000000	-	1.00
+   inspector	group	inspector	-	-	-	900,44,300,752	#0d0d0dff	-	1.00
+    inspector-header	group	inspector-header	-	-	-	900,44,300,44	#00000000	-	1.00
+     #0	text	-	-	Info	-	916,58.5,22,15	#00000000	#9a9a9aff	1.00
+    inspector-scroll	group	inspector-scroll	-	-	-	900,88,300,708	#00000000	-	1.00
+     inspector-content	group	inspector-content	-	-	-	900,88,300,617.4	#00000000	-	1.00
+      inspector-preview	group	inspector-preview	-	-	-	912,100,276,184	#141414ff	-	1.00
+       #0	group	-	-	-	-	912,100,276,184	#00000000	-	1.00
+      #1	group	-	-	-	-	912,296,276,33.9	#00000000	-	1.00
+       #0	text	-	-	DSCF4700.JPG	-	916,296,268,17.5	#00000000	#edededff	1.00
+       #1	text	-	-	6240 × 4160 · 12 MB	-	916,315.5,268,14.4	#00000000	#7f7f7fff	1.00
+      cloud	group	cloud	-	-	-	912,341.9,276,137	#00000000	-	1.00
+       cloud-state	group	cloud-state	-	-	-	922,351.9,256,20	#00000000	-	1.00
+        #0	icon	-	-	-	-	922,354.9,14,14	#00000000	#9a9a9aff	1.00
+        #1	text	-	-	Private draft	-	944,351.9,147,20	#00000000	#edededff	1.00
+        publish-photo	button	publish-photo	Publish	-	Add it to the public gallery (⌘P)	1099,351.9,79,20	#131313ff	-	1.00
+         icon	icon	icon	-	-	-	1109,354.9,14,14	#00000000	#edededff	1.00
+         label	text	label	-	Publish	-	1129,355.9,39,12	#00000000	#edededff	1.00
+       public-state	text	public-state	-	Private. Only you can see it.	-	922,377.9,256,12	#00000000	#9a9a9aff	1.00
+       description-section	group	description-section	-	-	-	922,395.9,256,73	#00000000	-	1.00
+        #0	group	-	-	-	-	922,401.9,256,12	#00000000	-	1.00
+         #0	text	-	-	Description	-	922,401.9,218,12	#00000000	#9a9a9aff	1.00
+         description-count	text	description-count	-	0 / 300	-	1140,401.9,38,12	#00000000	#7f7f7fff	1.00
+        description	textbox	description	-	-	-	922,417.9,256,51	#060606ff	-	1.00
+         scroll	group	scroll	-	-	-	930,425.9,240,35	#00000000	-	1.00
+          input	textbox	input	Description		-	930,425.9,240,17.5	#00000000	#edededff	1.00
+      exposure-readout	group	exposure-readout	Exposure	-	-	912,490.9,276,45.5	#161616ff	-	1.00
+       #0	group	-	-	-	-	912,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	f/2	-	935,498.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	APERTURE	-	923.5,516.5,46,11.9	#00000000	#9a9a9aff	1.00
+       #1	group	-	-	-	-	981,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	1/250 s	-	989,498.9,53,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	SHUTTER	-	995.5,516.5,40,11.9	#00000000	#9a9a9aff	1.00
+       #2	group	-	-	-	-	1050,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	160	-	1073,498.9,23,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	ISO	-	1075.5,516.5,18,11.9	#00000000	#9a9a9aff	1.00
+       #3	group	-	-	-	-	1119,490.9,69,45.5	#00000000	-	1.00
+        #0	text	-	-	56 mm	-	1134.5,498.9,38,15.6	#00000000	#edededff	1.00
+        #1	text	-	-	FOCAL	-	1139,516.5,29,11.9	#00000000	#9a9a9aff	1.00
+      details	group	details	-	-	-	912,548.4,276,145	#00000000	-	1.00
+       #0	group	-	-	-	-	912,548.4,276,145	#00000000	-	1.00
+        #0	group	-	-	-	-	912,548.4,276,30	#00000000	-	1.00
+         #0	text	-	-	Film	-	912,553.4,72,20	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,553.4,192,20	#00000000	-	1.00
+          #0	group	-	-	-	-	996,553.4,192,20	#00000000	-	1.00
+           film-chip	group	film-chip	-	-	-	996,553.4,122,20	#00000000	-	1.00
+            #0	group	-	-	-	-	1003,560.4,6,6	#9a9a9aff	-	1.00
+            #1	text	-	-	CLASSIC NEGATIVE	-	1015,557.1,96,12.5	#00000000	#edededff	1.00
+        #1	group	-	-	-	-	912,578.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Camera	-	912,583.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,583.4,192,15	#00000000	-	1.00
+          #0	text	-	-	FUJIFILM X-T5	-	996,583.4,192,15	#00000000	#edededff	1.00
+        #2	group	-	-	-	-	912,603.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Lens	-	912,608.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,608.4,192,15	#00000000	-	1.00
+          #0	text	-	-	XF56mmF1.2 R WR	-	996,608.4,192,15	#00000000	#edededff	1.00
+        #3	group	-	-	-	-	912,628.4,276,25	#00000000	-	1.00
+         #0	text	-	-	Taken	-	912,633.4,72,15	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,633.4,192,15	#00000000	-	1.00
+          #0	text	-	-	2026-08-10 10:20 (UTC+01:00)	-	996,633.4,192,15	#00000000	#edededff	1.00
+        #4	group	-	-	-	-	912,653.4,276,40	#00000000	-	1.00
+         #0	text	-	-	Original	-	912,658.4,72,30	#00000000	#7f7f7fff	1.00
+         #1	group	-	-	-	-	996,658.4,192,30	#00000000	-	1.00
+          #0	text	-	-	/Users/demo/Pictures/2026-08 Kyoto/DSCF4700.JPG	-	996,658.4,192,30	#00000000	#9a9a9aff	1.00
+  status-bar	group	status-bar	-	-	-	0,796,1200,24	#0d0d0dff	-	1.00
+   status	text	status	-	6 photos · 1 selected	-	14,800.8,1172,14.4	#00000000	#9a9a9aff	1.00

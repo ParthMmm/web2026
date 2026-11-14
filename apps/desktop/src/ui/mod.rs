@@ -76,7 +76,7 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
             drag_regions: true,
         })
         .on_frame_encoded(move |frame| recorder.borrow_mut().record(frame));
-    for item in menus(false, false) {
+    for item in menus(MenuState::default()) {
         app = app.menu_item(item);
     }
     if benchmarking {
@@ -106,10 +106,36 @@ fn poll(gallery: &mut Gallery, _clock: f64, tx: &mut Tx) -> bool {
     gallery.poll(tx)
 }
 
+/// What the menu bar shows that changes: what each View toggle will do, and which cloud
+/// commands the selection allows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct MenuState {
+    pub(super) sidebar_hidden: bool,
+    pub(super) inspector_hidden: bool,
+    /// More than one photo is selected, so the commands name photos.
+    pub(super) several: bool,
+    pub(super) upload: bool,
+    pub(super) publish: bool,
+    pub(super) unpublish: bool,
+}
+
 /// The menu bar's own items, in the order the macOS Human Interface Guidelines
-/// give. A View toggle names what it will do, so the bar is rebuilt when one
-/// flips.
-pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuItem<Gallery>> {
+/// give. A View toggle names what it will do and a cloud command is on when any
+/// selected photo can take it, so the bar is rebuilt when one of those changes.
+pub(super) fn menus(state: MenuState) -> Vec<MenuItem<Gallery>> {
+    let MenuState {
+        sidebar_hidden,
+        inspector_hidden,
+        several,
+        ..
+    } = state;
+    let photos = |verb: &str| {
+        if several {
+            format!("{verb} Photos")
+        } else {
+            format!("{verb} Photo")
+        }
+    };
     let shortcut = |chord: &str| chord.parse().expect("menu shortcut parses");
     let show_hide = |hidden: bool, noun: &str| {
         if hidden {
@@ -144,10 +170,11 @@ pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuIte
         .id("failures")
         .menu("File"),
         MenuItem::separator().menu("File"),
-        MenuItem::new("Upload Photo", |gallery: &mut Gallery, _| {
+        MenuItem::new(photos("Upload"), |gallery: &mut Gallery, _| {
             gallery.upload_selected();
         })
         .id("upload")
+        .enabled(state.upload)
         .menu("File")
         .key_equivalent(shortcut("cmd+u")),
         MenuItem::new("Upload All Photos", |gallery: &mut Gallery, _| {
@@ -157,16 +184,18 @@ pub(super) fn menus(sidebar_hidden: bool, inspector_hidden: bool) -> Vec<MenuIte
         .menu("File")
         .key_equivalent(shortcut("cmd+shift+u")),
         MenuItem::separator().menu("File"),
-        MenuItem::new("Publish Photo", |gallery: &mut Gallery, _| {
+        MenuItem::new(photos("Publish"), |gallery: &mut Gallery, _| {
             gallery.publish_selected();
         })
         .id("publish")
+        .enabled(state.publish)
         .menu("File")
         .key_equivalent(shortcut("cmd+p")),
-        MenuItem::new("Unpublish Photo", |gallery: &mut Gallery, _| {
+        MenuItem::new(photos("Unpublish"), |gallery: &mut Gallery, _| {
             gallery.unpublish_selected();
         })
         .id("unpublish")
+        .enabled(state.unpublish)
         .menu("File")
         .key_equivalent(shortcut("cmd+shift+p")),
         MenuItem::new("Cloud Problems…", |gallery: &mut Gallery, _| {
@@ -226,8 +255,8 @@ fn on_key(gallery: &mut Gallery, event: &KeyEvent, tx: &mut Tx) -> bool {
         Overlay::Viewer => {
             match event.key {
                 Key::Escape => gallery.close_overlay(),
-                Key::Left => gallery.move_selection(Movement::Left, tx),
-                Key::Right => gallery.move_selection(Movement::Right, tx),
+                Key::Left => gallery.move_selection(Movement::Left, false, tx),
+                Key::Right => gallery.move_selection(Movement::Right, false, tx),
                 _ if space => gallery.close_overlay(),
                 _ => return false,
             }
@@ -240,10 +269,15 @@ fn on_key(gallery: &mut Gallery, event: &KeyEvent, tx: &mut Tx) -> bool {
                 gallery.open_viewer();
                 return true;
             }
+            // A focused field took its own Cmd-A before the window hears it.
+            if event.is_command('a') && !event.mods.shift {
+                gallery.select_all();
+                return true;
+            }
             let Some(movement) = grid_movement(event) else {
                 return false;
             };
-            gallery.move_selection(movement, tx);
+            gallery.move_selection(movement, event.mods.shift, tx);
             true
         }
     }

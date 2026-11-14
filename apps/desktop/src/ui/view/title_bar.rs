@@ -106,9 +106,14 @@ pub(super) fn title_bar(s: &Gallery, look: &Look, layout: GridLayout, titlebar_i
                 .center_y()
                 .shrink()
                 .min_w(0.0)
-                .child(text("All photos").font(TITLE).color(look.fg).truncate())
+                .child(
+                    text(s.destination.title())
+                        .font(TITLE)
+                        .color(look.fg)
+                        .truncate(),
+                )
                 .children((!s.photos.is_empty()).then(|| {
-                    text(format::number(s.photos.len()))
+                    text(format::number(s.shown_len()))
                         .key("photo-count")
                         .font(MONO)
                         .color(look.faint)

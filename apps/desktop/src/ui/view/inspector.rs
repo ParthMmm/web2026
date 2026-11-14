@@ -1,5 +1,6 @@
-//! The inspector beside the grid: the selected photo large, its name and size, its camera
-//! settings, its details, and where its original lives.
+//! The inspector beside the grid: the focused photo large, its name and size, its camera
+//! settings, its details, and where its original lives. With several photos selected, how
+//! many and the cloud actions for them instead.
 
 use super::super::{
     format,
@@ -9,7 +10,7 @@ use super::super::{
 };
 use super::{
     TITLE_BAR_HEIGHT,
-    cloud::cloud_section,
+    cloud::{cloud_section, selection_actions},
     parts::{detail, detail_text, exposure_readout, film_chip},
 };
 use rune::{El, ScrollSpec, SurfaceFit, TextStyle, col, el, icon, row, text};
@@ -40,7 +41,10 @@ pub(super) fn inspector(s: &Gallery, look: &Look) -> El {
                         .color(look.muted),
                 ),
         );
-    let Some(photo) = s.selected_photo() else {
+    if s.selection.len() > 1 {
+        return panel.child(several(s, look));
+    }
+    let Some(photo) = s.focused_photo() else {
         // Only reachable when the library has photos but none is selected.
         return panel.child(
             col()
@@ -102,6 +106,40 @@ pub(super) fn inspector(s: &Gallery, look: &Look) -> El {
             })
             .child(content),
     )
+}
+
+/// Several photos selected: how many, how much they weigh, and the cloud actions that apply.
+fn several(s: &Gallery, look: &Look) -> El {
+    let bytes: u64 = s
+        .selected_photos()
+        .map(|photo| photo.record.byte_size)
+        .sum();
+    col()
+        .key("inspector-content")
+        .w_full()
+        .padding(BODY_PADDING)
+        .gap(12.0)
+        .child(
+            col()
+                .gap(2.0)
+                .px(4.0)
+                .child(
+                    text(format!(
+                        "{} selected",
+                        format::count(s.selection.len(), "photo", "photos")
+                    ))
+                    .key("selection-count")
+                    .font(TextStyle::new(14.0, 600.0))
+                    .color(look.fg)
+                    .truncate(),
+                )
+                .child(
+                    text(format!("{} of originals", format::bytes(bytes)))
+                        .font(MONO_SMALL)
+                        .color(look.faint),
+                ),
+        )
+        .child(selection_actions(s, look))
 }
 
 /// What went wrong, if anything, then a label and value for each detail the photo records.

@@ -8,7 +8,9 @@
 
 use super::{demo, gallery::Gallery, gallery::WINDOW_SIZE, look, on_key, poll, setup, view::view};
 use crate::cloud::{CloudFailure, CloudId, CloudState, CloudStep};
-use rune::{Env, Key, KeyEvent, Runtime, ScrollBars, text::TextSystem};
+use rune::{
+    Env, Key, KeyEvent, Mods, PhysicalInput, PopupItem, Runtime, ScrollBars, text::TextSystem,
+};
 use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 
 /// 1.5 s, as `--snap --at 1.5`, in steps long enough to be quick.
@@ -44,8 +46,35 @@ fn press(rt: &mut Runtime<Gallery>, key: &str) {
     settle(rt);
 }
 
+/// Clicks tile `index` while `mods` are held, as a Cmd- or Shift-click.
+fn press_tile(rt: &mut Runtime<Gallery>, index: usize, mods: Mods) {
+    let key = format!("{}/hit", rt.state.photos[index].key);
+    rt.physical_input(PhysicalInput::Modifiers(mods));
+    press(rt, &key);
+    rt.physical_input(PhysicalInput::Modifiers(Mods::default()));
+}
+
+const CMD: Mods = Mods {
+    shift: false,
+    cmd: true,
+    alt: false,
+    ctrl: false,
+    logo: true,
+};
+const SHIFT: Mods = Mods {
+    shift: true,
+    cmd: false,
+    alt: false,
+    ctrl: false,
+    logo: false,
+};
+
 fn key(rt: &mut Runtime<Gallery>, key: Key) {
-    rt.key(KeyEvent::from(key));
+    key_with(rt, key, Mods::default());
+}
+
+fn key_with(rt: &mut Runtime<Gallery>, key: Key, mods: Mods) {
+    rt.key(KeyEvent { key, mods });
     settle(rt);
 }
 
@@ -93,6 +122,69 @@ fn pressing_a_tile_shows_it_in_the_inspector() {
     let tile = rt.state.photos[4].key.clone();
     press(&mut rt, &format!("{tile}/hit"));
     assert!(text_in(&rt, "inspector").contains(&name(&rt, 4)));
+}
+
+#[test]
+fn cmd_and_shift_clicks_select_several_photos_and_the_inspector_counts_them() {
+    let mut rt = window(|_| {});
+    assert!(text_in(&rt, "status").ends_with("1 selected"));
+    press_tile(&mut rt, 3, CMD);
+    assert_eq!(text_in(&rt, "status"), "24 photos · 2 selected");
+    let inspector = text_in(&rt, "inspector");
+    assert!(inspector.contains("2 photos selected"), "{inspector}");
+    assert!(!inspector.contains(&name(&rt, 3)), "no one photo's details");
+    press_tile(&mut rt, 5, SHIFT);
+    assert_eq!(
+        text_in(&rt, "status"),
+        "24 photos · 3 selected",
+        "Shift-click runs from the photo Cmd-click added"
+    );
+    press_tile(&mut rt, 3, CMD);
+    assert_eq!(text_in(&rt, "status"), "24 photos · 2 selected");
+    press_tile(&mut rt, 7, Mods::default());
+    assert_eq!(text_in(&rt, "status"), "24 photos · 1 selected");
+    assert!(text_in(&rt, "inspector").contains(&name(&rt, 7)));
+}
+
+#[test]
+fn shift_arrows_extend_the_selection_cmd_a_takes_all_and_an_arrow_collapses_it() {
+    let mut rt = window(|_| {});
+    key_with(&mut rt, Key::Right, SHIFT);
+    key_with(&mut rt, Key::Right, SHIFT);
+    assert_eq!(text_in(&rt, "status"), "24 photos · 3 selected");
+    key_with(&mut rt, Key::Command('a'), CMD);
+    assert_eq!(text_in(&rt, "status"), "24 photos · 24 selected");
+    key(&mut rt, Key::Left);
+    assert_eq!(text_in(&rt, "status"), "24 photos · 1 selected");
+    assert!(
+        text_in(&rt, "inspector").contains(&name(&rt, 1)),
+        "the arrow moves from the focused photo"
+    );
+}
+
+#[test]
+fn the_tile_menu_acts_on_the_selection_and_a_photo_outside_it_replaces_it() {
+    let mut rt = window(scene("multi-select"));
+    let right_click = |rt: &mut Runtime<Gallery>, index: usize| {
+        let key = rt.state.photos[index].key.clone();
+        let (x, y) = rt.find(&key).expect("the tile");
+        rt.secondary_down(x, y);
+        rt.secondary_up(x, y);
+        rt.frame(0.0);
+        rt.popup_menu().expect("a context menu").clone()
+    };
+    let menu = right_click(&mut rt, 2);
+    assert_eq!(rt.state.selection.len(), 4, "inside the selection it stays");
+    for item in ["upload", "publish", "unpublish"] {
+        assert!(
+            menu.find(item).is_some_and(PopupItem::is_enabled),
+            "{item} applies to one of the selected photos"
+        );
+    }
+    rt.resolve_popup(None).unwrap();
+    let menu = right_click(&mut rt, 20);
+    assert_eq!(rt.state.selection.len(), 1, "outside it, the photo alone");
+    assert!(menu.find("publish").is_some_and(|item| !item.is_enabled()));
 }
 
 #[test]
@@ -328,6 +420,36 @@ fn the_status_bar_counts_an_upload_run_and_then_sums_it_up() {
         text_in(&rt, "status"),
         "Uploaded 2 photos as private drafts · 1 failed"
     );
+}
+
+#[test]
+fn the_drafts_and_published_rows_count_and_filter_the_grid() {
+    let mut rt = window(|s| {
+        scene("upload-draft")(s);
+        s.status.clear();
+    });
+    assert_eq!(text_in(&rt, "drafts"), "Drafts 6");
+    assert_eq!(text_in(&rt, "published"), "Published 0");
+    press(&mut rt, "drafts");
+    assert_eq!(rt.state.shown_len(), 6);
+    assert_eq!(text_in(&rt, "status"), "6 photos · 1 selected");
+    assert!(
+        !shows(&rt, &rt.state.photos[6].key),
+        "a local photo leaves the grid"
+    );
+    press(&mut rt, "published");
+    assert!(shows(&rt, "grid-region") && rt.state.shown_len() == 0);
+    assert!(text_in(&rt, "grid-region").contains("Nothing is published"));
+    assert!(text_in(&rt, "inspector").contains("Select a photo"));
+    press(&mut rt, "all-photos");
+    assert_eq!(rt.state.shown_len(), 24);
+}
+
+#[test]
+fn the_cloud_rows_hide_without_a_connection() {
+    let rt = window(scene("not-connected"));
+    assert!(shows(&rt, "all-photos"));
+    assert!(!shows(&rt, "drafts") && !shows(&rt, "published"));
 }
 
 /// The settled window's elements, one line each.

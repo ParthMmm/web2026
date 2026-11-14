@@ -12,7 +12,7 @@ mod viewer;
 
 use super::{
     format,
-    gallery::{Gallery, Overlay, SIDEBAR_WIDTH},
+    gallery::{Destination, Gallery, Overlay, SIDEBAR_WIDTH},
     icons,
     look::{Look, MONO, MONO_SMALL},
 };
@@ -74,7 +74,8 @@ pub(super) fn view(s: &Gallery, cx: &mut Cx<Gallery>) -> El {
 }
 
 /// Persistent navigation beside the grid: one destination per collection the library keeps,
-/// with its count, and the weight of the originals in the footer.
+/// with its count, and the weight of the originals in the footer. Drafts and Published show
+/// only while the photo API is connected.
 fn sidebar(s: &Gallery, look: &Look) -> El {
     let total_bytes: u64 = s.photos.iter().map(|photo| photo.record.byte_size).sum();
     let footer = row()
@@ -99,16 +100,19 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
                         .truncate(),
                 ),
         );
-    let mut sidebar = Sidebar::new().label("Library").footer(footer).section(
-        SidebarSection::new("Library").key("library").row(
-            SidebarRow::new("All photos")
-                .icon(&icons::PHOTOS)
-                .detail(format::number(s.photos.len()))
-                .selected(true)
-                .build(look)
-                .key("all-photos"),
-        ),
-    );
+    let mut library = SidebarSection::new("Library")
+        .key("library")
+        .row(destination_row(s, look, Destination::All, s.photos.len()));
+    if s.is_connected() {
+        let (drafts, published) = s.collection_counts();
+        library = library
+            .row(destination_row(s, look, Destination::Drafts, drafts))
+            .row(destination_row(s, look, Destination::Published, published));
+    }
+    let mut sidebar = Sidebar::new()
+        .label("Library")
+        .footer(footer)
+        .section(library);
     let cloud_problems = s.cloud_failures().count();
     if !s.failures.is_empty() || cloud_problems > 0 {
         let mut attention = SidebarSection::new("Needs attention").key("attention");
@@ -143,6 +147,22 @@ fn sidebar(s: &Gallery, look: &Look) -> El {
         .fill(look.chrome)
         .border_sides([0.0, 1.0, 0.0, 0.0], look.rule)
         .child(sidebar.build(look))
+}
+
+/// A sidebar row that opens `destination`, with how many photos it holds.
+fn destination_row(s: &Gallery, look: &Look, destination: Destination, count: usize) -> El {
+    let (icon, key) = match destination {
+        Destination::All => (&icons::PHOTOS, "all-photos"),
+        Destination::Drafts => (&icons::CLOUD_CHECK, "drafts"),
+        Destination::Published => (&icons::GLOBE, "published"),
+    };
+    SidebarRow::new(destination.title())
+        .icon(icon)
+        .detail(format::number(count))
+        .selected(s.destination == destination)
+        .on_select(move |s: &mut Gallery, _| s.open_destination(destination))
+        .build(look)
+        .key(key)
 }
 
 /// What is in view and selected at rest, a transient message when there is one, import and
@@ -241,11 +261,10 @@ fn progress_line(
 const STATUS: TextStyle = TextStyle::new(11.5, 400.0);
 
 fn selection_summary(s: &Gallery) -> String {
-    let photos = format::count(s.photos.len(), "photo", "photos");
-    if s.selected.is_some() {
-        format!("{photos} · 1 selected")
-    } else {
-        photos
+    let photos = format::count(s.shown_len(), "photo", "photos");
+    match s.selection.len() {
+        0 => photos,
+        selected => format!("{photos} · {} selected", format::number(selected)),
     }
 }
 
