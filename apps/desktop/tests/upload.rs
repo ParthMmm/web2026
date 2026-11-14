@@ -750,3 +750,62 @@ fn a_retry_with_the_same_token_stays_paused_and_makes_no_call() {
         .unwrap();
     assert_eq!(failure(&photo.cloud), &CloudFailure::Unauthorized);
 }
+
+#[test]
+fn a_refusal_of_a_token_a_retry_replaced_does_not_pause_the_queue_again() {
+    let api = FakeApi::start();
+    let setup = setup(2);
+    let keychain = Keychain::new(TOKEN);
+    let library = with_keychain(&setup.root, &api, &keychain);
+    let ids = import(&library, &setup.sources);
+    let (late, refused) = (ids[0].clone(), ids[1].clone());
+
+    // One lane waits on its call with the old token while the other meets the refusal.
+    api.change_token(ROTATED);
+    api.fault(Route::Begin, Action::Hold, 1);
+    library.upload(vec![late.clone()]);
+    until_held(&api);
+    library.upload(vec![refused.clone()]);
+    let mut events = events_until(&library, |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, Event::CloudPaused))
+    });
+
+    keychain.set(ROTATED);
+    library.upload(vec![refused.clone()]);
+    events.extend(events_until(&library, |events| {
+        last_states(events, std::slice::from_ref(&refused))[0]
+            .as_ref()
+            .is_some_and(is_draft)
+    }));
+
+    // The held call now answers 401 for the token the Retry replaced.
+    api.release();
+    events.extend(events_until(&library, |events| {
+        last_states(events, std::slice::from_ref(&late))[0]
+            .as_ref()
+            .is_some_and(is_settled)
+    }));
+    events.extend(events_within_quiet(&library));
+    assert!(
+        last_states(&events, &ids)
+            .iter()
+            .all(|state| state.as_ref().is_some_and(is_draft)),
+        "{events:?}"
+    );
+    assert!(
+        !events.iter().any(|event| matches!(
+            event,
+            Event::CloudChanged { id, state: CloudState::Failed { .. } } if *id == late
+        )),
+        "the late refusal fails nothing: {events:?}"
+    );
+    let paused = events
+        .iter()
+        .filter(|event| matches!(event, Event::CloudPaused))
+        .count();
+    assert_eq!(paused, 1, "the queue pauses once: {events:?}");
+    assert_eq!(api.refused(), 2);
+    assert_eq!(api.drafts().len(), 2);
+}

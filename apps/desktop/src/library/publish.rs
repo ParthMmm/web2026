@@ -218,6 +218,7 @@ fn describe_error(error: CallError) -> String {
         CallError::AlreadyDraft => CHANGING_ANSWER.into(),
         CallError::Stop(failure) => failure.message(),
         CallError::Paused => "the queue is paused".into(),
+        CallError::Superseded => "the owner token changed during the call".into(),
     }
 }
 

@@ -356,11 +356,14 @@ fn transfer_one(
             report(sender, record(shared, claim, state));
             return;
         }
-        Err(CallError::Paused) => {
+        Err(CallError::Paused | CallError::Superseded) => {
+            // The call met the pause, or a refusal of a token a Retry already replaced: wait
+            // in its state, and try again with the token in use.
             queue.transfers.push(Transfer {
                 due: Instant::now(),
                 ..transfer
             });
+            shared.wake.notify_all();
             return;
         }
         Err(CallError::Stop(CloudFailure::Unauthorized)) if queue.paused => {
