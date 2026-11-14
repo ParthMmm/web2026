@@ -43,12 +43,18 @@ import { draftView, publishedView } from "./internal/views.ts";
  * neither bucket shares one with it, so each call orders its steps so that a
  * visitor never sees a photo whose copies are missing, and so that running
  * the same call again finishes whatever an earlier call left undone. The
- * manifest is derived from D1 and rewritten by every call.
+ * manifest is derived from D1 and rewritten by every call; a writer repeats
+ * its write until D1's gallery version holds still across it, so the last
+ * manifest put always lists the current rows.
+ *
+ * Overlapping publish and unpublish calls on one photo end in the state of
+ * whichever call marks the row last. The other caller still gets its own
+ * success view, which may already be out of date.
  */
 export class Publishing extends Context.Service<
   Publishing,
   {
-    /** Copies, then marks Published, then rewrites the manifest. Publishing again replaces the details. */
+    /** Copies, marks Published, copies again whatever went missing, then rewrites the manifest. Publishing again replaces the details. */
     readonly publish: (
       photoId: PhotoId,
       details: PhotoDetails
@@ -122,18 +128,25 @@ export class Publishing extends Context.Service<
           { concurrency: 3, discard: true }
         );
 
+      // Another call can change D1 between this read and this put, and its own put can land first; write again until no change slipped in.
       const writeManifest = Effect.gen(function* writeGalleryManifest() {
-        const entries = yield* ledger.published;
-        const bytes = encodeGalleryManifest(
-          galleryManifest(entries, yield* DateTime.now)
-        );
-        const sha256 = Sha256.make(
-          yield* digest.digestHex(Digest.sha256, bytes)
-        );
-        yield* publicBlobs.put(GALLERY_MANIFEST_KEY, Stream.make(bytes), {
-          bytes: ByteCount.make(bytes.length),
-          sha256,
-        });
+        let written: number;
+        let current: number;
+        do {
+          written = yield* ledger.galleryVersion;
+          const entries = yield* ledger.published;
+          const bytes = encodeGalleryManifest(
+            galleryManifest(entries, yield* DateTime.now)
+          );
+          const sha256 = Sha256.make(
+            yield* digest.digestHex(Digest.sha256, bytes)
+          );
+          yield* publicBlobs.put(GALLERY_MANIFEST_KEY, Stream.make(bytes), {
+            bytes: ByteCount.make(bytes.length),
+            sha256,
+          });
+          current = yield* ledger.galleryVersion;
+        } while (current !== written);
       }).pipe(
         Effect.catchTag("BlobRejected", (cause) =>
           Effect.fail(new BlobUnavailable({ cause, operation: "manifest.put" }))
@@ -167,6 +180,8 @@ export class Publishing extends Context.Service<
             // The photo was reopened with another manifest since it was read; start from the row as it is now.
             return yield* publish(photoId, details);
           }
+          // An unpublish that found the row still Draft may have deleted the copies before the mark; copy what is gone.
+          yield* copyDerivatives(photoId, marked.value.manifest).pipe(storage);
           yield* writeManifest.pipe(storage);
           return publishedView(marked.value);
         }).pipe(

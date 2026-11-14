@@ -1,11 +1,12 @@
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Deferred, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { Digest } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 
 import { makeMemoryBlobs } from "../src/photos/blobs-memory.ts";
-import type { BlobKey } from "../src/photos/blobs.ts";
+import { PublicBlobs } from "../src/photos/blobs.ts";
+import type { BlobKey, BlobStore } from "../src/photos/blobs.ts";
 import { derivativeKinds, variantKinds } from "../src/photos/domain.ts";
 import type { PhotoDetails, PhotoId } from "../src/photos/domain.ts";
 import { GalleryManifest } from "../src/photos/gallery-manifest.ts";
@@ -15,7 +16,36 @@ import { Publishing } from "../src/photos/publishing.ts";
 import { declare, validBodies } from "./support/fixture.ts";
 import { migratedSqlite } from "./support/sqlite.ts";
 
-const harness = () => {
+const MANIFEST_KEY = "v1.json";
+
+/** Runs `before` and `after` around every put to the public bucket. */
+interface PutHooks {
+  readonly before: (key: BlobKey) => Effect.Effect<void>;
+  readonly after: (key: BlobKey) => Effect.Effect<void>;
+}
+
+const noHooks: PutHooks = {
+  after: () => Effect.void,
+  before: () => Effect.void,
+};
+
+const hookPuts = (hooks: PutHooks) =>
+  Layer.effect(
+    PublicBlobs,
+    Effect.gen(function* wrapPublicBlobs() {
+      const store = yield* PublicBlobs;
+      const put: BlobStore["put"] = (key, body, expected) =>
+        hooks
+          .before(key)
+          .pipe(
+            Effect.andThen(store.put(key, body, expected)),
+            Effect.andThen(hooks.after(key))
+          );
+      return { ...store, put };
+    })
+  );
+
+const harness = (hooks: PutHooks = noHooks) => {
   const privateBlobs = makeMemoryBlobs();
   const publicBlobs = makeMemoryBlobs();
   const layer = Layer.mergeAll(
@@ -24,7 +54,9 @@ const harness = () => {
     PublicGallery.layer
   ).pipe(
     Layer.provideMerge(privateBlobs.layer),
-    Layer.provideMerge(publicBlobs.publicLayer),
+    Layer.provideMerge(
+      hookPuts(hooks).pipe(Layer.provideMerge(publicBlobs.publicLayer))
+    ),
     Layer.provideMerge(migratedSqlite()),
     Layer.provideMerge(Digest.layerWebCrypto)
   );
@@ -417,6 +449,105 @@ it.effect(
       );
       expect(yield* listedIds).toEqual([photoId]);
       expect(publicBlobs.objects.size).toBe(derivativeKinds.length + 1);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "a manifest put that lands after a newer one is written again, so the manifest lists exactly the Published rows",
+  () => {
+    const held = Deferred.makeUnsafe<true>();
+    const release = Deferred.makeUnsafe<true>();
+    let holdNextManifest = false;
+    const { layer } = harness({
+      ...noHooks,
+      before: (key) =>
+        Effect.suspend(() => {
+          if (key !== MANIFEST_KEY || !holdNextManifest) {
+            return Effect.void;
+          }
+          holdNextManifest = false;
+          return Deferred.succeed(held, true).pipe(
+            Effect.andThen(Deferred.await(release))
+          );
+        }),
+    });
+    return Effect.gen(function* run() {
+      const publishing = yield* Publishing;
+      const kept = (yield* draft(1)).photoId;
+      const removed = (yield* draft(2)).photoId;
+      yield* publishing.publish(kept, details);
+      yield* publishing.publish(removed, details);
+
+      // Writer A reads both photos as Published, then its put waits.
+      holdNextManifest = true;
+      const writerA = yield* Effect.forkChild(
+        publishing.publish(kept, { alt: "Bay" })
+      );
+      yield* Deferred.await(held);
+      // Writer B delists a photo and its put lands first.
+      yield* publishing.unpublish(removed);
+      yield* Deferred.succeed(release, true);
+      yield* Fiber.join(writerA);
+
+      const publishedRows = yield* SqlClient.SqlClient.use(
+        (sql) =>
+          sql<{
+            readonly photoId: string;
+          }>`SELECT photo_id AS photoId FROM photo WHERE publication = 'Published'`
+      );
+      expect(publishedRows.map((row) => row.photoId)).toEqual([kept]);
+      const { manifest } = yield* gallery;
+      expect(manifest.photos).toMatchObject([{ alt: "Bay", id: kept }]);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "an unpublish between publish's copies and its mark leaves the photo Published with all three public copies",
+  () => {
+    const copied = Deferred.makeUnsafe<true>();
+    const resume = Deferred.makeUnsafe<true>();
+    let derivativePuts = 0;
+    const { layer, publicBlobs } = harness({
+      ...noHooks,
+      after: (key) =>
+        Effect.suspend(() => {
+          if (key === MANIFEST_KEY) {
+            return Effect.void;
+          }
+          derivativePuts += 1;
+          // The third copy has landed; hold the copy step open so the mark waits.
+          return derivativePuts === derivativeKinds.length
+            ? Deferred.succeed(copied, true).pipe(
+                Effect.andThen(Deferred.await(resume))
+              )
+            : Effect.void;
+        }),
+    });
+    return Effect.gen(function* run() {
+      const publishing = yield* Publishing;
+      const { manifest, photoId } = yield* draft(1);
+
+      const publisher = yield* Effect.forkChild(
+        publishing.publish(photoId, details)
+      );
+      yield* Deferred.await(copied);
+      // The row is still Draft, so this unpublish deletes the copies and returns.
+      expect((yield* publishing.unpublish(photoId))._tag).toBe("Draft");
+      yield* Deferred.succeed(resume, true);
+      yield* Fiber.join(publisher);
+
+      expect(yield* tagOf(photoId)).toBe("Published");
+      expect(yield* listedIds).toEqual([photoId]);
+      expect(publicKeys(publicBlobs.objects)).toEqual(
+        [
+          "v1.json",
+          ...derivativeKinds.map(
+            (kind) => `photos/${photoId}/${kind}-${manifest[kind].sha256}.webp`
+          ),
+        ].toSorted()
+      );
     }).pipe(Effect.provide(layer));
   }
 );

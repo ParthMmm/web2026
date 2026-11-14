@@ -56,13 +56,14 @@ One D1 row per photo. Its state follows from its columns, so there is no state c
 | `Published` | set | `'Published'` | set |
 | `Unpublishing` | set | `'Unpublishing'` | set |
 
-Migration `0002_publication.sql` adds checks that refuse any other combination. Every transition is one `UPDATE`, because D1 has no transactions and R2 shares none with it. The gallery manifest is derived: every `publish` and `unpublish` rewrites it from the `Published` rows.
+Migration `0002_publication.sql` adds checks that refuse any other combination. Every transition is one `UPDATE`, because D1 has no transactions and R2 shares none with it. The gallery manifest is derived: every `publish` and `unpublish` rewrites it from the `Published` rows. Migration `0003_gallery_version.sql` adds a one-row `gallery` table whose `version` a trigger raises whenever a photo's `publication` or `details` changes. A manifest writer reads the version before it reads the rows and again after its put, and writes again until the two match. So when two writes overlap, the last put lists the current rows.
 
 `publish` runs these steps, and each step only does what is still missing:
 
 1. Copy the three derivatives from `photos/` in the private bucket to the public bucket, each verified against its hash. Copies already there are skipped. The original is never copied.
 2. Mark the row `Published` with the details, only if it still holds the manifest that was copied.
-3. Rewrite the manifest.
+3. Check the three public copies again, and copy any that an overlapping `unpublish` deleted while the row was still `Draft`.
+4. Rewrite the manifest.
 
 `unpublish` runs these steps:
 
@@ -71,7 +72,7 @@ Migration `0002_publication.sql` adds checks that refuse any other combination. 
 3. Delete every public object under `photos/<photoId>/`.
 4. Mark an `Unpublishing` row `Draft`.
 
-A failure at any step leaves a state that is safe for visitors, and the same call repeated finishes the work. A visitor never sees a listed photo whose copies are missing: copies exist before the mark, and the manifest drops the photo before the delete. The API never reports `Draft` while public copies remain. A failed publish can leave unlisted copies of a draft; `unpublish` of a `Draft` deletes them too. Concurrent `publish` and `unpublish` of the same photo end in the state of the call that finishes last, and either call repeated converges.
+A failure at any step leaves a state that is safe for visitors, and the same call repeated finishes the work. A visitor never sees a listed photo whose copies are missing: copies exist before the mark, and the manifest drops the photo before the delete. The API never reports `Draft` while public copies remain. A failed publish can leave unlisted copies of a draft; `unpublish` of a `Draft` deletes them too. Concurrent `publish` and `unpublish` of the same photo end in the state of the call that marks the row last. The other call still answers with its own view, and either call repeated converges.
 
 ## Layout
 
@@ -129,7 +130,7 @@ Last run on 2026-11-06 against real R2 and D1: the full Rust client flow passed,
 
 Counted from the code, one upload costs about 8 R2 writes, about 15 R2 reads and about 10 D1 statements. At list price that is a small fraction of a cent, and it fits inside the R2 and D1 free tiers. Storage costs most: about $0.015 per GB-month after the 10 GB free tier. Staged copies live until `finalize` deletes them, or at most 7 days.
 
-One first publish costs 4 R2 Class A operations (3 copies and the manifest), 6 Class B operations (3 checks in the public bucket and 3 reads in the private one) and 3 D1 statements. The last statement reads every published row to rebuild the manifest. Publishing again with copies in place costs 1 Class A, 3 Class B and 3 D1 statements. One unpublish costs 2 Class A operations (the manifest and the list; deletes are free) and 4 D1 statements. Published derivatives are stored twice, once in each bucket.
+One first publish costs 4 R2 Class A operations (3 copies and the manifest), 9 Class B operations (6 checks in the public bucket and 3 reads in the private one) and 5 D1 statements. One statement reads every published row to rebuild the manifest, and two read the gallery version around the put. Publishing again with copies in place costs 1 Class A, 6 Class B and 5 D1 statements. One unpublish costs 2 Class A operations (the manifest and the list; deletes are free) and 6 D1 statements. A manifest write that overlaps another change repeats its put and its three statements. Published derivatives are stored twice, once in each bucket.
 
 Each public read is one Worker request and one Class B operation, because the Worker does not cache. Browsers keep images for a year and the manifest for a minute, which limits repeat reads from one visitor. At list price ($4.50 per million Class A, $0.36 per million Class B), a gallery of a few hundred photos stays inside the free tiers.
 
