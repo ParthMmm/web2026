@@ -87,7 +87,7 @@ impl Gallery {
         }
     }
 
-    fn apply(&mut self, event: Event, tx: &mut Tx) {
+    pub(in crate::ui) fn apply(&mut self, event: Event, tx: &mut Tx) {
         match event {
             Event::ImportProgress { processed, total } => {
                 self.progress = Some((processed, total));

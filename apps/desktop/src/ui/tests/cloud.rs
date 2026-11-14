@@ -5,14 +5,21 @@
 #[path = "../../../tests/support/mod.rs"]
 mod support;
 
-use super::{press, runtime, settle, shows, text_in};
+use super::{press, runtime, runtime_waking, settle, shows, text_in};
 use crate::{
-    Library,
+    Event, ImportOutcome, Library,
     cloud::{CloudState, CloudStep},
-    ui::gallery::Gallery,
+    ui::{format, gallery::Gallery},
 };
 use rune::{PopupMenuError, Runtime};
-use std::time::{Duration, Instant};
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration, Instant},
+};
 use support::{
     FakeApi, Route, TOKEN,
     flow::{self, Setup},
@@ -71,6 +78,33 @@ fn until(rt: &mut Runtime<Gallery>, done: impl Fn(&CloudState) -> bool) {
         rt.frame(0.05);
     }
     settle(rt);
+}
+
+/// What the host runs for a wake while the window is covered: `poll`, with no time passing, so
+/// no timed wake is due; then a frame, also with no time passing, builds what changed. Returns
+/// whether a wake came.
+fn take_wake(rt: &mut Runtime<Gallery>, wakes: &AtomicUsize) -> bool {
+    if wakes.swap(0, Ordering::SeqCst) == 0 {
+        return false;
+    }
+    rt.update_if(|gallery, tx| gallery.poll(tx));
+    rt.frame(0.0);
+    true
+}
+
+/// The inspector names the cloud state the gallery holds for the selected photo.
+fn inspector_matches_gallery(rt: &Runtime<Gallery>) {
+    let state = &rt
+        .state
+        .selected_photo()
+        .expect("a photo is selected")
+        .record
+        .cloud;
+    let shown = text_in(rt, "cloud-state");
+    assert!(
+        shown.starts_with(&format::cloud_state(state)),
+        "the inspector shows {shown:?} while the gallery holds {state:?}"
+    );
 }
 
 fn in_gallery(api: &FakeApi, cloud_id: &str) -> Option<serde_json::Value> {
@@ -191,4 +225,90 @@ fn the_tile_menu_publishes_a_draft_and_offers_no_unpublish() {
     rt.resolve_popup(Some("publish")).unwrap();
     until(&mut rt, flow::is_published);
     assert!(in_gallery(&api, &cloud_ids[0]).is_some());
+}
+
+#[test]
+fn a_cloud_change_reaches_the_window_with_no_timed_wake_due() {
+    let api = FakeApi::start();
+    let setup = flow::setup(1);
+    let library = flow::open(&setup.root, &api);
+    flow::drafts(&library, &setup);
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counter = wakes.clone();
+    let mut rt = runtime_waking(
+        Gallery::with_library(library),
+        Arc::new(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        }),
+    );
+    take_wake(&mut rt, &wakes);
+    rt.update_if(|gallery, _| {
+        gallery.publish_selected();
+        true
+    });
+    rt.frame(0.0);
+    let deadline = Instant::now() + flow::TIMEOUT;
+    while !rt
+        .state
+        .selected_photo()
+        .is_some_and(|photo| flow::is_published(&photo.record.cloud))
+    {
+        assert!(
+            Instant::now() < deadline,
+            "no wake brought the publish to the window: it shows {}",
+            text_in(&rt, "cloud-state")
+        );
+        std::thread::sleep(WAIT_STEP);
+        take_wake(&mut rt, &wakes);
+    }
+    inspector_matches_gallery(&rt);
+    assert!(text_in(&rt, "cloud").contains("Anyone can see it"));
+    assert!(shows(&rt, "unpublish-photo"));
+}
+
+#[test]
+fn a_record_read_before_a_cloud_change_keeps_the_newer_state() {
+    let Connected { mut rt, .. } = connected(1, 0, 4);
+    let stale = rt.state.selected_photo().unwrap().record.clone();
+    assert!(flow::is_draft(&stale.cloud));
+    let published = CloudState::Published {
+        cloud_id: stale.cloud.cloud_id().unwrap().clone(),
+    };
+    let id = stale.id.clone();
+    let events = [
+        Event::MetadataUpdated {
+            photo: stale.clone(),
+        },
+        Event::Detached {
+            photo: stale.clone(),
+        },
+        Event::Imported {
+            source: PathBuf::from("/dev/null"),
+            outcome: ImportOutcome::Relinked(stale),
+            processed: 1,
+            total: 1,
+            elapsed: Duration::ZERO,
+        },
+    ];
+    rt.update_if(|gallery, tx| {
+        gallery.apply(
+            Event::CloudChanged {
+                id,
+                state: published.clone(),
+            },
+            tx,
+        );
+        true
+    });
+    settle(&mut rt);
+    for event in events {
+        rt.update_if(|gallery, tx| {
+            gallery.apply(event, tx);
+            true
+        });
+        settle(&mut rt);
+        assert_eq!(rt.state.selected_photo().unwrap().record.cloud, published);
+        inspector_matches_gallery(&rt);
+        assert!(shows(&rt, "unpublish-photo"));
+    }
 }
