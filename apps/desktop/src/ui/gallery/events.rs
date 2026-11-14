@@ -144,6 +144,7 @@ impl Gallery {
                 }
             }
             Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
+            Event::UploadTransferred { .. } => self.upload_transferred(),
             Event::CloudChecked { corrected } => self.cloud_checked(corrected),
             Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),

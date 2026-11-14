@@ -417,34 +417,24 @@ fn the_benchmark_report_counts_where_each_upload_stands() {
 }
 
 #[test]
-fn the_benchmark_counts_only_uploads_that_sent_files_during_the_run() {
+fn the_benchmark_counts_only_uploads_the_transfer_lane_says_sent_files() {
     let mut rt = window(|_| {});
     rt.state.benchmark = Some(super::benchmark::Benchmark::new(30, true));
-    let ids: Vec<_> = rt.state.photos[..2]
-        .iter()
-        .map(|photo| photo.record.id.clone())
-        .collect();
+    let id = rt.state.photos[0].record.id.clone();
     let cloud_id = CloudId::from_hex("ab");
-    // The server already holds the first photo, as on a warm run: it answers Draft at once.
-    rt.state.cloud_changed(&ids[0], CloudState::Queued);
+    // Preparation sets Uploading before `begin`. When the server already holds the photo,
+    // `begin` answers Draft and no file is sent, so the state change alone counts nothing.
+    rt.state.cloud_changed(&id, CloudState::Queued);
     rt.state.cloud_changed(
-        &ids[0],
-        CloudState::Draft {
-            cloud_id: cloud_id.clone(),
-        },
-    );
-    assert_eq!(rt.state.benchmark.as_ref().unwrap().transferred(), 0);
-    // The second photo sends its files and then settles as a draft.
-    rt.state.cloud_changed(&ids[1], CloudState::Queued);
-    rt.state.cloud_changed(
-        &ids[1],
+        &id,
         CloudState::Uploading {
             cloud_id: cloud_id.clone(),
             missing: Vec::new(),
         },
     );
-    rt.state
-        .cloud_changed(&ids[1], CloudState::Draft { cloud_id });
+    rt.state.cloud_changed(&id, CloudState::Draft { cloud_id });
+    assert_eq!(rt.state.benchmark.as_ref().unwrap().transferred(), 0);
+    rt.state.upload_transferred();
     assert_eq!(rt.state.benchmark.as_ref().unwrap().transferred(), 1);
 }
 

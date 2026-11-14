@@ -178,6 +178,14 @@ impl Gallery {
         }
     }
 
+    /// An upload sent files and the server holds the photo now. The benchmark counts it; a
+    /// photo the server already held reports no transfer, so it never counts.
+    pub(in crate::ui) fn upload_transferred(&mut self) {
+        if let Some(benchmark) = &mut self.benchmark {
+            benchmark.upload_transferred();
+        }
+    }
+
     /// Applies a photo's new cloud state. Uploads count in the run, and when nothing is left
     /// to upload, the status bar says how the run ended. A publish or unpublish that ends says
     /// so in the status bar.
@@ -187,13 +195,6 @@ impl Gallery {
         };
         let was_pending = photo.record.cloud.is_pending();
         let now_pending = state.is_pending();
-        // A photo the server already holds skips `Uploading`, so only a real transfer counts.
-        let transferred = matches!(photo.record.cloud, CloudState::Uploading { .. })
-            && !now_pending
-            && !matches!(state, CloudState::Failed { .. });
-        if transferred && let Some(benchmark) = &mut self.benchmark {
-            benchmark.upload_transferred();
-        }
         let run = self.uploads.get_or_insert_default();
         if !was_pending && now_pending {
             run.total += 1;
