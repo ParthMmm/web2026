@@ -236,7 +236,13 @@ fn published_and_two_local() -> Connected {
 
 #[test]
 fn upload_on_a_selection_sends_the_local_photos_and_skips_the_published_one() {
-    let Connected { mut rt, api, .. } = published_and_two_local();
+    // The setup holds the originals the upload reads, so it stays alive to the end.
+    let Connected {
+        mut rt,
+        api,
+        _setup,
+        ..
+    } = published_and_two_local();
     assert!(flow::is_published(&rt.state.photos[0].record.cloud));
     let begins = api.count(Route::Begin);
     let publishes = api.count(Route::Publish);
