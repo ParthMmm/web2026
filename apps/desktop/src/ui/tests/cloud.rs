@@ -9,7 +9,7 @@ use super::{CMD, press, press_tile, runtime, settle, shows, text_in};
 use crate::{
     Library,
     cloud::{CloudState, CloudStep},
-    ui::gallery::Gallery,
+    ui::gallery::{Gallery, Overlay},
 };
 use rune::{PopupMenuError, Runtime};
 use std::time::{Duration, Instant};
@@ -316,4 +316,36 @@ fn a_publish_moves_a_photo_from_the_drafts_count_to_the_published_one() {
         "the published photo leaves the grid"
     );
     assert!(shown.iter().all(|key| shows(&rt, key)));
+}
+
+#[test]
+fn a_publish_in_drafts_takes_the_published_photos_out_of_the_selection() {
+    let Connected { mut rt, .. } = connected(3, 0, 4);
+    press(&mut rt, "drafts");
+    press_tile(&mut rt, 1, CMD);
+    rt.state.open_viewer();
+    assert_eq!(text_in(&rt, "status"), "3 photos · 2 selected");
+    press(&mut rt, "publish-selected");
+    until_each(&mut rt, &[0, 1], flow::is_published);
+    assert_eq!(rt.state.shown_len(), 1, "Drafts shows the one draft left");
+    assert_eq!(
+        text_in(&rt, "status"),
+        "1 photo · 1 selected",
+        "no hidden photo stays selected"
+    );
+    assert_eq!(
+        rt.state.focus(),
+        Some(&rt.state.photos[2].record.id),
+        "the draft left takes the focus"
+    );
+    let menu = rt.state.menu_state();
+    assert!(
+        !menu.unpublish,
+        "Unpublish is off: no selected photo is published"
+    );
+    assert!(menu.publish && !menu.several);
+    assert!(
+        rt.state.overlay != Overlay::Viewer,
+        "the viewer of a photo that left the grid closes"
+    );
 }

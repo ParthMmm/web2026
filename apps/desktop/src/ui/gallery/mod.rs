@@ -582,9 +582,12 @@ impl Gallery {
         };
         let columns = self.layout().columns;
         let start = self.visible_rows.start.saturating_sub(OVERSCAN_ROWS) * columns;
-        let end = ((self.visible_rows.end + OVERSCAN_ROWS) * columns).min(self.photos.len());
-        for photo in self.photos.get(start..end).unwrap_or_default() {
-            if let Thumbnail::Ready(path) = &photo.thumbnail
+        let end = ((self.visible_rows.end + OVERSCAN_ROWS) * columns).min(self.shown_len());
+        for position in start..end {
+            let Some(index) = self.shown_index(position) else {
+                break;
+            };
+            if let Thumbnail::Ready(path) = &self.photos[index].thumbnail
                 && !self.thumbnails.request(cache, path)
             {
                 break;

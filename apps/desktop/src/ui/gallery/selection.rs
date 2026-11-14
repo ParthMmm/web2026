@@ -48,13 +48,17 @@ impl Gallery {
         }
     }
 
+    /// The library index of the photo at `position` in the grid.
+    pub(super) fn shown_index(&self, position: usize) -> Option<usize> {
+        match self.destination {
+            Destination::All => (position < self.photos.len()).then_some(position),
+            _ => self.filtered.get(position).copied(),
+        }
+    }
+
     /// The photo at `position` in the grid.
     pub(in crate::ui) fn shown(&self, position: usize) -> Option<&GalleryPhoto> {
-        let index = match self.destination {
-            Destination::All => position,
-            _ => *self.filtered.get(position)?,
-        };
-        self.photos.get(index)
+        self.photos.get(self.shown_index(position)?)
     }
 
     /// The photos the grid shows, in grid order.
@@ -72,9 +76,15 @@ impl Gallery {
         self.shown_photos().position(|photo| &photo.record.id == id)
     }
 
-    /// Reads again which photos the destination holds. Runs after photos arrive or leave and
-    /// after a cloud state changes, so the grid and the sidebar's counts agree.
+    /// Reads again which photos the destination holds, and keeps the selection to them. Runs
+    /// after photos arrive or leave and after a cloud state changes, so the grid, the
+    /// sidebar's counts and the selection agree.
     pub(super) fn refilter(&mut self) {
+        self.filter();
+        self.drop_hidden();
+    }
+
+    fn filter(&mut self) {
         let destination = self.destination;
         self.filtered = match destination {
             Destination::All => Vec::new(),
@@ -95,16 +105,55 @@ impl Gallery {
             return;
         }
         self.destination = destination;
-        self.refilter();
+        self.filter();
         let before = self.focus().cloned();
         let kept = before
             .clone()
             .filter(|id| self.shown_position(id).is_some());
-        match kept.or_else(|| self.shown(0).map(|photo| photo.record.id.clone())) {
+        match kept {
+            Some(id) => self.selection.select(id),
+            None => self.select_first_shown(),
+        }
+        self.focus_changed(before, None);
+    }
+
+    /// Takes the photos the destination no longer holds, such as a draft that was just
+    /// published while Drafts is open, out of the selection, so no action runs on a photo the
+    /// grid does not show. When the focus leaves, the destination's first photo is selected
+    /// alone, as on opening it, and the viewer that showed the focus closes.
+    fn drop_hidden(&mut self) {
+        let destination = self.destination;
+        if destination == Destination::All || self.selection.is_empty() {
+            return;
+        }
+        let hidden: Vec<PhotoId> = self
+            .photos
+            .iter()
+            .filter(|photo| {
+                self.selection.contains(&photo.record.id) && !destination.holds(&photo.record.cloud)
+            })
+            .map(|photo| photo.record.id.clone())
+            .collect();
+        let before = self.focus().cloned();
+        if before.as_ref().is_some_and(|focus| hidden.contains(focus)) {
+            if self.overlay == Overlay::Viewer {
+                self.overlay = Overlay::None;
+            }
+            self.select_first_shown();
+            self.focus_changed(before, None);
+            return;
+        }
+        for id in &hidden {
+            self.selection.remove(id);
+        }
+    }
+
+    /// The grid's first photo alone, or nothing when the grid is empty.
+    fn select_first_shown(&mut self) {
+        match self.shown(0).map(|photo| photo.record.id.clone()) {
             Some(id) => self.selection.select(id),
             None => self.selection.clear(),
         }
-        self.focus_changed(before, None);
     }
 
     /// Photos in each destination the photo API keeps: drafts, then published photos.
