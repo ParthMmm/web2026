@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { Digest } from "effect/crypto";
 import { SqlClient } from "effect/sql";
 
 import { makeMemoryBlobs } from "../src/photos/blobs-memory.ts";
-import type { BlobKey } from "../src/photos/blobs.ts";
+import { BlobKey, Blobs } from "../src/photos/blobs.ts";
 import { variantKinds } from "../src/photos/domain.ts";
 import type { PhotoId, VariantKind } from "../src/photos/domain.ts";
 import { Photos } from "../src/photos/photos.ts";
@@ -21,11 +21,13 @@ import {
   withExif,
 } from "./support/fixture.ts";
 import { migratedSqlite } from "./support/sqlite.ts";
+import { TEST_S3, testUploadUrls } from "./support/upload-urls.ts";
 
 const harness = () => {
   const blobs = makeMemoryBlobs();
   const layer = Photos.layer.pipe(
     Layer.provideMerge(blobs.layer),
+    Layer.provideMerge(testUploadUrls),
     Layer.provideMerge(migratedSqlite()),
     Layer.provideMerge(Digest.layerWebCrypto)
   );
@@ -674,5 +676,109 @@ it.effect("list sets next only when more photos follow", () => {
     expect(page.next).toBe(null);
     const one = yield* photos.list({ limit: 1 });
     expect(one.next).toBe(one.photos[0]?.photoId);
+  }).pipe(Effect.provide(layer));
+});
+
+const ORIGINAL_UPLOAD_MILLIS = 15 * 60 * 1000;
+
+it.effect(
+  "originalUpload signs a 15-minute PUT of the declared length and SHA-256 to the original's final key",
+  () => {
+    const { layer } = harness();
+    return Effect.gen(function* run() {
+      const photos = yield* Photos;
+      const { manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+
+      const upload = yield* photos.originalUpload(photoId);
+      const url = new URL(upload.url);
+
+      expect(upload.method).toBe("PUT");
+      expect(`${url.origin}/`).toBe(`${TEST_S3.endpoint}/`);
+      expect(url.pathname).toBe(
+        `/${TEST_S3.bucketName}/photos/${photoId}/original-${manifest.original.sha256}`
+      );
+      expect(upload.headers).toEqual({
+        "content-length": String(manifest.original.bytes),
+        "x-amz-checksum-sha256": Buffer.from(
+          manifest.original.sha256,
+          "hex"
+        ).toString("base64"),
+      });
+      expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe(
+        "content-length;host;x-amz-checksum-sha256"
+      );
+      expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
+      expect(url.searchParams.get("X-Amz-Credential")).toMatch(
+        new RegExp(
+          `^${TEST_S3.accessKeyId}/19700101/auto/s3/aws4_request$`,
+          "u"
+        )
+      );
+      expect(url.searchParams.get("X-Amz-Signature")).toMatch(
+        /^[0-9a-f]{64}$/u
+      );
+      expect(DateTime.toEpochMillis(upload.expiresAt)).toBe(
+        ORIGINAL_UPLOAD_MILLIS
+      );
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "an original written at the signed key counts as uploaded, and finalize leaves it in place",
+  () => {
+    const { layer, objects } = harness();
+    return Effect.gen(function* run() {
+      const photos = yield* Photos;
+      const blobs = yield* Blobs;
+      const { bodies, manifest, photoId } = yield* fixture();
+      yield* photos.begin(manifest);
+      const upload = yield* photos.originalUpload(photoId);
+      const signedKey = Schema.decodeSync(BlobKey)(
+        decodeURIComponent(new URL(upload.url).pathname).slice(
+          `/${TEST_S3.bucketName}/`.length
+        )
+      );
+
+      // What R2 does with an accepted presigned PUT.
+      yield* blobs.put(
+        signedKey,
+        Stream.make(bodies.original),
+        manifest.original
+      );
+      expect(yield* missingOf(photoId)).toEqual(
+        variantKinds.filter((kind) => kind !== "original")
+      );
+
+      yield* uploadAll(
+        photoId,
+        bodies,
+        variantKinds.filter((kind) => kind !== "original")
+      );
+      expect(yield* photos.finalize(photoId)).toMatchObject({ _tag: "Draft" });
+      expect(keysUnder(objects, "photos/")).toContain(signedKey);
+      expect(keysUnder(objects, "photos/")).toHaveLength(variantKinds.length);
+      expect(keysUnder(objects, "staging/")).toEqual([]);
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect("originalUpload refuses an unknown photo and one past upload", () => {
+  const { layer } = harness();
+  return Effect.gen(function* run() {
+    const photos = yield* Photos;
+    const { bodies, manifest, photoId } = yield* fixture();
+
+    expect(
+      yield* photos.originalUpload(photoId).pipe(Effect.flip)
+    ).toMatchObject({ _tag: "PhotoNotFound", photoId });
+
+    yield* photos.begin(manifest);
+    yield* uploadAll(photoId, bodies);
+    yield* photos.finalize(photoId);
+    expect(
+      yield* photos.originalUpload(photoId).pipe(Effect.flip)
+    ).toMatchObject({ _tag: "PhotoAlreadyDraft", photoId });
   }).pipe(Effect.provide(layer));
 });

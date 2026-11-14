@@ -23,6 +23,7 @@ const PhotosHandlers = HttpApiBuilder.group(
       finalize: ({ params }) => photos.finalize(params.photoId),
       get: ({ params }) => photos.get(params.photoId),
       list: ({ query }) => photos.list(query),
+      originalUpload: ({ params }) => photos.originalUpload(params.photoId),
       publish: ({ params, payload }) =>
         publishing.publish(params.photoId, payload),
       put: ({ headers, params, payload }) =>

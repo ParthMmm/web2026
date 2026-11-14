@@ -57,6 +57,15 @@ fn main() -> anyhow::Result<()> {
         422,
         &ApiError::HashMismatch { kind: Kind::W480 },
     )?;
+    let mut tampered_original = bodies[&Kind::Original].to_vec();
+    if let Some(last) = tampered_original.last_mut() {
+        *last ^= 0xff;
+    }
+    expect_storage(
+        client.put_original(&photo_id, tampered_original),
+        400,
+        "BadDigest",
+    )?;
     let short = bodies[&Kind::W480].slice(1..);
     expect_error(
         client.put(&photo_id, Kind::W480, short),
@@ -84,9 +93,13 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     for kind in Kind::ALL {
-        client.put_file(&photo_id, kind, &dir.join(kind.as_str()))?;
+        let path = dir.join(kind.as_str());
+        match kind {
+            Kind::Original => client.put_original_file(&photo_id, &path)?,
+            _ => client.put_file(&photo_id, kind, &path)?,
+        }
     }
-    client.put(&photo_id, Kind::Original, bodies[&Kind::Original].clone())?;
+    client.put_original(&photo_id, bodies[&Kind::Original].clone())?;
     anyhow::ensure!(
         matches!(client.get(&photo_id)?, PhotoView::Uploading { missing, .. } if missing.is_empty()),
         "Expected nothing missing after every upload"
@@ -103,6 +116,13 @@ fn main() -> anyhow::Result<()> {
     );
     expect_error(
         client.put(&photo_id, Kind::W480, bodies[&Kind::W480].clone()),
+        409,
+        &ApiError::PhotoAlreadyDraft {
+            photo_id: photo_id.clone(),
+        },
+    )?;
+    expect_error(
+        client.original_upload(&photo_id),
         409,
         &ApiError::PhotoAlreadyDraft {
             photo_id: photo_id.clone(),
@@ -200,10 +220,12 @@ fn main() -> anyhow::Result<()> {
 
     println!(
         "PASS: 401, 404, idempotent begin, publish refused while uploading, wrong-hash and short \
-         uploads rejected, finalize refused while missing, 4 uploads, draft, duplicate finalize, \
-         409 after draft, 10 repeated reads, empty gallery, draft not public, 401 publish, \
+         uploads rejected, wrong-hash original refused by storage, finalize refused while \
+         missing, 4 uploads with a {}-byte original sent straight to storage, draft, duplicate \
+         finalize, 409 after draft, 10 repeated reads, empty gallery, draft not public, 401 publish, \
          publish twice, list, public manifest and 3 derivatives without a token, original not \
-         public, unpublish twice, gallery empty and derivatives gone"
+         public, unpublish twice, gallery empty and derivatives gone",
+        manifest.original.bytes
     );
     Ok(())
 }
@@ -216,6 +238,20 @@ fn expect_status<T: std::fmt::Debug>(
     match result {
         Err(ClientError::Http { status: got, .. }) if got == status => Ok(()),
         other => anyhow::bail!("Expected HTTP {status} for {what}, got {other:?}"),
+    }
+}
+
+fn expect_storage<T: std::fmt::Debug>(
+    result: Result<T, ClientError>,
+    status: u16,
+    code: &str,
+) -> anyhow::Result<()> {
+    match result {
+        Err(ClientError::Storage {
+            status: got,
+            code: Some(got_code),
+        }) if got == status && got_code == code => Ok(()),
+        other => anyhow::bail!("Expected storage HTTP {status} {code}, got {other:?}"),
     }
 }
 

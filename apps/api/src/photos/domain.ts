@@ -10,21 +10,29 @@ export type Sha256 = typeof Sha256.Type;
 export const PhotoId = Hex64.pipe(Schema.brand("PhotoId"));
 export type PhotoId = typeof PhotoId.Type;
 
+/** The largest body the Worker takes. Derivatives go through the Worker, so none is larger. */
 export const MAX_OBJECT_BYTES = 100 * 1024 * 1024;
 
+/** The largest original. It goes straight to R2, whose limit for one PUT is 5 GiB. */
+export const MAX_ORIGINAL_BYTES = 5_000_000_000;
+
 export const ByteCount = Schema.Int.check(
-  Schema.isBetween({ maximum: MAX_OBJECT_BYTES, minimum: 1 })
+  Schema.isBetween({ maximum: MAX_ORIGINAL_BYTES, minimum: 1 })
 ).pipe(Schema.brand("ByteCount"));
 export type ByteCount = typeof ByteCount.Type;
 
 const Original = Schema.Struct({ bytes: ByteCount, sha256: Sha256 });
+
+const DerivativeByteCount = ByteCount.check(
+  Schema.isLessThanOrEqualTo(MAX_OBJECT_BYTES)
+);
 
 const derivative = (longestEdge: number) => {
   const edge = Schema.Int.check(
     Schema.isBetween({ maximum: longestEdge, minimum: 1 })
   );
   return Schema.Struct({
-    bytes: ByteCount,
+    bytes: DerivativeByteCount,
     height: edge,
     sha256: Sha256,
     width: edge,
@@ -108,6 +116,19 @@ export const PhotoView = Schema.Union([
   Unpublishing,
 ]);
 export type PhotoView = typeof PhotoView.Type;
+
+/**
+ * A presigned R2 PUT for an original. Send the bytes to `url` with exactly
+ * these `headers`, before `expiresAt`. R2 refuses bytes whose SHA-256 differs
+ * from the signed checksum, and a request whose signed headers differ.
+ */
+export const OriginalUpload = Schema.Struct({
+  expiresAt: Schema.DateTimeUtcFromString,
+  headers: Schema.Record(Schema.String, Schema.String),
+  method: Schema.Literal("PUT"),
+  url: Schema.String,
+});
+export type OriginalUpload = typeof OriginalUpload.Type;
 
 export const MAX_PAGE = 200;
 export const DEFAULT_PAGE = 100;

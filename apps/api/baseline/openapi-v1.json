@@ -42,7 +42,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -203,7 +203,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -370,7 +370,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -542,7 +542,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -722,7 +722,7 @@
                           "bytes": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 104857600
+                            "maximum": 5000000000
                           },
                           "sha256": {
                             "type": "string",
@@ -923,7 +923,7 @@
                                       "bytes": {
                                         "type": "integer",
                                         "minimum": 1,
-                                        "maximum": 104857600
+                                        "maximum": 5000000000
                                       },
                                       "sha256": {
                                         "type": "string",
@@ -1084,7 +1084,7 @@
                                       "bytes": {
                                         "type": "integer",
                                         "minimum": 1,
-                                        "maximum": 104857600
+                                        "maximum": 5000000000
                                       },
                                       "sha256": {
                                         "type": "string",
@@ -1251,7 +1251,7 @@
                                       "bytes": {
                                         "type": "integer",
                                         "minimum": 1,
-                                        "maximum": 104857600
+                                        "maximum": 5000000000
                                       },
                                       "sha256": {
                                         "type": "string",
@@ -1423,7 +1423,7 @@
                                       "bytes": {
                                         "type": "integer",
                                         "minimum": 1,
-                                        "maximum": 104857600
+                                        "maximum": 5000000000
                                       },
                                       "sha256": {
                                         "type": "string",
@@ -1635,7 +1635,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -1796,7 +1796,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -1963,7 +1963,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -2135,7 +2135,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -2285,6 +2285,109 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PhotoNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "StorageUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUnavailableEncoded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/photos/{photoId}/original/upload-url": {
+      "post": {
+        "tags": [
+          "photos"
+        ],
+        "operationId": "photos.originalUpload",
+        "parameters": [
+          {
+            "name": "photoId",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "expiresAt": {
+                      "type": "string"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "PUT"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "expiresAt",
+                    "headers",
+                    "method",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PhotoNotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PhotoAlreadyDraft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoAlreadyDraftEncoded"
                 }
               }
             }
@@ -2471,7 +2574,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -2632,7 +2735,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -2799,7 +2902,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -2971,7 +3074,7 @@
                                 "bytes": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 104857600
+                                  "maximum": 5000000000
                                 },
                                 "sha256": {
                                   "type": "string",
@@ -3224,7 +3327,7 @@
                             "bytes": {
                               "type": "integer",
                               "minimum": 1,
-                              "maximum": 104857600
+                              "maximum": 5000000000
                             },
                             "sha256": {
                               "type": "string",
@@ -3476,7 +3579,7 @@
                             "bytes": {
                               "type": "integer",
                               "minimum": 1,
-                              "maximum": 104857600
+                              "maximum": 5000000000
                             },
                             "sha256": {
                               "type": "string",
@@ -4203,7 +4306,7 @@
           "expected": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 104857600
+            "maximum": 5000000000
           },
           "kind": {
             "type": "string",

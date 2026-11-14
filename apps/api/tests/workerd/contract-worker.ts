@@ -12,6 +12,7 @@ import { Photos } from "../../src/photos/photos.ts";
 import { PublicGallery } from "../../src/photos/public-gallery.ts";
 import { Publishing } from "../../src/photos/publishing.ts";
 import { blobsContract, contractKey } from "../support/blobs-contract.ts";
+import { testUploadUrls } from "../support/upload-urls.ts";
 import { photosScenarios } from "./scenarios.ts";
 
 interface Env {
@@ -65,6 +66,7 @@ export default {
       ).pipe(
         Layer.provideMerge(blobs),
         Layer.provideMerge(publicBlobs),
+        Layer.provideMerge(testUploadUrls),
         Layer.provide(D1Client.layer({ db: env.Db })),
         Layer.provideMerge(Digest.layerWebCrypto)
       );

@@ -2,6 +2,7 @@ import {
   Array as Arr,
   Clock,
   Context,
+  DateTime,
   Effect,
   Layer,
   Option,
@@ -26,6 +27,7 @@ import {
 import type {
   DerivativeKind,
   Manifest,
+  OriginalUpload,
   PhotoId,
   PhotoPage,
   PhotoView,
@@ -48,6 +50,7 @@ import {
   VP8X_BODY_START,
   WEBP_PREFIX_BYTES,
 } from "./internal/webp.ts";
+import { UploadUrls } from "./upload-urls.ts";
 
 export interface PageRequest {
   readonly after?: PhotoId | undefined;
@@ -144,6 +147,16 @@ export class Photos extends Context.Service<
     readonly list: (
       request: PageRequest
     ) => Effect.Effect<PhotoPage, StorageUnavailable>;
+    /**
+     * A presigned PUT that sends the original straight to its final key in
+     * R2, which checks the signed length and SHA-256 as it writes.
+     */
+    readonly originalUpload: (
+      photoId: PhotoId
+    ) => Effect.Effect<
+      OriginalUpload,
+      PhotoNotFound | PhotoAlreadyDraft | StorageUnavailable
+    >;
     readonly store: (
       input: StoreInput
     ) => Effect.Effect<
@@ -168,11 +181,12 @@ export class Photos extends Context.Service<
   static readonly layer: Layer.Layer<
     Photos,
     never,
-    Blobs | SqlClient.SqlClient
+    Blobs | UploadUrls | SqlClient.SqlClient
   > = Layer.effect(
     Photos,
     Effect.gen(function* buildPhotos() {
       const blobs = yield* Blobs;
+      const uploadUrls = yield* UploadUrls;
       const ledger = yield* makeLedger;
 
       const requirePhoto = (photoId: PhotoId) =>
@@ -366,6 +380,26 @@ export class Photos extends Context.Service<
           Effect.annotateLogs({ kind, photoId })
         );
 
+      // The final key, not staging: R2 has checked the bytes, and finalize only needs the original to exist.
+      const originalUpload = Effect.fn("Photos.originalUpload")(
+        function* signOriginalUpload(photoId: PhotoId) {
+          const stored = yield* requirePhoto(photoId);
+          if (stored._tag !== "Uploading") {
+            return yield* new PhotoAlreadyDraft({ photoId });
+          }
+          const facts = stored.manifest.original;
+          const signed = yield* uploadUrls
+            .signPut(finalKey(photoId, "original", facts.sha256), facts)
+            .pipe(storage);
+          return {
+            expiresAt: DateTime.makeUnsafe(signed.expiresAt),
+            headers: signed.headers,
+            method: "PUT" as const,
+            url: signed.url,
+          };
+        }
+      );
+
       // A reopened draft leaves the objects of its earlier manifest under its final prefix.
       const removeSuperseded = ({
         manifest,
@@ -457,7 +491,7 @@ export class Photos extends Context.Service<
         };
       });
 
-      return Photos.of({ begin, finalize, get, list, store });
+      return Photos.of({ begin, finalize, get, list, originalUpload, store });
     })
   );
 }
