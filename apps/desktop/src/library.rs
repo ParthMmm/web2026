@@ -25,13 +25,62 @@ use std::{
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
-        Arc, Condvar, Mutex, MutexGuard,
+        Arc, Condvar, Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError},
     },
     time::{Duration, Instant},
 };
 use transfer::Transfer;
 pub use transfer::UploadRetry;
+
+/// Wakes the window's event loop, as Rune's `Waker` does.
+pub type Waker = Arc<dyn Fn() + Send + Sync>;
+
+/// The window's wake-up for library events ([`Library::set_waker`]).
+#[derive(Default)]
+struct EventWake {
+    waker: Mutex<Option<Waker>>,
+    /// A wake went out, and the receiver hasn't found the channel empty since. Later events
+    /// ride on that wake, so a burst of events wakes the window once.
+    pending: AtomicBool,
+}
+
+impl EventWake {
+    fn wake(&self) {
+        if self.pending.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let waker = self
+            .waker
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some(waker) = waker {
+            waker();
+        }
+    }
+}
+
+/// The lanes' side of the event channel: each event wakes the window, so it never waits for
+/// a timer to read it. macOS can hold back a background window's timers for a long time.
+#[derive(Clone)]
+pub(crate) struct EventSender {
+    sender: SyncSender<Event>,
+    wake: Arc<EventWake>,
+}
+
+/// The window dropped the library, so nobody reads its events.
+#[derive(Debug)]
+pub(crate) struct Disconnected;
+
+impl EventSender {
+    pub(crate) fn send(&self, event: Event) -> Result<(), Disconnected> {
+        self.sender.send(event).map_err(|_| Disconnected)?;
+        self.wake.wake();
+        Ok(())
+    }
+}
 
 /// Where a library lives, how much background work it does, and where it uploads.
 #[derive(Clone, Debug)]
@@ -280,6 +329,7 @@ pub struct Library {
     photos: Vec<PhotoRecord>,
     failures: Vec<ImportFailure>,
     receiver: Receiver<Event>,
+    wake: Arc<EventWake>,
     shared: Arc<Shared>,
 }
 
@@ -357,6 +407,11 @@ impl Library {
             }
         }
         let (sender, receiver) = mpsc::sync_channel(64);
+        let wake = Arc::new(EventWake::default());
+        let sender = EventSender {
+            sender,
+            wake: wake.clone(),
+        };
         // Two lanes bound encoder work to two helper processes. Background work
         // waits while an interactive preview is pending or running; a running
         // background job is never cancelled halfway through a write.
@@ -385,6 +440,7 @@ impl Library {
             photos,
             failures,
             receiver,
+            wake,
             shared,
         })
     }
@@ -551,12 +607,38 @@ impl Library {
         self.shared.wake.notify_all();
     }
 
+    /// Calls `waker` whenever an event arrives while the receiver hasn't yet found the channel
+    /// empty since the last call, and once now for events sent before it was set.
+    pub fn set_waker(&self, waker: Waker) {
+        *self
+            .wake
+            .waker
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(waker);
+        self.wake_again();
+    }
+
+    /// Wakes the window again, for events it left in the channel.
+    pub fn wake_again(&self) {
+        self.wake.pending.store(false, Ordering::Release);
+        self.wake.wake();
+    }
+
     pub fn recv_timeout(&self, timeout: Duration) -> Result<Event, RecvTimeoutError> {
+        self.wake.pending.store(false, Ordering::Release);
         self.receiver.recv_timeout(timeout)
     }
 
     pub fn try_recv(&self) -> Result<Event, TryRecvError> {
-        self.receiver.try_recv()
+        match self.receiver.try_recv() {
+            // Rearm, then look once more: an event sent before the rearm saw the old wake and
+            // didn't call the waker, so it must be read now.
+            Err(TryRecvError::Empty) => {
+                self.wake.pending.store(false, Ordering::Release);
+                self.receiver.try_recv()
+            }
+            received => received,
+        }
     }
 }
 
@@ -609,7 +691,7 @@ fn refresh_film_metadata(
     Ok(())
 }
 
-fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
+fn run_background(shared: &Shared, sender: &EventSender) {
     loop {
         let job = {
             let mut queue = shared.queue();
@@ -708,7 +790,7 @@ fn run_background(shared: &Shared, sender: &SyncSender<Event>) {
     }
 }
 
-fn run_interactive(shared: &Shared, sender: &SyncSender<Event>) {
+fn run_interactive(shared: &Shared, sender: &EventSender) {
     loop {
         let id = {
             let mut queue = shared.queue();

@@ -5,6 +5,10 @@ use photo_prototype::{
 };
 use std::{
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -1099,4 +1103,56 @@ fn a_failed_app_owned_copy_can_be_retried_and_is_deleted_only_when_cleared() {
     ) {}
     assert!(!other.exists(), "clearing the list deletes the unused copy");
     assert!(copy.exists(), "the imported copy is the photo's original");
+}
+
+/// Imports `source` and reads its events only after a wake, as the window does: each wake
+/// reads until the channel is empty. Returns the wake count when the import finished.
+fn import_on_wakes(library: &Library, wakes: &AtomicUsize, source: &Path) -> usize {
+    let mut seen = wakes.load(Ordering::SeqCst);
+    library.import(vec![source.to_path_buf()]);
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "no wake came for the import's events"
+        );
+        let now = wakes.load(Ordering::SeqCst);
+        if now == seen {
+            std::thread::sleep(Duration::from_millis(1));
+            continue;
+        }
+        seen = now;
+        let mut finished = false;
+        while let Ok(event) = library.try_recv() {
+            finished |= matches!(event, Event::ImportFinished { .. });
+        }
+        if finished {
+            return seen;
+        }
+    }
+}
+
+#[test]
+fn library_events_wake_the_receiver_again_after_it_empties_the_channel() {
+    let temp = tempfile::tempdir().unwrap();
+    let first = temp.path().join("first.jpg");
+    let second = temp.path().join("second.jpg");
+    solid(&first, 600, 400, [200, 40, 40]);
+    solid(&second, 600, 400, [40, 200, 40]);
+    let library = open(&temp.path().join("library"));
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counter = wakes.clone();
+    library.set_waker(Arc::new(move || {
+        counter.fetch_add(1, Ordering::SeqCst);
+    }));
+    assert_eq!(
+        wakes.load(Ordering::SeqCst),
+        1,
+        "setting the waker wakes once, for events sent before it"
+    );
+    // The window reads on that wake, which finds the channel empty and rearms the wake.
+    assert!(library.try_recv().is_err());
+    let after_first = import_on_wakes(&library, &wakes, &first);
+    let after_second = import_on_wakes(&library, &wakes, &second);
+    assert!(after_second > after_first);
 }

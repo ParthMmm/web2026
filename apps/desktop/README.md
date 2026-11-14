@@ -252,6 +252,8 @@ Render at `--at 1.5`: Rune animates elements in, so earlier frames show them hal
 
 A headless run moves the wall clock and the animation clock together, so anything driven by time (the poll's wakes, the performance panel's refresh) also needs a real window. The benchmark above is that check.
 
+Library events do not wait for the poll's timed wakes. macOS can hold back the timers of a covered or background window, so each event the library sends calls the window's Rune `Waker` (`Library::set_waker`), and `poll` drains the channel at once. A burst of events wakes the window once, until `poll` finds the channel empty. The cloud state of a photo reaches the window only in `CloudChanged`: a record the library sends for another reason keeps the state the window holds, because it may have been read before the last change.
+
 ## Design system
 
 The window keeps the Library design from the ZUI build (#21), drawn with Rune and rune-kit. `src/ui/look.rs` holds its palette for each appearance (`docs/photo-gallery` has the references) and lays it over rune-kit's tokens, so kit controls and the app's own parts agree:

@@ -81,6 +81,14 @@ impl GalleryPhoto {
             thumbnail,
         }
     }
+
+    /// Takes the library's newer copy of the photo but keeps its cloud state. The cloud state
+    /// arrives only in `CloudChanged`, and another lane may have read `record` before the last
+    /// one, so its copy can carry an older state.
+    pub(super) fn replace_record(&mut self, record: PhotoRecord) {
+        let cloud = self.record.cloud.clone();
+        self.record = PhotoRecord { cloud, ..record };
+    }
 }
 
 /// The large rendition of the selected photo.
@@ -181,6 +189,8 @@ pub struct Gallery {
     /// How threads land work on the gallery. `None` for a demo gallery,
     /// which starts no threads.
     handle: Option<AppHandle<Self>>,
+    /// The event loop's wake-up from `setup`, which the library calls for each event.
+    waker: Option<Waker>,
     pending_imports: Vec<PendingImport>,
     session_failures: usize,
     /// Photos assets the picker could not load, said once the import they came with ends.
@@ -281,15 +291,20 @@ impl Gallery {
             grid_size: None,
             benchmark,
             handle: None,
+            waker: None,
             pending_imports: Vec::new(),
             session_failures: 0,
             photos_note: None,
         }
     }
 
-    /// Runs once, before the first frame, with the waker image decodes use.
+    /// Runs once, before the first frame, with the waker image decodes and library events use.
     pub(super) fn setup(&mut self, waker: Waker) {
-        self.images = Some(ImageCache::new(waker));
+        self.images = Some(ImageCache::new(waker.clone()));
+        if let LibraryState::Open(library) = &self.library {
+            library.set_waker(waker.clone());
+        }
+        self.waker = Some(waker);
         let Some(handle) = self.handle.clone() else {
             demo::decode(self);
             return;

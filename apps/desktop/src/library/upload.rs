@@ -8,7 +8,7 @@
 //! published.
 
 use super::{
-    Event, Shared, ensure_derivative, ensure_unchanged,
+    Event, EventSender, Shared, ensure_derivative, ensure_unchanged,
     transfer::{CHANGING_ANSWER, Transfer, record},
 };
 use crate::{
@@ -23,7 +23,6 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
-    sync::mpsc::SyncSender,
 };
 
 /// The web sizes the API takes, and the derivative each one is.
@@ -244,7 +243,7 @@ fn staged_copy(
 pub(super) fn send_prepared(
     shared: &Shared,
     api: &Api,
-    sender: &SyncSender<Event>,
+    sender: &EventSender,
     id: &PhotoId,
 ) -> Option<Result<CloudState, CallError>> {
     let Ok(Some(manifest)) = shared.catalog().manifest(id) else {
@@ -271,7 +270,7 @@ pub(super) fn send_prepared(
 fn send(
     shared: &Shared,
     api: &Api,
-    sender: &SyncSender<Event>,
+    sender: &EventSender,
     id: &PhotoId,
     cloud_id: &CloudId,
     manifest: &Manifest,
