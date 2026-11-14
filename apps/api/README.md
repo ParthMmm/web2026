@@ -147,6 +147,8 @@ The baseline was reset once, to the first export of this API. The old baseline d
 
 The baseline was reset a second time for publishing (PAL-858, PAL-854). The `Published` and `Unpublishing` view tags extend the views of `begin` and `get`, and `finalize` now answers the photo's real view instead of only `Draft`. oasdiff reports both as breaking. No desktop release has ever called this API, because the desktop app had no upload yet, so the reset hides no break from an installed client. From now on, do not regenerate the baseline to pass a breaking change.
 
+The baseline was reset a third time for originals that go straight to R2 (PAL-2204). The original's `bytes` maximum rose from 100 MiB to 5 GB, the most R2 takes in one PUT, and every photo view echoes the manifest, so oasdiff reports a raised response maximum as breaking. The only clients are the Rust client and the desktop app, and neither checks that maximum. Parth chose the reset over a v2 contract on 2026-11-14. The same reset added `originalUpload`, which breaks nothing.
+
 Keep the operation IDs stable. Installed clients ignore unknown fields, so new optional response fields are safe. Removing a field, requiring a new request field or adding a view or error variant breaks installed clients. Add a new version and a migration window for those.
 
 ## Rust generator decision
