@@ -26,12 +26,13 @@ def require_display():
 
 
 def uploads_passed(result):
-    # An upload run must finish at least one upload while it measures, and stop none.
+    # An upload run must send at least one photo's files while it measures, and stop none.
+    # Photos already in the cloud before the run do not count: they transfer nothing.
     uploads = result.get("uploads")
     return (
         type(uploads) is dict
         and uploads.get("failed") == 0
-        and type(uploads.get("in_cloud")) is int and uploads["in_cloud"] >= 1
+        and type(uploads.get("transferred")) is int and uploads["transferred"] >= 1
     )
 
 
@@ -104,7 +105,7 @@ metadata = {
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),
     "cache_definition": "cold = empty library; warm = library already holds every photo, its grid derivative and the exact requested large previews, fresh process; OS file cache not flushed",
     "scope": "fixed-duration browsing window; cold import may still be running" if args.mode == "gui" else "complete thumbnail import",
-    "uploads": "each photo uploads as a private draft while the window runs" if args.uploads else "off",
+    "uploads": "cold run only: each photo uploads as a private draft while the window runs" if args.uploads else "off",
 }
 
 def run(name, command, env):
@@ -160,7 +161,9 @@ target_dir = Path(os.environ.get("CARGO_TARGET_DIR", root / "target"))
 pipeline_binary = str(target_dir / "release/benchmark-pipeline")
 for pipeline in (["gui"] if args.mode == "gui" else ["pipeline"]):
     library = (args.output / (pipeline + "-library")).resolve()
-    for state in ["cold", "warm"]:
+    # The server already holds every photo the cold run uploaded, so a warm upload run would
+    # transfer nothing. An upload run measures the cold state alone.
+    for state in (["cold"] if args.uploads else ["cold", "warm"]):
         if pipeline == "gui" and state == "warm":
             # Match the GUI benchmark script's deterministic request times and rows.
             rows = (count + 3) // 4

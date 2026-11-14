@@ -417,6 +417,38 @@ fn the_benchmark_report_counts_where_each_upload_stands() {
 }
 
 #[test]
+fn the_benchmark_counts_only_uploads_that_sent_files_during_the_run() {
+    let mut rt = window(|_| {});
+    rt.state.benchmark = Some(super::benchmark::Benchmark::new(30, true));
+    let ids: Vec<_> = rt.state.photos[..2]
+        .iter()
+        .map(|photo| photo.record.id.clone())
+        .collect();
+    let cloud_id = CloudId::from_hex("ab");
+    // The server already holds the first photo, as on a warm run: it answers Draft at once.
+    rt.state.cloud_changed(&ids[0], CloudState::Queued);
+    rt.state.cloud_changed(
+        &ids[0],
+        CloudState::Draft {
+            cloud_id: cloud_id.clone(),
+        },
+    );
+    assert_eq!(rt.state.benchmark.as_ref().unwrap().transferred(), 0);
+    // The second photo sends its files and then settles as a draft.
+    rt.state.cloud_changed(&ids[1], CloudState::Queued);
+    rt.state.cloud_changed(
+        &ids[1],
+        CloudState::Uploading {
+            cloud_id: cloud_id.clone(),
+            missing: Vec::new(),
+        },
+    );
+    rt.state
+        .cloud_changed(&ids[1], CloudState::Draft { cloud_id });
+    assert_eq!(rt.state.benchmark.as_ref().unwrap().transferred(), 1);
+}
+
+#[test]
 fn the_status_bar_counts_an_upload_run_and_then_sums_it_up() {
     let mut rt = window(|_| {});
     let ids: Vec<_> = rt.state.photos[..3]

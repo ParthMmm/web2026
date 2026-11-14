@@ -187,6 +187,13 @@ impl Gallery {
         };
         let was_pending = photo.record.cloud.is_pending();
         let now_pending = state.is_pending();
+        // A photo the server already holds skips `Uploading`, so only a real transfer counts.
+        let transferred = matches!(photo.record.cloud, CloudState::Uploading { .. })
+            && !now_pending
+            && !matches!(state, CloudState::Failed { .. });
+        if transferred && let Some(benchmark) = &mut self.benchmark {
+            benchmark.upload_transferred();
+        }
         let run = self.uploads.get_or_insert_default();
         if !was_pending && now_pending {
             run.total += 1;

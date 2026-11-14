@@ -47,6 +47,8 @@ pub(super) struct Step {
 pub(super) struct Benchmark {
     seconds: u64,
     uploads: bool,
+    /// Uploads that sent their files and settled on the server during this run.
+    transferred: usize,
     started: Instant,
     next_preview_at: u64,
     preview_requested: Option<Instant>,
@@ -89,6 +91,7 @@ impl Benchmark {
         Self {
             seconds,
             uploads,
+            transferred: 0,
             started: now,
             next_preview_at: 1,
             preview_requested: None,
@@ -110,6 +113,16 @@ impl Benchmark {
     /// Whether the run uploads each photo as it lands.
     pub(super) fn uploads(&self) -> bool {
         self.uploads
+    }
+
+    /// An upload sent its files and the server holds the photo now.
+    pub(super) fn upload_transferred(&mut self) {
+        self.transferred += 1;
+    }
+
+    #[cfg(test)]
+    pub(super) fn transferred(&self) -> usize {
+        self.transferred
     }
 
     /// Time left in the run, or `None` once it is over.
@@ -208,6 +221,7 @@ impl Benchmark {
                 "pending": totals.uploads.pending,
                 "in_cloud": totals.uploads.in_cloud,
                 "failed": totals.uploads.failed,
+                "transferred": self.transferred,
             })
         });
         serde_json::json!({
