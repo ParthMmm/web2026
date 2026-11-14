@@ -34,6 +34,7 @@ import {
   publicPrefix,
 } from "./internal/keys.ts";
 import { makeLedger } from "./internal/ledger.ts";
+import type { Published } from "./internal/ledger.ts";
 import { storage } from "./internal/storage.ts";
 import { draftView, publishedView } from "./internal/views.ts";
 
@@ -54,7 +55,7 @@ import { draftView, publishedView } from "./internal/views.ts";
 export class Publishing extends Context.Service<
   Publishing,
   {
-    /** Copies, marks Published, copies again whatever went missing, then rewrites the manifest. Publishing again replaces the details. */
+    /** Copies, marks Published, keeps the copies only while the row stays Published, then rewrites the manifest. Publishing again replaces the details. */
     readonly publish: (
       photoId: PhotoId,
       details: PhotoDetails
@@ -158,6 +159,37 @@ export class Publishing extends Context.Service<
           .list(publicPrefix(photoId))
           .pipe(Effect.flatMap((keys) => publicBlobs.remove(keys)));
 
+      const publishedRow = (photoId: PhotoId) =>
+        ledger
+          .find(photoId)
+          .pipe(
+            storage,
+            Effect.map(
+              Option.filter((row): row is Published => row._tag === "Published")
+            )
+          );
+
+      // An unpublish can delete the copies before publish marks the row, or finish after the mark and before these copies land; leave the bucket as the row is now.
+      const keepCopiesWhilePublished = (
+        photoId: PhotoId,
+        manifest: Manifest
+      ): Effect.Effect<void, StorageUnavailable> =>
+        Effect.gen(function* keepPublicCopies() {
+          yield* copyDerivatives(photoId, manifest).pipe(storage);
+          if (Option.isSome(yield* publishedRow(photoId))) {
+            return;
+          }
+          yield* removePublicCopies(photoId).pipe(storage);
+          const current = yield* publishedRow(photoId);
+          if (Option.isSome(current)) {
+            // A later publish marked the photo again while the copies were being deleted.
+            return yield* keepCopiesWhilePublished(
+              photoId,
+              current.value.manifest
+            );
+          }
+        });
+
       const publish = (
         photoId: PhotoId,
         details: PhotoDetails
@@ -180,8 +212,7 @@ export class Publishing extends Context.Service<
             // The photo was reopened with another manifest since it was read; start from the row as it is now.
             return yield* publish(photoId, details);
           }
-          // An unpublish that found the row still Draft may have deleted the copies before the mark; copy what is gone.
-          yield* copyDerivatives(photoId, marked.value.manifest).pipe(storage);
+          yield* keepCopiesWhilePublished(photoId, marked.value.manifest);
           yield* writeManifest.pipe(storage);
           return publishedView(marked.value);
         }).pipe(

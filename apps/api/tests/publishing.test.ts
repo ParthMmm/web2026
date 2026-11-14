@@ -18,15 +18,17 @@ import { migratedSqlite } from "./support/sqlite.ts";
 
 const MANIFEST_KEY = "v1.json";
 
-/** Runs `before` and `after` around every put to the public bucket. */
+/** Runs `before` and `after` around every put to the public bucket, and `holds` before every check of a public copy. */
 interface PutHooks {
   readonly before: (key: BlobKey) => Effect.Effect<void>;
   readonly after: (key: BlobKey) => Effect.Effect<void>;
+  readonly holds: (key: BlobKey) => Effect.Effect<void>;
 }
 
 const noHooks: PutHooks = {
   after: () => Effect.void,
   before: () => Effect.void,
+  holds: () => Effect.void,
 };
 
 const hookPuts = (hooks: PutHooks) =>
@@ -41,7 +43,9 @@ const hookPuts = (hooks: PutHooks) =>
             Effect.andThen(store.put(key, body, expected)),
             Effect.andThen(hooks.after(key))
           );
-      return { ...store, put };
+      const holds: BlobStore["holds"] = (key, expected) =>
+        hooks.holds(key).pipe(Effect.andThen(store.holds(key, expected)));
+      return { ...store, holds, put };
     })
   );
 
@@ -548,6 +552,46 @@ it.effect(
           ),
         ].toSorted()
       );
+    }).pipe(Effect.provide(layer));
+  }
+);
+
+it.effect(
+  "an unpublish that finishes between publish's mark and its second copy pass leaves the photo Draft with no public copies",
+  () => {
+    const marked = Deferred.makeUnsafe<true>();
+    const resume = Deferred.makeUnsafe<true>();
+    let checks = 0;
+    const { layer, publicBlobs } = harness({
+      ...noHooks,
+      holds: () =>
+        Effect.suspend(() => {
+          checks += 1;
+          // The first pass checks each derivative once; every later check belongs to the pass after the mark.
+          if (checks <= derivativeKinds.length) {
+            return Effect.void;
+          }
+          return Deferred.succeed(marked, true).pipe(
+            Effect.andThen(Deferred.await(resume))
+          );
+        }),
+    });
+    return Effect.gen(function* run() {
+      const publishing = yield* Publishing;
+      const { photoId } = yield* draft(1);
+
+      const publisher = yield* Effect.forkChild(
+        publishing.publish(photoId, details)
+      );
+      yield* Deferred.await(marked);
+      expect(yield* tagOf(photoId)).toBe("Published");
+      expect((yield* publishing.unpublish(photoId))._tag).toBe("Draft");
+      yield* Deferred.succeed(resume, true);
+      yield* Fiber.join(publisher);
+
+      expect(yield* tagOf(photoId)).toBe("Draft");
+      expect(yield* listedIds).toEqual([]);
+      expect(publicKeys(publicBlobs.objects)).toEqual(["v1.json"]);
     }).pipe(Effect.provide(layer));
   }
 );
