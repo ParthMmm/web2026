@@ -380,6 +380,43 @@ fn upload_in_the_demo_library_starts_nothing() {
 }
 
 #[test]
+fn the_benchmark_report_counts_where_each_upload_stands() {
+    let mut rt = window(|_| {});
+    let ids: Vec<_> = rt.state.photos[..4]
+        .iter()
+        .map(|photo| photo.record.id.clone())
+        .collect();
+    let cloud_id = CloudId::from_hex("ab");
+    rt.state.cloud_changed(&ids[0], CloudState::Queued);
+    rt.state.cloud_changed(
+        &ids[1],
+        CloudState::Uploading {
+            cloud_id: cloud_id.clone(),
+            missing: Vec::new(),
+        },
+    );
+    rt.state.cloud_changed(
+        &ids[2],
+        CloudState::Published {
+            cloud_id: cloud_id.clone(),
+        },
+    );
+    rt.state.cloud_changed(
+        &ids[3],
+        CloudState::Failed {
+            cloud_id: None,
+            failure: CloudFailure::OriginalMissing,
+            step: CloudStep::Upload,
+        },
+    );
+    let totals = rt.state.upload_totals();
+    assert_eq!(
+        (totals.local, totals.pending, totals.in_cloud, totals.failed),
+        (rt.state.photos.len() - 4, 2, 1, 1)
+    );
+}
+
+#[test]
 fn the_status_bar_counts_an_upload_run_and_then_sums_it_up() {
     let mut rt = window(|_| {});
     let ids: Vec<_> = rt.state.photos[..3]

@@ -25,6 +25,16 @@ def require_display():
         raise RuntimeError("GUI benchmark blocked: unlock the Mac and wake its display first")
 
 
+def uploads_passed(result):
+    # An upload run must finish at least one upload while it measures, and stop none.
+    uploads = result.get("uploads")
+    return (
+        type(uploads) is dict
+        and uploads.get("failed") == 0
+        and type(uploads.get("in_cloud")) is int and uploads["in_cloud"] >= 1
+    )
+
+
 def gui_passed(result, count, cold):
     intervals = result.get("present_interval_samples")
     frames = result.get("presented_frames")
@@ -62,9 +72,12 @@ parser.add_argument("--count", type=int, default=20)
 parser.add_argument("--seconds", type=int, default=30)
 parser.add_argument("--output", type=Path, required=True, help="New directory outside Git, or benchmarks/local/")
 parser.add_argument("--mode", choices=["gui", "pipeline"], default="gui")
+parser.add_argument("--uploads", action="store_true", help="Upload each photo while the GUI runs; needs PHOTO_API_URL and the owner token")
 args = parser.parse_args()
 if args.count < 1 or args.seconds < 10:
     parser.error("count must be positive and seconds at least 10")
+if args.uploads and (args.mode != "gui" or not os.environ.get("PHOTO_API_URL")):
+    parser.error("--uploads needs --mode gui and PHOTO_API_URL")
 root = Path(__file__).resolve().parent
 if args.mode == "gui":
     require_display()
@@ -91,6 +104,7 @@ metadata = {
     "photos": count, "input_bytes": sum(sizes), "median_jpeg_bytes": statistics.median(sizes),
     "cache_definition": "cold = empty library; warm = library already holds every photo, its grid derivative and the exact requested large previews, fresh process; OS file cache not flushed",
     "scope": "fixed-duration browsing window; cold import may still be running" if args.mode == "gui" else "complete thumbnail import",
+    "uploads": "each photo uploads as a private draft while the window runs" if args.uploads else "off",
 }
 
 def run(name, command, env):
@@ -136,7 +150,7 @@ def run(name, command, env):
             "thumbnail_cache_peak_entries": 64, "preview_cache_peak_entries": 2,
             "thumbnail_peak_in_flight": 4, "preview_peak_in_flight": 1,
         }
-        result["passed"] = gui_passed(result, count, name == "cold")
+        result["passed"] = gui_passed(result, count, name == "cold") and (not args.uploads or uploads_passed(result))
 
     print(name, json.dumps(result), flush=True)
     return result
@@ -159,6 +173,8 @@ for pipeline in (["gui"] if args.mode == "gui" else ["pipeline"]):
             results["warm_preparation"] = json.loads(warming.stdout.splitlines()[-1])
             (args.output / "report.json").write_text(json.dumps(results, indent=2) + "\n")
         env = dict(os.environ, PHOTO_LIBRARY_DIR=str(library), PHOTO_BENCH_SECONDS=str(args.seconds))
+        if args.uploads:
+            env["PHOTO_BENCH_UPLOADS"] = "1"
         command = [str(target_dir / "release/photo-desktop")] if pipeline == "gui" else [pipeline_binary, str(library)]
         name = state if pipeline == "gui" else pipeline + "-" + state
         results["runs"][name] = run(name, command + [str(p.resolve()) for p in selected], env)

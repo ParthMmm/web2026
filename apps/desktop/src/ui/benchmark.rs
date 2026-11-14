@@ -33,6 +33,12 @@ pub(super) fn seconds_from_env() -> Option<u64> {
     }
 }
 
+/// `PHOTO_BENCH_UPLOADS=1` uploads each photo while the benchmark runs, so the
+/// report measures the window with its transfer lanes busy.
+pub(super) fn uploads_from_env() -> bool {
+    std::env::var_os("PHOTO_BENCH_UPLOADS").is_some_and(|value| value == "1")
+}
+
 pub(super) struct Step {
     pub(super) scroll_row: usize,
     pub(super) preview_index: Option<usize>,
@@ -40,6 +46,7 @@ pub(super) struct Step {
 
 pub(super) struct Benchmark {
     seconds: u64,
+    uploads: bool,
     started: Instant,
     next_preview_at: u64,
     preview_requested: Option<Instant>,
@@ -61,13 +68,27 @@ pub(super) struct Totals {
     pub(super) photos: usize,
     pub(super) thumbnails_completed: usize,
     pub(super) failed: usize,
+    pub(super) uploads: UploadTotals,
+}
+
+/// Where each photo's upload stands when the run ends.
+#[derive(Default)]
+pub(super) struct UploadTotals {
+    /// Only in the library: no upload asked, or none started.
+    pub(super) local: usize,
+    /// Queued or uploading.
+    pub(super) pending: usize,
+    /// On the server: a draft or published.
+    pub(super) in_cloud: usize,
+    pub(super) failed: usize,
 }
 
 impl Benchmark {
-    pub(super) fn new(seconds: u64) -> Self {
+    pub(super) fn new(seconds: u64, uploads: bool) -> Self {
         let now = Instant::now();
         Self {
             seconds,
+            uploads,
             started: now,
             next_preview_at: 1,
             preview_requested: None,
@@ -84,6 +105,11 @@ impl Benchmark {
             first_poll_ms: None,
             last_poll: now,
         }
+    }
+
+    /// Whether the run uploads each photo as it lands.
+    pub(super) fn uploads(&self) -> bool {
+        self.uploads
     }
 
     /// Time left in the run, or `None` once it is over.
@@ -176,7 +202,16 @@ impl Benchmark {
         let ended = Instant::now();
         let presents = present_samples(frames, self.started, ended);
         let cpu_ms: Vec<f64> = frames.iter().map(|frame| frame.cpu_ms).collect();
+        let uploads = self.uploads.then(|| {
+            serde_json::json!({
+                "local": totals.uploads.local,
+                "pending": totals.uploads.pending,
+                "in_cloud": totals.uploads.in_cloud,
+                "failed": totals.uploads.failed,
+            })
+        });
         serde_json::json!({
+            "uploads": uploads,
             "photos": totals.photos,
             "thumbnails_completed": totals.thumbnails_completed,
             "failed": totals.failed,
