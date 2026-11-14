@@ -93,6 +93,9 @@ export const aspectRatio = (photo: Photo): number => {
    match `--row` in PhotoGallery.astro; the column is the spine's measure. */
 const ROW_REM = { narrow: 11, wide: 15 };
 const ROW_STRETCH = 1.5;
+/** The grid's `gap` and the width where `--row` turns wide, in rem. */
+const GAP_REM = 0.5;
+const WIDE_FROM_REM = 48;
 
 /** `sizes` for a grid tile. */
 export const tileSizes = (photo: Photo): string => {
@@ -100,6 +103,65 @@ export const tileSizes = (photo: Photo): string => {
   const wide = ROW_REM.wide * ROW_STRETCH;
   const narrow = ROW_REM.narrow * ROW_STRETCH;
   return `(min-width: 48rem) min(60rem, ${ratio} * ${wide}rem), min(100vw - 3rem, ${ratio} * ${narrow}rem)`;
+};
+
+/** What the first row of the grid is laid out in, in px: the viewport's
+    width, the column's width and the root font size. */
+export interface GridLayout {
+  viewport: number;
+  column: number;
+  rem: number;
+}
+
+/** How many tiles the grid's first row holds. The grid wraps a tile to the
+    next row when its base width, its aspect ratio times `--row`, no longer
+    fits beside the ones before it, so the count follows the column's width
+    and the photos' shapes. The first row always holds at least one tile. */
+export const firstRowCount = (
+  ratios: readonly number[],
+  { viewport, column, rem }: GridLayout
+): number => {
+  const rowRem =
+    viewport >= WIDE_FROM_REM * rem ? ROW_REM.wide : ROW_REM.narrow;
+  const row = rowRem * rem;
+  const gap = GAP_REM * rem;
+  let used = 0;
+  let count = 0;
+  for (const ratio of ratios) {
+    const width = ratio * row;
+    const needed = count === 0 ? width : used + gap + width;
+    if (count > 0 && needed > column) {
+      break;
+    }
+    used = needed;
+    count += 1;
+  }
+  return count;
+};
+
+/** A point a pointer touched, in px. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** A swipe must travel this far across, in px, to move a photo. */
+const SWIPE_MIN_PX = 40;
+/** And this many times further across than up or down. */
+const SWIPE_SLOPE = 2;
+
+/** The move a touch from `start` to `end` makes in the larger view: 1 for
+    the next photo (a swipe to the left), -1 for the previous one (to the
+    right), and 0 for a tap, a short drag or a mostly vertical drag. */
+export const swipeStep = (start: Point, end: Point): -1 | 0 | 1 => {
+  const across = end.x - start.x;
+  const down = end.y - start.y;
+  const far = Math.abs(across) >= SWIPE_MIN_PX;
+  const level = Math.abs(across) >= SWIPE_SLOPE * Math.abs(down);
+  if (!(far && level)) {
+    return 0;
+  }
+  return across < 0 ? 1 : -1;
 };
 
 /** `sizes` for the larger view. It fits the photo inside the viewport less

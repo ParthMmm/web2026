@@ -67,7 +67,8 @@ const { base } = Astro.props;
   /* Rows of equal height, each stretched to the column, so every photo keeps
      its whole frame and the order stays newest first, left to right. A tile
      grows in proportion to its aspect ratio, which keeps a row's heights
-     equal. The row heights match ROW_REM in src/lib/gallery.ts. */
+     equal. The row heights, the 48rem step and the gap match ROW_REM,
+     WIDE_FROM_REM and GAP_REM in src/lib/gallery.ts. */
   .gallery {
     --row: 11rem;
   }
@@ -203,12 +204,15 @@ const { base } = Astro.props;
     }
   }
 
+  /* A horizontal drag is a swipe the script handles; the browser keeps
+     vertical scroll and pinch zoom. */
   .stage {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     place-items: center;
     min-height: 0;
     margin: 0;
+    touch-action: pan-y pinch-zoom;
   }
 
   /* Sized to fit the stage by width or, for a tall photo, by height. The

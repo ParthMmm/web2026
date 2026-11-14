@@ -1,24 +1,27 @@
 /* The /photos/ page in the browser. The page ships its shell; this fetches
    the manifest, fills the grid, and runs the larger view: a modal <dialog>
-   with Left, Right, Home, End and Escape, whose URL is `/photos/#<id>`. */
+   with Left, Right, Home, End, Escape and a touch swipe, whose URL is
+   `/photos/#<id>`. */
 
 import type { Photo } from "../lib/gallery";
 import {
   altText,
   aspectRatio,
   caption,
+  firstRowCount,
   idFromHash,
   imageUrl,
   sizesFor,
   srcset,
   step,
+  swipeStep,
   tileSizes,
 } from "../lib/gallery";
 import { parseManifest } from "../lib/gallery-manifest";
 
-/** About one row on a phone and on a desktop; the rest load lazily. */
-const EAGER_TILES = 4;
 const LOAD_TIMEOUT_MS = 15_000;
+/** The unit on a computed length, such as the root's `16px`. */
+const PX = /px$/u;
 /** The larger view never asks for more than this. */
 const LARGE_SIZES = ["w1200", "w2400"] as const;
 
@@ -61,14 +64,14 @@ const fetchPhotos = async (base: string): Promise<Photo[] | null> => {
   }
 };
 
-const tileImage = (base: string, photo: Photo, index: number) => {
+const tileImage = (base: string, photo: Photo, eager: boolean) => {
   const { w480 } = photo.sizes;
   const img = document.createElement("img");
   img.alt = altText(photo);
   img.width = w480.width;
   img.height = w480.height;
   img.decoding = "async";
-  img.loading = index < EAGER_TILES ? "eager" : "lazy";
+  img.loading = eager ? "eager" : "lazy";
   /* srcset and sizes before src, so the browser picks once. */
   img.sizes = tileSizes(photo);
   img.srcset = srcset(base, photo);
@@ -96,6 +99,9 @@ export const mountGallery = (root: HTMLElement): void => {
   let photos: Photo[] = [];
   let tiles: HTMLAnchorElement[] = [];
   let current = 0;
+  /* The touch a swipe follows, and whether the last one moved a photo. */
+  let touch: { id: number; x: number; y: number } | null = null;
+  let swiped = false;
 
   const setState = (state: State) => {
     root.dataset.state = state;
@@ -158,11 +164,20 @@ export const mountGallery = (root: HTMLElement): void => {
   };
 
   const render = () => {
+    /* Only the first row loads at once; the grid is hidden until it fills,
+       so the column is the gallery's width. */
+    const eager = firstRowCount(photos.map(aspectRatio), {
+      column: root.clientWidth,
+      rem: Number(
+        getComputedStyle(document.documentElement).fontSize.replace(PX, "")
+      ),
+      viewport: window.innerWidth,
+    });
     tiles = photos.map((photo, index) => {
       const link = document.createElement("a");
       link.className = "photo-tile";
       link.href = `#${photo.id}`;
-      link.append(tileImage(base, photo, index));
+      link.append(tileImage(base, photo, index < eager));
       link.addEventListener("click", (event) => {
         /* A modified click opens the shareable link in a new tab as usual. */
         const modified =
@@ -207,8 +222,38 @@ export const mountGallery = (root: HTMLElement): void => {
   previous.addEventListener("click", () => go(-1));
   next.addEventListener("click", () => go(1));
   close.addEventListener("click", () => viewer.close());
-  /* A click on the empty space around the photo closes it, as Escape does. */
+  /* A touch swipe across the photo moves one photo. A second finger, as in
+     a pinch, or a scroll the browser takes over ends the swipe. */
+  viewer.addEventListener("pointerdown", (event) => {
+    swiped = false;
+    const onStage =
+      event.target instanceof Node && stage.contains(event.target);
+    touch =
+      onStage && event.pointerType === "touch" && event.isPrimary
+        ? { id: event.pointerId, x: event.clientX, y: event.clientY }
+        : null;
+  });
+  stage.addEventListener("pointerup", (event) => {
+    if (touch?.id !== event.pointerId) {
+      return;
+    }
+    const delta = swipeStep(touch, { x: event.clientX, y: event.clientY });
+    touch = null;
+    if (delta !== 0) {
+      swiped = true;
+      go(delta);
+    }
+  });
+  stage.addEventListener("pointercancel", () => {
+    touch = null;
+  });
+  /* A click on the empty space around the photo closes it, as Escape does,
+     unless it ends a swipe. */
   viewer.addEventListener("click", (event) => {
+    if (swiped) {
+      swiped = false;
+      return;
+    }
     if (event.target === viewer || event.target === stage) {
       viewer.close();
     }
