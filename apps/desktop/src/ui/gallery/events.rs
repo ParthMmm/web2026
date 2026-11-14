@@ -28,6 +28,9 @@ impl Gallery {
         tx.instant();
         match opened {
             Ok((library, photos)) => {
+                if let Some(waker) = &self.waker {
+                    library.set_waker(waker.clone());
+                }
                 self.failures = library.failures().to_vec();
                 self.connection = library.connection().clone();
                 self.photos = photos;
@@ -68,6 +71,9 @@ impl Gallery {
             .map_while(|_| library.try_recv().ok())
             .collect();
         let received = !events.is_empty();
+        if events.len() == EVENTS_PER_TICK {
+            library.wake_again();
+        }
         for event in events {
             self.apply(event, tx);
         }
@@ -87,7 +93,7 @@ impl Gallery {
         }
     }
 
-    fn apply(&mut self, event: Event, tx: &mut Tx) {
+    pub(in crate::ui) fn apply(&mut self, event: Event, tx: &mut Tx) {
         match event {
             Event::ImportProgress { processed, total } => {
                 self.progress = Some((processed, total));
@@ -136,7 +142,7 @@ impl Gallery {
             },
             Event::MetadataUpdated { photo: record } | Event::Detached { photo: record } => {
                 if let Some(photo) = self.photo_mut(&record.id) {
-                    photo.record = record;
+                    photo.replace_record(record);
                 }
             }
             Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
@@ -188,7 +194,7 @@ impl Gallery {
             .map(|index| self.photos.remove(index));
         let photo = match existing {
             Some(mut photo) => {
-                photo.record = record;
+                photo.replace_record(record);
                 photo
             }
             None => GalleryPhoto::new(record, thumbnail),

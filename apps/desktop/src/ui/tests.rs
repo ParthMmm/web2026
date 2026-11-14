@@ -25,12 +25,17 @@ fn window(apply: fn(&mut Gallery)) -> Runtime<Gallery> {
 
 /// The real view, `poll` and keys on `gallery`, settled.
 fn runtime(gallery: Gallery) -> Runtime<Gallery> {
+    runtime_waking(gallery, Arc::new(|| {}))
+}
+
+/// As `runtime`, with `waker` standing in for the host's wake-up.
+fn runtime_waking(gallery: Gallery, waker: rune::Waker) -> Runtime<Gallery> {
     let text = TextSystem::new(look::FONTS, look::FAMILIES);
     let mut rt = Runtime::with_text(gallery, view, WINDOW_SIZE, Env::new(true, 1.0), text);
     rt.poll = Some(poll);
     rt.on_key = Some(on_key);
     rt.set_system_scroll_bars(ScrollBars::Always);
-    setup(&mut rt.state, Arc::new(|| {}));
+    setup(&mut rt.state, waker);
     settle(&mut rt);
     rt
 }

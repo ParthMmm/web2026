@@ -4,16 +4,13 @@
 //! and makes the call it names. Each lane retries what may pass with the same backoff and turns
 //! the rest into a failure that names the step, so a Retry runs that step again.
 
-use super::{Event, Shared, publish, upload};
+use super::{Event, EventSender, Shared, publish, upload};
 use crate::{
     api::{Api, CallError},
     catalog::PhotoId,
     cloud::{CloudFailure, CloudState, CloudStep},
 };
-use std::{
-    sync::mpsc::SyncSender,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 /// At most this many calls run at once. An upload streams one object from disk at a time.
 pub(super) const TRANSFER_LANES: usize = 2;
@@ -110,7 +107,7 @@ enum Work {
 
 /// One transfer lane: reconciles once if asked, then takes the next due photo, until the
 /// library closes.
-pub(super) fn run_transfers(shared: &Shared, api: &Api, sender: &SyncSender<Event>) {
+pub(super) fn run_transfers(shared: &Shared, api: &Api, sender: &EventSender) {
     while let Some(work) = next_work(shared) {
         match work {
             Work::Reconcile => {
@@ -172,7 +169,7 @@ fn next_work(shared: &Shared) -> Option<Work> {
 
 /// Makes the call the photo's state names, then records the server's answer, retries later, or
 /// records why the step stopped.
-fn transfer_one(shared: &Shared, api: &Api, sender: &SyncSender<Event>, transfer: Transfer) {
+fn transfer_one(shared: &Shared, api: &Api, sender: &EventSender, transfer: Transfer) {
     let id = transfer.id.clone();
     let Ok(state) = shared.catalog().cloud_state(&id) else {
         return;
