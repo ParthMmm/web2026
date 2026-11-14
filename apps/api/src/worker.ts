@@ -1,5 +1,6 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import { D1Layer } from "@alchemy.run/cloudflare/D1/SQL";
+import { RuntimeContext } from "alchemy/RuntimeContext";
 import { Config, Effect, Layer, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 
@@ -10,6 +11,7 @@ import { PhotoDatabase, PrivateBucket, PublicBucket } from "./photos/infra.ts";
 import { Photos } from "./photos/photos.ts";
 import { PublicGallery } from "./photos/public-gallery.ts";
 import { Publishing } from "./photos/publishing.ts";
+import { UploadUrls } from "./photos/upload-urls.ts";
 
 const MIN_TOKEN_CHARS = 32;
 
@@ -33,12 +35,20 @@ export default Cloudflare.Worker(
     const privateBucket = yield* Cloudflare.R2.ReadWriteBucket(PrivateBucket);
     const publicBucket = yield* Cloudflare.R2.ReadWriteBucket(PublicBucket);
     const database = yield* Cloudflare.D1.QueryDatabase(PhotoDatabase);
+    // Deployed, Alchemy mints an API token that may only write objects in the private bucket.
+    const privateS3 = yield* Cloudflare.R2.S3Credentials(PrivateBucket, {
+      access: "write",
+    });
     const ownerToken = yield* OwnerToken;
     const publicBlobs = Layer.succeed(PublicBlobs, r2Blobs(publicBucket));
     const owner = Layer.mergeAll(Photos.layer, Publishing.layer).pipe(
       Layer.provide([
         Layer.succeed(Blobs, r2Blobs(privateBucket)),
         publicBlobs,
+        // The accessor reads the env binding and never touches RuntimeContext, so the phantom only satisfies the type.
+        UploadUrls.layerS3(
+          privateS3.pipe(Effect.provide(RuntimeContext.phantom))
+        ),
         D1Layer(database),
       ])
     );

@@ -13,6 +13,7 @@ import { PublicGallery } from "../src/photos/public-gallery.ts";
 import { Publishing } from "../src/photos/publishing.ts";
 import { declare, fixture, validBodies } from "./support/fixture.ts";
 import { migratedSqlite } from "./support/sqlite.ts";
+import { testUploadUrls } from "./support/upload-urls.ts";
 
 const TOKEN = "owner-token-for-tests-only-0123456789";
 const ORIGIN = "http://photos.test";
@@ -33,6 +34,7 @@ const serve = () => {
     Layer.provide([
       privateBlobs.layer,
       publicBlobs.publicLayer,
+      testUploadUrls,
       migratedSqlite(),
     ])
   );
@@ -364,4 +366,31 @@ it("lists photos one page at a time and refuses a limit outside 1 to 200", async
   );
   expect(refused).toEqual([400, 400, 400, 400]);
   expect(await statusOf("/v1/photos", {}, null)).toBe(401);
+});
+
+it("signs an original upload for the owner only, and only while the photo is uploading", async () => {
+  const { call, jsonOf, statusOf } = serve();
+  const { manifest, photoId } = await photo();
+  const path = `/v1/photos/${photoId}/original/upload-url`;
+
+  expect(await statusOf(path, post(), null)).toBe(401);
+  expect(await jsonOf(path, post())).toMatchObject({
+    _tag: "PhotoNotFound",
+  });
+
+  await call("/v1/photos", json({ manifest, photoId }));
+  const upload = await jsonOf(path, post());
+  expect(upload).toMatchObject({
+    headers: { "content-length": String(manifest.original.bytes) },
+    method: "PUT",
+  });
+  expect(new URL(upload.url).pathname).toBe(
+    `/private/photos/${photoId}/original-${manifest.original.sha256}`
+  );
+  expect(Date.parse(upload.expiresAt)).toBeGreaterThan(Date.now());
+
+  await uploadDraft(call);
+  expect(await jsonOf(path, post())).toMatchObject({
+    _tag: "PhotoAlreadyDraft",
+  });
 });

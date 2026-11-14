@@ -14,6 +14,7 @@ import { PublicGallery } from "../src/photos/public-gallery.ts";
 import { Publishing } from "../src/photos/publishing.ts";
 import { declare, validBodies } from "./support/fixture.ts";
 import { migratedSqlite } from "./support/sqlite.ts";
+import { testUploadUrls } from "./support/upload-urls.ts";
 
 const harness = () => {
   const privateBlobs = makeMemoryBlobs();
@@ -25,6 +26,7 @@ const harness = () => {
   ).pipe(
     Layer.provideMerge(privateBlobs.layer),
     Layer.provideMerge(publicBlobs.publicLayer),
+    Layer.provideMerge(testUploadUrls),
     Layer.provideMerge(migratedSqlite()),
     Layer.provideMerge(Digest.layerWebCrypto)
   );

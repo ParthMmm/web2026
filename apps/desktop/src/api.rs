@@ -113,16 +113,19 @@ impl Api {
         self.client.begin(manifest).map_err(classify)
     }
 
-    /// Streams the file at `path` as one object, with its length from disk.
+    /// Streams the file at `path` as one object, with its length from disk. The original goes
+    /// straight to storage through a presigned URL; the web sizes go through the API.
     pub(crate) fn put_file(
         &self,
         id: &CloudId,
         kind: ObjectKind,
         path: &Path,
     ) -> Result<(), CallError> {
-        self.client
-            .put_file(id.as_str(), kind, path)
-            .map_err(classify)
+        match kind {
+            ObjectKind::Original => self.client.put_original_file(id.as_str(), path),
+            _ => self.client.put_file(id.as_str(), kind, path),
+        }
+        .map_err(classify)
     }
 
     pub(crate) fn finalize(&self, id: &CloudId) -> Result<PhotoView, CallError> {
@@ -176,6 +179,7 @@ fn classify(error: ClientError) -> CallError {
             return CallError::Transient(reason.into());
         }
         ClientError::File(error) => return CallError::File(error.kind().to_string()),
+        ClientError::Storage { status, code } => return classify_storage(status, code.as_deref()),
         ClientError::Http { status, error } => (status, error),
     };
     match (status, error) {
@@ -200,6 +204,21 @@ fn classify(error: ClientError) -> CallError {
         }
         _ => CallError::Stop(CloudFailure::Rejected {
             message: format!("HTTP {status}"),
+        }),
+    }
+}
+
+/// A refused presigned upload. Each try asks for a new URL, so an expired one may pass.
+fn classify_storage(status: u16, code: Option<&str>) -> CallError {
+    match (status, code) {
+        (400, Some("BadDigest")) => CallError::Stop(CloudFailure::Rejected {
+            message: "original doesn't match its checksum".into(),
+        }),
+        (403 | 408 | 429 | 500..=599, _) => CallError::Transient(format!("storage HTTP {status}")),
+        (_, code) => CallError::Stop(CloudFailure::Rejected {
+            message: format!("storage HTTP {status} {}", code.unwrap_or_default())
+                .trim_end()
+                .to_owned(),
         }),
     }
 }
@@ -233,6 +252,23 @@ mod tests {
             classify(refused),
             CallError::Stop(CloudFailure::NotDraft)
         ));
+    }
+
+    #[test]
+    fn storage_refusing_the_bytes_stops_and_an_expired_link_is_tried_again() {
+        let refused = ClientError::Storage {
+            status: 400,
+            code: Some("BadDigest".into()),
+        };
+        assert!(matches!(
+            classify(refused),
+            CallError::Stop(CloudFailure::Rejected { .. })
+        ));
+        let expired = ClientError::Storage {
+            status: 403,
+            code: Some("AccessDenied".into()),
+        };
+        assert!(matches!(classify(expired), CallError::Transient(_)));
     }
 
     #[test]
