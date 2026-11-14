@@ -1,13 +1,15 @@
 //! Made-up photos for headless renders and the goldens, and the scenes `--scene` names. A
 //! headless run never opens the library on disk, so a render never shows anyone's photos.
 //! Every state the window can show has a scene: full, empty, opening, failed, importing,
-//! long names, each end of the zoom, the panels hidden, and each upload and publish state.
+//! long names, each end of the zoom, the panels hidden, each upload and publish state, several
+//! photos selected, and the Drafts and Published destinations.
 //! Demo uploads and publishes are made up too: the demo library makes no calls.
 
 use super::{
     format,
     gallery::{
-        DescriptionEdit, Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail, UploadRun,
+        DescriptionEdit, Destination, Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail,
+        UploadRun,
     },
     images::ImageSlots,
 };
@@ -122,6 +124,18 @@ pub(super) static SCENES: &[Scene] = &[
     ("published", |s| {
         in_the_gallery(s);
         select(s, 1);
+        s.open_destination(Destination::Published);
+    }),
+    ("drafts", |s| {
+        in_the_gallery(s);
+        select(s, 0);
+        s.open_destination(Destination::Drafts);
+    }),
+    ("multi-select", |s| {
+        in_the_gallery(s);
+        // A published photo, a draft, and two photos only in the library.
+        select(s, 1);
+        add_to_selection(s, &[2, 9, 10]);
     }),
     ("publishing", |s| {
         in_the_gallery(s);
@@ -389,12 +403,25 @@ fn draw(
 
 fn clear(s: &mut Gallery) {
     s.photos.clear();
-    s.selected = None;
+    s.selection.clear();
     s.preview = None;
 }
 
 fn select(s: &mut Gallery, index: usize) {
-    s.selected = Some(s.photos[index].record.id.clone());
+    s.selection.select(s.photos[index].record.id.clone());
+    s.request_preview();
+}
+
+/// Adds photos `indices` to the selection, as Cmd-clicks do; the last one takes the focus.
+fn add_to_selection(s: &mut Gallery, indices: &[usize]) {
+    let order: Vec<PhotoId> = s
+        .photos
+        .iter()
+        .map(|photo| photo.record.id.clone())
+        .collect();
+    for &index in indices {
+        s.selection.toggle(order[index].clone(), &order);
+    }
     s.request_preview();
 }
 

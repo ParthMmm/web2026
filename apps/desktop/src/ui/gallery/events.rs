@@ -1,7 +1,7 @@
 //! What the library reports, applied to the gallery: the library opening, imports landing
 //! one photo at a time, renditions finishing, and photos leaving.
 
-use super::{Gallery, GalleryPhoto, LibraryState, Overlay, Thumbnail};
+use super::{Gallery, GalleryPhoto, LibraryState, Thumbnail};
 use crate::{
     DerivativeSize, Event, ImportFailure, ImportOutcome, Library, LibraryOptions, PhotoId,
     PhotoRecord, photos, ui::format,
@@ -31,12 +31,13 @@ impl Gallery {
                 self.failures = library.failures().to_vec();
                 self.connection = library.connection().clone();
                 self.photos = photos;
+                self.refilter();
                 self.resume_uploads();
                 self.library = LibraryState::Open(library);
                 // A photo is selected on open, so the inspector carries content
                 // and the first arrow key moves somewhere.
-                if self.selected.is_none() {
-                    self.select_index(0, tx);
+                if self.focus().is_none() {
+                    self.select_position(0, tx);
                 }
                 // The count lives on the sidebar and the weight in its footer, so
                 // the status line is free for transient state.
@@ -197,22 +198,18 @@ impl Gallery {
             .photos
             .partition_point(|other| other.record.source < photo.record.source);
         self.photos.insert(index, photo);
+        self.refilter();
         // A library that opens while its first import runs has nothing to
         // select at open time. The first photo to arrive repairs that.
-        if self.selected.is_none() {
-            self.select_index(0, tx);
+        if self.focus().is_none() {
+            self.select_position(0, tx);
         }
     }
 
     fn remove(&mut self, id: &PhotoId) {
         self.photos.retain(|photo| &photo.record.id != id);
-        if self.selected.as_ref() == Some(id) {
-            self.selected = None;
-            self.preview = None;
-            if self.overlay == Overlay::Viewer {
-                self.overlay = Overlay::None;
-            }
-        }
+        self.refilter();
+        self.deselect(id);
     }
 
     fn photo_mut(&mut self, id: &PhotoId) -> Option<&mut GalleryPhoto> {

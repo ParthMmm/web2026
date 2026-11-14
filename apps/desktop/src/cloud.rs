@@ -142,6 +142,18 @@ impl CloudState {
         self.is_pending() || matches!(self, Self::Publishing { .. } | Self::Unpublishing { .. })
     }
 
+    /// A private draft on the server, including one being published until the server says it
+    /// is public.
+    pub fn is_draft(&self) -> bool {
+        matches!(self, Self::Draft { .. } | Self::Publishing { .. })
+    }
+
+    /// In the public gallery, including a photo being taken out until the server says it is
+    /// gone.
+    pub fn is_published(&self) -> bool {
+        matches!(self, Self::Published { .. } | Self::Unpublishing { .. })
+    }
+
     /// The step a Retry runs, when one can help.
     pub fn retry(&self) -> Option<CloudStep> {
         match self {

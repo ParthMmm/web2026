@@ -11,6 +11,7 @@ mod library;
 pub mod metadata;
 #[cfg(feature = "desktop")]
 pub mod photos;
+pub mod selection;
 #[cfg(feature = "desktop")]
 pub mod ui;
 

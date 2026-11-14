@@ -5,8 +5,10 @@ mod cloud;
 mod description;
 mod events;
 mod import;
+mod selection;
 
 use super::{
+    MenuState,
     benchmark::{self, Benchmark, Totals},
     demo,
     frames::FrameLog,
@@ -15,12 +17,14 @@ use super::{
 use crate::{
     ImportFailure, Library, LibraryOptions, PhotoId, PhotoRecord,
     api::{Config, Connection},
-    grid::{self, Movement},
+    cloud::CloudStep,
+    selection::Selection,
 };
 pub(super) use cloud::{UploadRun, failure_of};
 pub(super) use description::{DescriptionEdit, description_length};
 use import::PendingImport;
 use rune::{AppHandle, ImageCache, Tx, Waker};
+pub(super) use selection::Destination;
 use std::{
     cell::RefCell,
     ops::Range,
@@ -83,7 +87,7 @@ impl GalleryPhoto {
     }
 }
 
-/// The large rendition of the selected photo.
+/// The large rendition of the focused photo.
 pub(super) struct Preview {
     pub(super) id: PhotoId,
     pub(super) image: Option<Arc<Path>>,
@@ -150,7 +154,14 @@ pub struct Gallery {
     pub(super) library: LibraryState,
     pub(super) photos: Vec<GalleryPhoto>,
     pub(super) failures: Vec<ImportFailure>,
-    pub(super) selected: Option<PhotoId>,
+    /// The selected photos and the focused one.
+    pub(super) selection: Selection<PhotoId>,
+    /// What the menu bar shows now.
+    menu: MenuState,
+    /// The sidebar destination the grid shows.
+    pub(super) destination: Destination,
+    /// Indices into `photos` of the destination's photos, unless it is every photo.
+    filtered: Vec<usize>,
     pub(super) preview: Option<Preview>,
     pub(super) overlay: Overlay,
     /// The person hid the sidebar or the inspector from the View menu.
@@ -163,7 +174,7 @@ pub struct Gallery {
     pub(super) connection: Connection,
     /// The uploads since the queue was last empty.
     pub(super) uploads: Option<UploadRun>,
-    /// The selected photo's description as the inspector edits it.
+    /// The focused photo's description as the inspector edits it.
     pub(super) description: DescriptionEdit,
     pub(super) status: String,
     pub(super) picking: bool,
@@ -216,7 +227,9 @@ impl Gallery {
         let mut gallery = Self::blank(LibraryState::Demo, PathBuf::new(), Rc::default(), None);
         gallery.connection = demo::connection();
         gallery.photos = demo::photos();
-        gallery.selected = gallery.photos.first().map(|photo| photo.record.id.clone());
+        if let Some(first) = gallery.photos.first() {
+            gallery.selection.select(first.record.id.clone());
+        }
         gallery.request_preview();
         gallery
     }
@@ -237,7 +250,9 @@ impl Gallery {
         gallery.photos = events::gallery_photos(&library, &records);
         gallery.resume_uploads();
         gallery.library = LibraryState::Open(library);
-        gallery.selected = gallery.photos.first().map(|photo| photo.record.id.clone());
+        if let Some(first) = gallery.photos.first() {
+            gallery.selection.select(first.record.id.clone());
+        }
         gallery
     }
 
@@ -257,7 +272,10 @@ impl Gallery {
             library,
             photos: Vec::new(),
             failures: Vec::new(),
-            selected: None,
+            selection: Selection::default(),
+            menu: MenuState::default(),
+            destination: Destination::All,
+            filtered: Vec::new(),
             preview: None,
             overlay: Overlay::None,
             sidebar_hidden: false,
@@ -313,6 +331,7 @@ impl Gallery {
     /// view shows changed.
     pub(super) fn poll(&mut self, tx: &mut Tx) -> bool {
         let busy = self.drain(tx);
+        self.update_menu();
         let mut changed = busy.received;
         changed |= self.settle_images();
         changed |= self.step_benchmark(tx);
@@ -330,39 +349,8 @@ impl Gallery {
         changed
     }
 
-    pub(super) fn selected_index(&self) -> Option<usize> {
-        let selected = self.selected.as_ref()?;
-        self.photos
-            .iter()
-            .position(|photo| &photo.record.id == selected)
-    }
-
-    pub(super) fn selected_photo(&self) -> Option<&GalleryPhoto> {
-        self.selected_index().map(|index| &self.photos[index])
-    }
-
-    pub(super) fn select_index(&mut self, index: usize, tx: &mut Tx) {
-        let Some(id) = self.photos.get(index).map(|photo| photo.record.id.clone()) else {
-            return;
-        };
-        if self.selected.as_ref() == Some(&id) {
-            return;
-        }
-        // Moving on keeps what was written for the photo left behind.
-        self.save_description();
-        self.selected = Some(id);
-        self.request_preview();
-        tx.scroll_into_view(row_key(&self.photos, index, self.layout().columns));
-    }
-
-    pub(super) fn select_id(&mut self, id: &PhotoId, tx: &mut Tx) {
-        if let Some(index) = self.photos.iter().position(|photo| &photo.record.id == id) {
-            self.select_index(index, tx);
-        }
-    }
-
     pub(super) fn request_preview(&mut self) {
-        let Some(id) = self.selected.clone() else {
+        let Some(id) = self.focus().cloned() else {
             return;
         };
         let image = match &self.library {
@@ -387,7 +375,7 @@ impl Gallery {
     }
 
     fn preview_ready(&mut self, id: &PhotoId, path: PathBuf, cache_hit: bool) {
-        let index = self.selected_index();
+        let index = self.focused_position();
         let Some(preview) = self.preview.as_mut().filter(|preview| &preview.id == id) else {
             return;
         };
@@ -418,23 +406,8 @@ impl Gallery {
         }
     }
 
-    pub(super) fn move_selection(&mut self, movement: Movement, tx: &mut Tx) {
-        let GridLayout {
-            columns, page_rows, ..
-        } = self.layout();
-        if let Some(index) = grid::move_selection(
-            self.selected_index(),
-            self.photos.len(),
-            columns,
-            page_rows,
-            movement,
-        ) {
-            self.select_index(index, tx);
-        }
-    }
-
     pub(super) fn open_viewer(&mut self) {
-        if self.selected.is_some() && self.benchmark.is_none() {
+        if self.focus().is_some() && self.benchmark.is_none() {
             self.overlay = Overlay::Viewer;
         }
     }
@@ -479,17 +452,52 @@ impl Gallery {
     /// bar names what each View toggle will do next.
     fn layout_changed(&mut self) {
         self.grid_size = None;
+        self.update_menu();
+    }
+
+    /// What the menu bar should show for the panels and the selection.
+    /// One pass over the selection, as `poll` asks before every frame.
+    pub(super) fn menu_state(&self) -> MenuState {
+        let mut state = MenuState {
+            sidebar_hidden: self.sidebar_hidden,
+            inspector_hidden: self.inspector_hidden,
+            several: self.selection.len() > 1,
+            ..MenuState::default()
+        };
+        if !self.is_connected() {
+            return state;
+        }
+        for photo in self.selected_photos() {
+            let can = |step| photo.record.cloud.start(step).is_some();
+            state.upload |= can(CloudStep::Upload);
+            state.publish |= can(CloudStep::Publish);
+            state.unpublish |= can(CloudStep::Unpublish);
+        }
+        state
+    }
+
+    /// Rebuilds the menu bar when what it shows changed. A benchmark run measures the
+    /// library alone, so it skips the work.
+    fn update_menu(&mut self) {
+        if self.benchmark.is_some() {
+            return;
+        }
+        let state = self.menu_state();
+        if state == self.menu {
+            return;
+        }
+        self.menu = state;
         if let Some(handle) = &self.handle {
-            let _ = handle.set_menu(super::menus(self.sidebar_hidden, self.inspector_hidden));
+            let _ = handle.set_menu(super::menus(state));
         }
     }
 
-    /// Shows the selected photo's original in Finder.
+    /// Shows the focused photo's original in Finder.
     pub(super) fn reveal_selected(&self) {
         if self.handle.is_none() {
             return;
         }
-        if let Some(photo) = self.selected_photo() {
+        if let Some(photo) = self.focused_photo() {
             let source = photo.record.source.clone();
             std::thread::spawn(move || {
                 let _ = std::process::Command::new("open")
@@ -574,9 +582,12 @@ impl Gallery {
         };
         let columns = self.layout().columns;
         let start = self.visible_rows.start.saturating_sub(OVERSCAN_ROWS) * columns;
-        let end = ((self.visible_rows.end + OVERSCAN_ROWS) * columns).min(self.photos.len());
-        for photo in self.photos.get(start..end).unwrap_or_default() {
-            if let Thumbnail::Ready(path) = &photo.thumbnail
+        let end = ((self.visible_rows.end + OVERSCAN_ROWS) * columns).min(self.shown_len());
+        for position in start..end {
+            let Some(index) = self.shown_index(position) else {
+                break;
+            };
+            if let Thumbnail::Ready(path) = &self.photos[index].thumbnail
                 && !self.thumbnails.request(cache, path)
             {
                 break;
@@ -646,7 +657,7 @@ impl Gallery {
             && let Some(photo) = self.photos.get(index)
         {
             // Every scripted request counts, even when it repeats a selection.
-            self.selected = Some(photo.record.id.clone());
+            self.selection.select(photo.record.id.clone());
             self.request_preview();
         }
         // Sustained frame demand: ask for the next frame now.
@@ -680,10 +691,10 @@ impl Gallery {
 }
 
 /// A grid row's key: its first photo's, so a row keeps its key while photos
-/// arrive after it.
-pub(super) fn row_key(photos: &[GalleryPhoto], index: usize, columns: usize) -> String {
-    let first = index - index % columns.max(1);
-    photos.get(first).map_or_else(
+/// arrive after it. `position` is any photo's place in the grid.
+pub(super) fn row_key(gallery: &Gallery, position: usize, columns: usize) -> String {
+    let first = position - position % columns.max(1);
+    gallery.shown(first).map_or_else(
         || format!("row-{first}"),
         |photo| format!("row-{}", photo.key),
     )

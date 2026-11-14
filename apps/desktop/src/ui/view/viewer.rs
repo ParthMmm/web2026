@@ -23,12 +23,12 @@ const FILM_FRAME_HEIGHT: f32 = 44.0;
 const FILM_FRAME_GAP: f32 = 4.0;
 
 pub(super) fn viewer(s: &Gallery, look: &Look) -> Option<El> {
-    let index = s.selected_index()?;
-    let photo = &s.photos[index];
+    let index = s.focused_position()?;
+    let photo = s.shown(index)?;
     let mut place = format!(
         "{} of {}",
         format::number(index + 1),
-        format::number(s.photos.len())
+        format::number(s.shown_len())
     );
     if let Some(taken) = &photo.record.metadata.captured_at {
         place = format!("{place} · {}", taken.long_date());
@@ -102,7 +102,9 @@ pub(super) fn viewer(s: &Gallery, look: &Look) -> Option<El> {
 /// The photo, fitted whole, with step buttons at its sides and the camera settings floating
 /// over its lower edge.
 fn stage(s: &Gallery, look: &Look, index: usize) -> El {
-    let photo = &s.photos[index];
+    let photo = s
+        .shown(index)
+        .expect("the viewer shows a photo in the grid");
     let preview = s
         .preview
         .as_ref()
@@ -139,7 +141,7 @@ fn stage(s: &Gallery, look: &Look, index: usize) -> El {
                 look,
                 &icons::NEXT,
                 "Next photo",
-                index + 1 < s.photos.len(),
+                index + 1 < s.shown_len(),
                 Movement::Right,
             )
             .key("next-photo"),
@@ -192,7 +194,7 @@ fn step_button(
             .hover(look.c.hover)
             .press_scale(0.95)
             .cursor(rune::Cursor::Pointer)
-            .on_press_tx(move |s: &mut Gallery, tx: &mut Tx| s.move_selection(movement, tx));
+            .on_press_tx(move |s: &mut Gallery, tx: &mut Tx| s.move_selection(movement, false, tx));
     } else {
         button = button.opacity(0.3);
     }
@@ -204,7 +206,7 @@ fn step_button(
 
 /// Neighbours of the open photo, centred on it. Pressing one opens it.
 fn filmstrip(s: &Gallery, look: &Look, index: usize) -> El {
-    let range = filmstrip_range(index, s.photos.len(), s.window_size[0]);
+    let range = filmstrip_range(index, s.shown_len(), s.window_size[0]);
     row()
         .key("filmstrip")
         .w_full()
@@ -213,34 +215,38 @@ fn filmstrip(s: &Gallery, look: &Look, index: usize) -> El {
         .gap(FILM_FRAME_GAP)
         .fill(look.chrome)
         .border_sides([1.0, 0.0, 0.0, 0.0], look.rule)
-        .children(range.map(|position| {
-            let photo = &s.photos[position];
+        .children(range.filter_map(|position| {
+            let photo = s.shown(position)?;
             let current = position == index;
             let pixels = match &photo.thumbnail {
                 Thumbnail::Ready(path) => s.thumbnails.pixels(path),
                 _ => None,
             };
-            el().key(format!("film-{}", photo.record.id))
-                .role("button")
-                .label(photo.record.file_name())
-                .checked(current)
-                .padding(2.0)
-                .radius(6.0)
-                .border(2.0, if current { look.fg } else { Color::TRANSPARENT })
-                .opacity(if current { 1.0 } else { 0.7 })
-                .cursor(rune::Cursor::Pointer)
-                .on_press_tx(move |s: &mut Gallery, tx: &mut Tx| s.select_index(position, tx))
-                .child(
-                    el().size(FILM_FRAME_WIDTH, FILM_FRAME_HEIGHT)
-                        .radius(3.0)
-                        .fill(look.plate)
-                        .children(pixels.map(|pixels| {
-                            el().w_full()
-                                .h_full()
-                                .radius(3.0)
-                                .pixels_fit(pixels, SurfaceFit::Fill)
-                        })),
-                )
+            Some(
+                el().key(format!("film-{}", photo.record.id))
+                    .role("button")
+                    .label(photo.record.file_name())
+                    .checked(current)
+                    .padding(2.0)
+                    .radius(6.0)
+                    .border(2.0, if current { look.fg } else { Color::TRANSPARENT })
+                    .opacity(if current { 1.0 } else { 0.7 })
+                    .cursor(rune::Cursor::Pointer)
+                    .on_press_tx(move |s: &mut Gallery, tx: &mut Tx| {
+                        s.select_position(position, tx)
+                    })
+                    .child(
+                        el().size(FILM_FRAME_WIDTH, FILM_FRAME_HEIGHT)
+                            .radius(3.0)
+                            .fill(look.plate)
+                            .children(pixels.map(|pixels| {
+                                el().w_full()
+                                    .h_full()
+                                    .radius(3.0)
+                                    .pixels_fit(pixels, SurfaceFit::Fill)
+                            })),
+                    ),
+            )
         }))
 }
 

@@ -3,15 +3,17 @@
 
 use super::super::{
     gallery::{
-        GRID_GAP, GRID_GUTTER, Gallery, GalleryPhoto, GridLayout, LibraryState, Thumbnail, row_key,
+        Destination, GRID_GAP, GRID_GUTTER, Gallery, GalleryPhoto, GridLayout, LibraryState,
+        Thumbnail, row_key,
     },
     icons,
     look::Look,
 };
 use super::{GRID_KEY, cloud::tile_mark};
+use crate::cloud::CloudStep;
 use rune::{
-    Color, El, GrowthSpec, PopupItem, PopupMenu, ScrollSpec, SurfaceFit, TextStyle, Tx, col, el,
-    icon, row, text,
+    Color, El, GrowthSpec, Mods, PopupItem, PopupMenu, ScrollSpec, SurfaceFit, TextStyle, Tx, col,
+    el, icon, row, text,
 };
 use rune_kit::Button;
 use std::borrow::Cow;
@@ -34,6 +36,7 @@ pub(super) fn grid_region(s: &Gallery, look: &Look, layout: GridLayout) -> El {
         LibraryState::Unavailable(message) => unavailable(message, look),
         _ if s.photos.is_empty() && s.is_importing() => note("Looking for JPEGs…", look),
         _ if s.photos.is_empty() => empty_state(s, look),
+        _ if s.shown_len() == 0 => note(empty_destination(s.destination), look),
         LibraryState::Open(_) | LibraryState::Demo => grid(s, look, layout),
     };
     region.child(content)
@@ -41,7 +44,7 @@ pub(super) fn grid_region(s: &Gallery, look: &Look, layout: GridLayout) -> El {
 
 fn grid(s: &Gallery, look: &Look, layout: GridLayout) -> El {
     let columns = layout.columns;
-    let rows = s.photos.len().div_ceil(columns);
+    let rows = s.shown_len().div_ceil(columns);
     let look = look.clone();
     col()
         .key(GRID_KEY)
@@ -68,7 +71,7 @@ fn grid(s: &Gallery, look: &Look, layout: GridLayout) -> El {
                 .virtual_rows(
                     rows,
                     layout.row_height(),
-                    move |s: &Gallery, row| Cow::Owned(row_key(&s.photos, row * columns, columns)),
+                    move |s: &Gallery, row| Cow::Owned(row_key(s, row * columns, columns)),
                     move |s: &Gallery, row| grid_row(s, row, &look, layout),
                 )
                 .on_visible_rows(|s: &mut Gallery, rows| {
@@ -80,7 +83,7 @@ fn grid(s: &Gallery, look: &Look, layout: GridLayout) -> El {
 
 fn grid_row(s: &Gallery, row_index: usize, look: &Look, layout: GridLayout) -> El {
     let start = row_index * layout.columns;
-    let end = (start + layout.columns).min(s.photos.len());
+    let end = (start + layout.columns).min(s.shown_len());
     row()
         .w_full()
         .h(layout.row_height())
@@ -88,16 +91,16 @@ fn grid_row(s: &Gallery, row_index: usize, look: &Look, layout: GridLayout) -> E
         .px(GRID_GUTTER)
         .gap(GRID_GAP)
         .children(
-            s.photos[start..end]
-                .iter()
+            (start..end)
+                .filter_map(|position| s.shown(position))
                 .map(|photo| tile(s, photo, look, layout)),
         )
 }
 
-/// A square crop of the photo on a plate. The selected tile's ring stands off the photo
+/// A square crop of the photo on a plate. A selected tile's ring stands off the photo
 /// instead of covering its edge.
 fn tile(s: &Gallery, photo: &GalleryPhoto, look: &Look, layout: GridLayout) -> El {
-    let selected = s.selected.as_ref() == Some(&photo.record.id);
+    let selected = s.selection.contains(&photo.record.id);
     let missing = photo.record.source_missing;
     let content = match &photo.thumbnail {
         Thumbnail::Ready(path) => s.thumbnails.pixels(path).map(|pixels| {
@@ -169,44 +172,58 @@ fn tile(s: &Gallery, photo: &GalleryPhoto, look: &Look, layout: GridLayout) -> E
         .checked(selected)
         .on_press_tx(move |s: &mut Gallery, tx: &mut Tx| {
             if s.benchmark.is_none() {
-                s.select_id(&id, tx);
+                let mods = tx.mods();
+                s.click(&id, mods, tx);
             }
         })
         .on_double_press_tx(move |s: &mut Gallery, tx: &mut Tx| {
-            s.select_id(&open, tx);
+            if s.focus() != Some(&open) {
+                s.click(&open, Mods::default(), tx);
+            }
             s.open_viewer();
         })
-        // A right click selects first, so the menu acts on the photo under the pointer, as in
-        // Finder and Photos.
+        // A right click on a photo outside the selection selects it first, so the menu acts on
+        // the photo under the pointer, as in Finder and Photos. Inside the selection, the menu
+        // acts on every selected photo.
         .on_secondary_press(move |s: &mut Gallery, press, tx: &mut Tx| {
             if s.benchmark.is_some() {
                 return;
             }
-            s.select_id(&menu, tx);
+            s.select_for_menu(&menu, tx);
             let info = if s.inspector_hidden {
                 "Show Info"
             } else {
                 "Hide Info"
             };
             let connected = s.is_connected();
-            let (can_publish, can_unpublish) = s.selected_photo().map_or((false, false), |photo| {
-                let state = &photo.record.cloud;
-                (state.can_publish(), state.can_unpublish())
-            });
+            let can = |count: usize| connected && count > 0;
             let items = PopupMenu::new()
                 .item(PopupItem::new("open", "Open"))
                 .item(PopupItem::new("info", info))
                 .separator()
                 .item(PopupItem::new("reveal", "Show in Finder"))
                 .separator()
-                .item(PopupItem::new("publish", "Publish").enabled(connected && can_publish))
-                .item(PopupItem::new("unpublish", "Unpublish").enabled(connected && can_unpublish));
+                .item(
+                    PopupItem::new("upload", "Upload")
+                        .enabled(can(s.selected_for(CloudStep::Upload))),
+                )
+                .item(
+                    PopupItem::new("publish", "Publish")
+                        .enabled(can(s.selected_for(CloudStep::Publish))),
+                )
+                .item(
+                    PopupItem::new("unpublish", "Unpublish")
+                        .enabled(can(s.selected_for(CloudStep::Unpublish))),
+                )
+                .item(PopupItem::new("retry", "Retry").enabled(can(s.selected_retries())));
             tx.popup_menu(items, press, |s: &mut Gallery, picked, _| match picked {
                 Some("open") => s.open_viewer(),
                 Some("info") => s.toggle_inspector(),
                 Some("reveal") => s.reveal_selected(),
+                Some("upload") => s.upload_selected(),
                 Some("publish") => s.publish_selected(),
                 Some("unpublish") => s.unpublish_selected(),
+                Some("retry") => s.retry_selected(),
                 _ => {}
             });
         });
@@ -290,6 +307,15 @@ fn unavailable(message: &str, look: &Look) -> El {
                     .wrap(),
             ),
     )
+}
+
+/// What the grid says for a destination that holds no photos.
+fn empty_destination(destination: Destination) -> &'static str {
+    match destination {
+        Destination::All => "No photos yet",
+        Destination::Drafts => "No drafts. Upload a photo to make one.",
+        Destination::Published => "Nothing is published. Publish a draft to add it.",
+    }
 }
 
 fn note(message: &'static str, look: &Look) -> El {

@@ -116,6 +116,120 @@ fn action(state: &CloudState) -> Option<Action> {
     })
 }
 
+/// One cloud action on several photos: how many it would send, and its button.
+struct SelectionAction {
+    count: usize,
+    singular: &'static str,
+    plural: &'static str,
+    label: &'static str,
+    key: &'static str,
+    help: &'static str,
+    icon: &'static Icon,
+    press: fn(&mut Gallery),
+}
+
+/// The cloud actions for several selected photos: each step any of them can take, with how
+/// many it sends. A photo that can't take a step is skipped.
+pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
+    let actions = [
+        SelectionAction {
+            count: s.selected_for(CloudStep::Upload),
+            singular: "photo to upload",
+            plural: "photos to upload",
+            label: "Upload",
+            key: "upload-selected",
+            help: "Upload as private drafts (⌘U)",
+            icon: &icons::CLOUD_UPLOAD,
+            press: Gallery::upload_selected,
+        },
+        SelectionAction {
+            count: s.selected_for(CloudStep::Publish),
+            singular: "draft to publish",
+            plural: "drafts to publish",
+            label: "Publish",
+            key: "publish-selected",
+            help: "Add them to the public gallery (⌘P)",
+            icon: &icons::GLOBE,
+            press: Gallery::publish_selected,
+        },
+        SelectionAction {
+            count: s.selected_for(CloudStep::Unpublish),
+            singular: "photo to unpublish",
+            plural: "photos to unpublish",
+            label: "Unpublish",
+            key: "unpublish-selected",
+            help: "Take them out of the public gallery (⇧⌘P)",
+            icon: &icons::CLOUD_CHECK,
+            press: Gallery::unpublish_selected,
+        },
+        SelectionAction {
+            count: s.selected_retries(),
+            singular: "photo to retry",
+            plural: "photos to retry",
+            label: "Retry",
+            key: "retry-selected",
+            help: "Try each stopped step again",
+            icon: &icons::CLOUD_UPLOAD,
+            press: Gallery::retry_selected,
+        },
+    ];
+    let connected = s.is_connected();
+    let rows: Vec<El> = actions
+        .into_iter()
+        .filter(|action| action.count > 0)
+        .map(|action| {
+            let press = action.press;
+            row()
+                .w_full()
+                .gap(8.0)
+                .center_y()
+                .child(
+                    text(format::count(action.count, action.singular, action.plural))
+                        .font(look.ty.ui)
+                        .color(look.fg)
+                        .truncate()
+                        .grow(1.0),
+                )
+                .child(
+                    Button::new(action.label)
+                        .icon(action.icon)
+                        .control_size(ControlSize::Small)
+                        .disabled(!connected)
+                        .help(action.help)
+                        .on_press(move |s: &mut Gallery| press(s))
+                        .build(look)
+                        .key(action.key),
+                )
+        })
+        .collect();
+    let none = rows.is_empty().then(|| {
+        text("No cloud step can start for these photos now.")
+            .font(look.ty.small)
+            .color(look.muted)
+            .wrap()
+    });
+    let not_connected = match &s.connection {
+        Connection::NotConnected { reason } if !rows.is_empty() => Some(
+            text(format!("Not connected to the photo API. {reason}."))
+                .key("not-connected")
+                .font(look.ty.small)
+                .color(look.faint)
+                .wrap(),
+        ),
+        _ => None,
+    };
+    col()
+        .key("cloud")
+        .w_full()
+        .gap(8.0)
+        .padding(10.0)
+        .radius(look.radius.lg)
+        .border(1.0, look.rule)
+        .children(rows)
+        .children(none)
+        .children(not_connected)
+}
+
 /// Who can see the photo, in words, while the cloud holds it.
 fn audience(state: &CloudState) -> Option<&'static str> {
     Some(match state {
