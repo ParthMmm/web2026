@@ -164,10 +164,12 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
         )
     });
     let uploads = s.uploads.filter(|run| run.total > 0).map(|run| {
-        let words = if s.is_connected() {
-            "Uploading"
-        } else {
+        let words = if !s.is_connected() {
             "Waiting to upload · not connected"
+        } else if s.cloud_paused {
+            "Upload paused · token refused"
+        } else {
+            "Uploading"
         };
         progress_line(
             look,
@@ -178,14 +180,13 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
         )
     });
     let (publishing, unpublishing) = s.publishing();
-    let publish =
-        format::publishing_status(publishing, unpublishing, s.is_connected()).map(|words| {
-            text(words)
-                .key("publish-status")
-                .font(STATUS)
-                .color(look.muted)
-                .truncate()
-        });
+    let publish = format::publishing_status(publishing, unpublishing, cloud_note(s)).map(|words| {
+        text(words)
+            .key("publish-status")
+            .font(STATUS)
+            .color(look.muted)
+            .truncate()
+    });
     let left = if s.status.is_empty() {
         text(selection_summary(s)).font(MONO_SMALL)
     } else {
@@ -204,6 +205,17 @@ fn status_bar(s: &Gallery, look: &Look) -> El {
         .children(publish)
         .children(progress)
         .children(uploads)
+}
+
+/// Why calls wait, when they do.
+fn cloud_note(s: &Gallery) -> Option<&'static str> {
+    if !s.is_connected() {
+        Some("not connected")
+    } else if s.cloud_paused {
+        Some("paused")
+    } else {
+        None
+    }
 }
 
 /// Words, a count when there is one, and a bar that is indeterminate without it.

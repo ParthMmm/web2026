@@ -7,6 +7,7 @@ mod events;
 mod import;
 
 use super::{
+    MenuState,
     benchmark::{self, Benchmark, Totals},
     demo,
     frames::FrameLog,
@@ -15,6 +16,7 @@ use super::{
 use crate::{
     ImportFailure, Library, LibraryOptions, PhotoId, PhotoRecord,
     api::{Config, Connection},
+    cloud::CloudState,
     grid::{self, Movement},
 };
 pub(super) use cloud::{UploadRun, failure_of};
@@ -163,6 +165,10 @@ pub struct Gallery {
     pub(super) connection: Connection,
     /// The uploads since the queue was last empty.
     pub(super) uploads: Option<UploadRun>,
+    /// The photo API refused the owner token, and no call runs until a Retry finds a new one.
+    pub(super) cloud_paused: bool,
+    /// The menu bar as last set: what each View toggle says, and which items are on.
+    pub(super) menu: MenuState,
     /// The selected photo's description as the inspector edits it.
     pub(super) description: DescriptionEdit,
     pub(super) status: String,
@@ -268,6 +274,8 @@ impl Gallery {
                 reason: "Opening the library".into(),
             },
             uploads: None,
+            cloud_paused: false,
+            menu: MenuState::default(),
             description: DescriptionEdit::default(),
             status: String::new(),
             picking: false,
@@ -327,6 +335,9 @@ impl Gallery {
         } else {
             IDLE_POLL
         });
+        // Every change to the selection or its cloud state reaches a poll before the frame
+        // that shows it.
+        self.refresh_menu();
         changed
     }
 
@@ -479,8 +490,36 @@ impl Gallery {
     /// bar names what each View toggle will do next.
     fn layout_changed(&mut self) {
         self.grid_size = None;
+        self.refresh_menu();
+    }
+
+    /// The menu bar for the current state: what each View toggle will do, and which photo
+    /// actions apply to the selection.
+    pub(super) fn menu_state(&self) -> MenuState {
+        let selected = self.selected_photo().map(|photo| &photo.record.cloud);
+        let connected = self.is_connected();
+        MenuState {
+            sidebar_hidden: self.sidebar_hidden,
+            inspector_hidden: self.inspector_hidden,
+            publish: connected && selected.is_some_and(CloudState::can_publish),
+            unpublish: connected && selected.is_some_and(CloudState::can_unpublish),
+            cancel: selected.is_some_and(CloudState::is_pending),
+            cancel_all: self
+                .photos
+                .iter()
+                .any(|photo| photo.record.cloud.is_pending()),
+        }
+    }
+
+    /// Rebuilds the menu bar when what it shows changed.
+    fn refresh_menu(&mut self) {
+        let menu = self.menu_state();
+        if menu == self.menu {
+            return;
+        }
+        self.menu = menu;
         if let Some(handle) = &self.handle {
-            let _ = handle.set_menu(super::menus(self.sidebar_hidden, self.inspector_hidden));
+            let _ = handle.set_menu(super::menus(menu));
         }
     }
 

@@ -9,7 +9,7 @@
 
 use super::{
     Event, Shared, ensure_derivative, ensure_unchanged,
-    transfer::{CHANGING_ANSWER, Transfer, record},
+    transfer::{CHANGING_ANSWER, Claim, Transfer, record, report},
 };
 use crate::{
     api::{Api, CallError, Derivative, Manifest, ObjectKind, Original, PhotoView},
@@ -35,6 +35,7 @@ const RENDITIONS: [(ObjectKind, DerivativeSize); 3] = [
 
 /// Hashes the original and stages the web sizes, then hands the photo to a transfer lane.
 pub(super) fn prepare(shared: &Shared, id: &PhotoId) -> Vec<Event> {
+    let claim = Claim::take(shared, id);
     if !matches!(shared.catalog().cloud_state(id), Ok(CloudState::Queued)) {
         return Vec::new();
     }
@@ -44,9 +45,15 @@ pub(super) fn prepare(shared: &Shared, id: &PhotoId) -> Vec<Event> {
                 cloud_id: CloudId::from_hex(&manifest.original.sha256),
                 missing: ObjectKind::ALL.to_vec(),
             };
-            match shared.catalog().set_prepared(id, &manifest, &state) {
+            let mut queue = shared.queue();
+            if !claim.holds(&queue) {
+                return Vec::new();
+            }
+            let prepared = shared.catalog().set_prepared(id, &manifest, &state);
+            match prepared {
                 Ok(()) => {
-                    shared.queue().transfers.push(Transfer::now(id.clone()));
+                    queue.transfers.push(Transfer::now(id.clone()));
+                    drop(queue);
                     shared.wake.notify_all();
                     return vec![Event::CloudChanged {
                         id: id.clone(),
@@ -58,15 +65,12 @@ pub(super) fn prepare(shared: &Shared, id: &PhotoId) -> Vec<Event> {
         }
         Err(failure) => failure,
     };
-    vec![record(
-        shared,
-        id,
-        CloudState::Failed {
-            cloud_id: None,
-            failure,
-            step: CloudStep::Upload,
-        },
-    )]
+    let failed = CloudState::Failed {
+        cloud_id: None,
+        failure,
+        step: CloudStep::Upload,
+    };
+    record(shared, &claim, failed).into_iter().collect()
 }
 
 /// The manifest this photo's upload declares. A retry keeps the earlier manifest while its
@@ -245,21 +249,26 @@ pub(super) fn send_prepared(
     shared: &Shared,
     api: &Api,
     sender: &SyncSender<Event>,
-    id: &PhotoId,
+    claim: &Claim,
 ) -> Option<Result<CloudState, CallError>> {
+    let id = &claim.id;
     let Ok(Some(manifest)) = shared.catalog().manifest(id) else {
-        let _ = sender.send(record(shared, id, CloudState::Queued));
-        shared.queue().prepares.push_back(id.clone());
-        shared.wake.notify_all();
+        if let Some(event) = record(shared, claim, CloudState::Queued) {
+            let _ = sender.send(event);
+            shared.queue().prepares.push_back(id.clone());
+            shared.wake.notify_all();
+        }
         return None;
     };
     let cloud_id = CloudId::from_hex(&manifest.original.sha256);
-    let result = send(shared, api, sender, id, &cloud_id, &manifest).map_err(|error| match error {
-        // The server forgot an upload it had begun; begin again.
-        CallError::NotFound => CallError::Transient("HTTP 404".into()),
-        other => other,
-    });
-    if result.is_ok() {
+    let result =
+        send(shared, api, sender, claim, &cloud_id, &manifest).map_err(|error| match error {
+            // The server forgot an upload it had begun; begin again.
+            CallError::NotFound => CallError::Transient("HTTP 404".into()),
+            other => other,
+        });
+    // A cancelled upload's folder may already hold a newer upload's copies.
+    if result.is_ok() && claim.holds(&shared.queue()) {
         let _ = fs::remove_dir_all(shared.upload_dir(id));
     }
     Some(result)
@@ -268,25 +277,26 @@ pub(super) fn send_prepared(
 /// Begin, send what the server misses, finalize, and return the state the server reports once
 /// the upload is done: Draft, or a later state another run reached. A write the server refuses
 /// because the photo is past upload starts over from `begin`, which then reports that state.
+/// A cancel or a pause stops it before the next call.
 fn send(
     shared: &Shared,
     api: &Api,
     sender: &SyncSender<Event>,
-    id: &PhotoId,
+    claim: &Claim,
     cloud_id: &CloudId,
     manifest: &Manifest,
 ) -> Result<CloudState, CallError> {
+    let id = &claim.id;
     'round: for _ in 0..2 {
+        claim.may_call(shared)?;
         let missing = match api.begin(manifest)? {
             PhotoView::Uploading { missing, .. } => missing,
             done => return Ok(CloudState::reported(&done)),
         };
         let mut left = missing.clone();
-        let _ = sender.send(record(shared, id, uploading(cloud_id, &left)));
+        report(sender, record(shared, claim, uploading(cloud_id, &left)));
         for kind in missing {
-            if shared.queue().stopped {
-                return Err(CallError::Transient("the library closed".into()));
-            }
+            claim.may_call(shared)?;
             let path = object_path(shared, id, kind, manifest).map_err(CallError::Stop)?;
             match api.put_file(cloud_id, kind, &path) {
                 Ok(()) => {}
@@ -302,8 +312,9 @@ fn send(
                 Err(error) => return Err(error),
             }
             left.retain(|other| *other != kind);
-            let _ = sender.send(record(shared, id, uploading(cloud_id, &left)));
+            report(sender, record(shared, claim, uploading(cloud_id, &left)));
         }
+        claim.may_call(shared)?;
         match api.finalize(cloud_id) {
             Ok(PhotoView::Uploading { .. }) | Err(CallError::AlreadyDraft) => continue 'round,
             Ok(done) => return Ok(CloudState::reported(&done)),

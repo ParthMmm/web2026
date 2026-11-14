@@ -1,6 +1,6 @@
-//! The window's cloud actions: Upload, Publish, Unpublish and Retry for the selected photo or
-//! for every photo, each photo's state as the library reports it, and the words the status bar
-//! says about an upload run and each publish.
+//! The window's cloud actions: Upload, Cancel, Publish, Unpublish and Retry for the selected
+//! photo or for every photo, each photo's state as the library reports it, and the words the
+//! status bar says about an upload run, each publish, and a refused owner token.
 
 use super::{Gallery, LibraryState, Overlay};
 use crate::{
@@ -55,6 +55,50 @@ impl Gallery {
             return;
         };
         self.ask_selected(step);
+    }
+
+    /// Stops the selected photo's upload, if it is queued or uploading.
+    pub(in crate::ui) fn cancel_selected(&mut self) {
+        let selected = self.selected.clone();
+        self.cancel(selected.into_iter().collect());
+    }
+
+    /// Stops every queued or uploading photo's upload.
+    pub(in crate::ui) fn cancel_all(&mut self) {
+        let ids = self
+            .photos
+            .iter()
+            .map(|photo| photo.record.id.clone())
+            .collect();
+        self.cancel(ids);
+    }
+
+    /// Hands the queued or uploading photos among `ids` to the library to cancel, and shows
+    /// each one only in the library at once. The demo library changes nothing.
+    fn cancel(&mut self, ids: Vec<PhotoId>) {
+        let LibraryState::Open(library) = &self.library else {
+            return;
+        };
+        let pending: Vec<(PhotoId, String)> = ids
+            .into_iter()
+            .filter_map(|id| {
+                let photo = self.photos.iter().find(|photo| photo.record.id == id)?;
+                photo
+                    .record
+                    .cloud
+                    .is_pending()
+                    .then(|| (id, photo.record.file_name()))
+            })
+            .collect();
+        let Some((_, name)) = pending.first() else {
+            return;
+        };
+        let words = format::cancelled(pending.len(), name);
+        library.cancel(pending.iter().map(|(id, _)| id.clone()).collect());
+        for (id, _) in pending {
+            self.cloud_changed(&id, CloudState::Local);
+        }
+        self.status = words;
     }
 
     /// Uploads every photo that is only in the library, and retries the failed uploads a retry
@@ -146,6 +190,8 @@ impl Gallery {
         if was_pending && !now_pending {
             match state {
                 CloudState::Failed { .. } => run.failed += 1,
+                // Cancelled: no longer part of the run.
+                CloudState::Local => run.total = run.total.saturating_sub(1),
                 _ => run.drafts += 1,
             }
         }
@@ -177,6 +223,21 @@ impl Gallery {
             }
             Err(message) => self.status = format!("Couldn't compare with the photo API: {message}"),
         }
+    }
+
+    /// The API refused the owner token: one photo failed with the reason, and the rest wait.
+    pub(in crate::ui) fn cloud_paused(&mut self) {
+        self.cloud_paused = true;
+        self.status = "The photo API refused the owner token, so uploads and publishing are paused. Update PHOTO_API_TOKEN or the Keychain item, then retry.".into();
+    }
+
+    pub(in crate::ui) fn cloud_resumed(&mut self) {
+        self.cloud_paused = false;
+        self.status = "Resumed uploads and publishing with the new owner token".into();
+    }
+
+    pub(in crate::ui) fn token_unchanged(&mut self) {
+        self.status = "The owner token is the same, so uploads and publishing stay paused. Update PHOTO_API_TOKEN or the Keychain item, then retry.".into();
     }
 
     /// Counts the uploads a restart left pending, so the status bar shows them resuming.

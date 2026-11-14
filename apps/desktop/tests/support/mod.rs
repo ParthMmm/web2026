@@ -3,7 +3,7 @@
 //! SHA-256, checked lengths and hashes, `409` on a write after upload, `finalize` answering a
 //! published photo's real view, `PhotoNotDraft` for publishing an upload), and lets a test
 //! inject faults: an HTTP status, a lost answer, a delay, an unpublish that stops midway, or a
-//! hold until the test releases it.
+//! hold until the test releases it. A test can also change the owner token it accepts.
 
 #![allow(dead_code)]
 
@@ -76,6 +76,9 @@ struct State {
     faults: Vec<Fault>,
     held: bool,
     released: bool,
+    refused: usize,
+    /// The owner token it accepts, when not [`TOKEN`].
+    token: Option<String>,
 }
 
 #[derive(Clone)]
@@ -113,6 +116,16 @@ impl FakeApi {
             action,
             remaining: times,
         });
+    }
+
+    /// Accepts `token` from now on, and refuses every other, [`TOKEN`] included.
+    pub fn change_token(&self, token: &str) {
+        self.lock().token = Some(token.to_owned());
+    }
+
+    /// Calls the API answered 401.
+    pub fn refused(&self) -> usize {
+        self.lock().refused
     }
 
     pub fn clear_faults(&self) {
@@ -240,8 +253,13 @@ impl FakeApi {
         let Some((method, path, headers, body)) = read_request(&stream) else {
             return;
         };
+        let accepted = self
+            .lock()
+            .token
+            .clone()
+            .unwrap_or_else(|| TOKEN.to_owned());
         let authorized =
-            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {TOKEN}"));
+            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {accepted}"));
         let Some(route) = route(&method, &path) else {
             respond(&mut stream, 404, &json!({"_tag": "NotFound"}));
             return;
@@ -278,6 +296,7 @@ impl FakeApi {
         let (status, answer) = if authorized {
             self.handle(route, &path, &body)
         } else {
+            self.lock().refused += 1;
             (401, json!({"_tag": "Unauthorized"}))
         };
         self.lock().calls.push(route);

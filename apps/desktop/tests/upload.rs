@@ -4,7 +4,7 @@
 mod support;
 
 use photo_prototype::{
-    Event, Library, LibraryOptions,
+    Event, Library, LibraryOptions, PhotoId,
     api::{Connection, ObjectKind},
     cloud::{CloudFailure, CloudState},
 };
@@ -520,4 +520,233 @@ fn without_a_connection_the_library_stays_local() {
         library.current_photos().unwrap()[0].cloud,
         CloudState::Local
     );
+}
+
+/// The token the API accepts once the owner rotates it.
+const ROTATED: &str = "rotated-owner-token-0123456789abcd";
+
+/// How long a test watches for work that should not happen.
+const QUIET: Duration = Duration::from_millis(300);
+
+/// Every cloud state the library reports, with every other event, until `done` accepts the
+/// events so far.
+fn events_until(library: &Library, done: impl Fn(&[Event]) -> bool) -> Vec<Event> {
+    let deadline = Instant::now() + TIMEOUT;
+    let mut events = Vec::new();
+    while !done(&events) {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match library.recv_timeout(remaining) {
+            Ok(event) => events.push(event),
+            Err(_) => panic!("stalled; events so far: {events:?}"),
+        }
+    }
+    events
+}
+
+/// The events the library reports in the next [`QUIET`].
+fn events_within_quiet(library: &Library) -> Vec<Event> {
+    std::thread::sleep(QUIET);
+    std::iter::from_fn(|| library.try_recv().ok()).collect()
+}
+
+/// The last state reported for each of `ids`, in order.
+fn last_states(events: &[Event], ids: &[PhotoId]) -> Vec<Option<CloudState>> {
+    ids.iter()
+        .map(|wanted| {
+            events.iter().rev().find_map(|event| match event {
+                Event::CloudChanged { id, state } if id == wanted => Some(state.clone()),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+fn changed(event: &Event, wanted: &PhotoId, to: &CloudState) -> bool {
+    matches!(event, Event::CloudChanged { id, state } if id == wanted && state == to)
+}
+
+#[test]
+fn a_cancelled_upload_is_local_after_a_reopen_and_a_later_upload_ends_as_one_draft() {
+    let api = FakeApi::start();
+    let setup = setup(2);
+    let library = open(&setup.root, &api);
+    let ids = import(&library, &setup.sources);
+    let (uploading, queued) = (ids[0].clone(), ids[1].clone());
+
+    // Cancelled while the lane sends the original.
+    api.fault(Route::Put(ObjectKind::Original), Action::Hold, 1);
+    library.upload(vec![uploading.clone()]);
+    until_held(&api);
+    library.cancel(vec![uploading.clone()]);
+    let events = events_until(&library, |events| {
+        events
+            .iter()
+            .any(|event| changed(event, &uploading, &CloudState::Local))
+    });
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            Event::CloudChanged {
+                state: CloudState::Uploading { .. },
+                ..
+            }
+        )),
+        "{events:?}"
+    );
+    api.release();
+    until_called(&api, Route::Put(ObjectKind::Original));
+
+    // Cancelled before it was prepared.
+    library.upload(vec![queued.clone()]);
+    library.cancel(vec![queued.clone()]);
+    let events = events_until(&library, |events| {
+        events
+            .iter()
+            .any(|event| changed(event, &queued, &CloudState::Local))
+    });
+    assert_eq!(
+        last_states(&events, std::slice::from_ref(&uploading)),
+        vec![None],
+        "the held call's answer is not recorded: {events:?}"
+    );
+    let after = events_within_quiet(&library);
+    assert!(
+        !after
+            .iter()
+            .any(|event| matches!(event, Event::CloudChanged { .. })),
+        "nothing is written over a cancel: {after:?}"
+    );
+    assert_eq!(api.count(Route::Begin), 1, "the queued photo made no call");
+    drop(library);
+
+    for id in &ids {
+        assert_eq!(stored_state(&setup.root, &api, id), CloudState::Local);
+        assert!(
+            !setup.root.join("uploads").join(id.as_str()).exists(),
+            "no staged copies are left"
+        );
+    }
+
+    let library = open(&setup.root, &api);
+    library.upload(ids.clone());
+    let states = wait_all(&library, &ids, is_settled);
+    assert!(states.iter().all(is_draft), "{states:?}");
+    assert_eq!(api.drafts().len(), 2, "one draft each");
+    assert_eq!(
+        api.count(Route::Put(ObjectKind::Original)),
+        2,
+        "begin reported the original the server already held"
+    );
+}
+
+/// Uploads every photo in `ids` after the API stopped taking the library's token, and returns
+/// the events until one photo failed, the queue paused, and every other photo was prepared, then
+/// the events in the quiet after.
+fn upload_with_a_refused_token(library: &Library, api: &FakeApi, ids: &[PhotoId]) -> Vec<Event> {
+    api.change_token(ROTATED);
+    library.upload(ids.to_vec());
+    let mut events = events_until(library, |events| {
+        let paused = events
+            .iter()
+            .any(|event| matches!(event, Event::CloudPaused));
+        let settled = last_states(events, ids).iter().all(|state| {
+            matches!(
+                state,
+                Some(CloudState::Failed { .. } | CloudState::Uploading { .. })
+            )
+        });
+        paused && settled
+    });
+    events.extend(events_within_quiet(library));
+    events
+}
+
+/// The one photo the refused token failed.
+fn refused_photo(events: &[Event], ids: &[PhotoId]) -> PhotoId {
+    let states = last_states(events, ids);
+    let failed: Vec<&PhotoId> = ids
+        .iter()
+        .zip(&states)
+        .filter(|(_, state)| matches!(state, Some(CloudState::Failed { .. })))
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(failed.len(), 1, "exactly one photo fails: {states:?}");
+    failed[0].clone()
+}
+
+#[test]
+fn a_refused_token_pauses_the_queue_and_a_retry_with_a_new_token_finishes_every_photo() {
+    let api = FakeApi::start();
+    let setup = setup(3);
+    let keychain = Keychain::new(TOKEN);
+    let library = with_keychain(&setup.root, &api, &keychain);
+    let ids = import(&library, &setup.sources);
+
+    let events = upload_with_a_refused_token(&library, &api, &ids);
+    assert_eq!(api.refused(), 1, "exactly one call is refused");
+    assert_eq!(
+        (api.count(Route::Begin), api.puts()),
+        (1, 0),
+        "and no other is made"
+    );
+    let failed = refused_photo(&events, &ids);
+    for (id, state) in ids.iter().zip(last_states(&events, &ids)) {
+        let state = state.unwrap();
+        if *id == failed {
+            assert_eq!(failure(&state), &CloudFailure::Unauthorized);
+        } else {
+            assert!(matches!(state, CloudState::Uploading { .. }), "{state:?}");
+        }
+    }
+    let paused = events
+        .iter()
+        .filter(|event| matches!(event, Event::CloudPaused))
+        .count();
+    assert_eq!(paused, 1, "the pause is said once");
+
+    keychain.set(ROTATED);
+    library.upload(vec![failed]);
+    let states = wait_all(&library, &ids, is_settled);
+    assert!(states.iter().all(is_draft), "{states:?}");
+    assert_eq!(api.drafts().len(), 3);
+    assert_eq!(api.refused(), 1);
+}
+
+#[test]
+fn a_retry_with_the_same_token_stays_paused_and_makes_no_call() {
+    let api = FakeApi::start();
+    let setup = setup(2);
+    let keychain = Keychain::new(TOKEN);
+    let library = with_keychain(&setup.root, &api, &keychain);
+    let ids = import(&library, &setup.sources);
+
+    let events = upload_with_a_refused_token(&library, &api, &ids);
+    let failed = refused_photo(&events, &ids);
+    let calls = api.calls().len();
+
+    library.upload(vec![failed.clone()]);
+    let events = events_until(&library, |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, Event::TokenUnchanged))
+    });
+    let state = last_states(&events, std::slice::from_ref(&failed))
+        .remove(0)
+        .unwrap();
+    assert_eq!(failure(&state), &CloudFailure::Unauthorized, "{events:?}");
+    let after = events_within_quiet(&library);
+    assert!(
+        !after
+            .iter()
+            .any(|event| matches!(event, Event::CloudChanged { .. })),
+        "{after:?}"
+    );
+    assert_eq!(api.calls().len(), calls, "no new call");
+    let photo = library
+        .current_photos()
+        .unwrap()
+        .into_iter()
+        .find(|photo| photo.id == failed)
+        .unwrap();
+    assert_eq!(failure(&photo.cloud), &CloudFailure::Unauthorized);
 }
