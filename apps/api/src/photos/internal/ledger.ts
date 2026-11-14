@@ -156,6 +156,8 @@ export interface Ledger {
     photoId: PhotoId
   ) => Effect.Effect<Option.Option<Draft>, LedgerUnavailable>;
   readonly published: Effect.Effect<readonly Published[], LedgerUnavailable>;
+  /** Rises with every change to the Published list or its details. */
+  readonly galleryVersion: Effect.Effect<number, LedgerUnavailable>;
 }
 
 export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
@@ -213,6 +215,12 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
         UPDATE photo SET finalized_at = ${nowMillis}
         WHERE photo_id = ${photoId} AND finalized_at IS NULL AND manifest = ${manifest}
         RETURNING ${columns}`,
+    });
+
+    const selectGalleryVersion = SqlSchema.findOne({
+      Request: Schema.Null,
+      Result: Schema.Struct({ version: Schema.Int }),
+      execute: () => sql`SELECT version FROM gallery WHERE id = 1`,
     });
 
     const compareAndPublish = SqlSchema.findOneOption({
@@ -314,9 +322,17 @@ export const makeLedger: Effect.Effect<Ledger, never, SqlClient.SqlClient> =
       Effect.map((rows) => rows.map(toStored).filter(isPublished))
     );
 
+    const galleryVersion: Ledger["galleryVersion"] = selectGalleryVersion(
+      null
+    ).pipe(
+      attempt("ledger.galleryVersion"),
+      Effect.map(({ version }) => version)
+    );
+
     return {
       declare,
       find,
+      galleryVersion,
       markFinal,
       markPrivate,
       markPublished,
