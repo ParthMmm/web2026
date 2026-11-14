@@ -182,9 +182,14 @@ fn the_tile_menu_acts_on_the_selection_and_a_photo_outside_it_replaces_it() {
         );
     }
     rt.resolve_popup(None).unwrap();
-    let menu = right_click(&mut rt, 20);
+    // Photo 0 is a draft outside the selection.
+    let menu = right_click(&mut rt, 0);
     assert_eq!(rt.state.selection.len(), 1, "outside it, the photo alone");
-    assert!(menu.find("publish").is_some_and(|item| !item.is_enabled()));
+    assert!(menu.find("publish").is_some_and(PopupItem::is_enabled));
+    assert!(
+        menu.find("unpublish")
+            .is_some_and(|item| !item.is_enabled())
+    );
 }
 
 #[test]
