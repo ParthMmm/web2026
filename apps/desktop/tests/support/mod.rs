@@ -1,7 +1,9 @@
 //! A small in-process photo API for upload and publish tests. It follows the Worker's contract
-//! for `begin`, `get`, `put`, `finalize`, `publish`, `unpublish` and `list` (identity by
-//! SHA-256, checked lengths and hashes, `409` on a write after upload, `finalize` answering a
-//! published photo's real view, `PhotoNotDraft` for publishing an upload), and lets a test
+//! for `begin`, `get`, `put`, `originalUpload`, `finalize`, `publish`, `unpublish` and `list`
+//! (identity by SHA-256, checked lengths and hashes, `409` on a write after upload, `finalize`
+//! answering a published photo's real view, `PhotoNotDraft` for publishing an upload). It also
+//! stands in for storage: the original arrives by a presigned PUT under `/r2/`, which needs no
+//! token and refuses one, and is counted as `Route::Put(ObjectKind::Original)`. It lets a test
 //! inject faults: an HTTP status, a lost answer, a delay, an unpublish that stops midway, or a
 //! hold until the test releases it.
 
@@ -27,6 +29,8 @@ pub enum Route {
     Begin,
     Get,
     Put(ObjectKind),
+    /// `originalUpload`: a presigned PUT for the original.
+    OriginalUpload,
     Finalize,
     Publish,
     Unpublish,
@@ -240,8 +244,13 @@ impl FakeApi {
         let Some((method, path, headers, body)) = read_request(&stream) else {
             return;
         };
-        let authorized =
-            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {TOKEN}"));
+        let storage = path.starts_with("/r2/");
+        let authorized = if storage {
+            // A presigned PUT carries its signature in the URL; the owner token must stay home.
+            !headers.contains_key("authorization")
+        } else {
+            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {TOKEN}"))
+        };
         let Some(route) = route(&method, &path) else {
             respond(&mut stream, 404, &json!({"_tag": "NotFound"}));
             return;
@@ -275,17 +284,22 @@ impl FakeApi {
             Some(Action::Hold) => self.wait_for_release(),
             _ => {}
         }
-        let (status, answer) = if authorized {
-            self.handle(route, &path, &body)
-        } else {
+        let (status, answer) = if !authorized {
             (401, json!({"_tag": "Unauthorized"}))
+        } else if storage {
+            self.store_original(&path, &headers, &body)
+        } else {
+            self.handle(route, &path, &body)
         };
         self.lock().calls.push(route);
         if matches!(action, Some(Action::LoseAnswer)) {
             let _ = stream.shutdown(std::net::Shutdown::Both);
             return;
         }
-        respond(&mut stream, status, &answer);
+        match answer["Code"].as_str() {
+            Some(code) if storage => respond_xml(&mut stream, status, code),
+            _ => respond(&mut stream, status, &answer),
+        }
     }
 
     fn take_fault(&self, route: Route) -> Option<Action> {
@@ -305,6 +319,28 @@ impl FakeApi {
             state = self.state.1.wait(state).unwrap();
         }
         state.held = false;
+    }
+
+    /// What R2 does with a presigned PUT: the bytes must match the signed length and SHA-256.
+    fn store_original(
+        &self,
+        path: &str,
+        headers: &HashMap<String, String>,
+        body: &[u8],
+    ) -> (u16, Value) {
+        let mut state = self.lock();
+        let id = photo_id(path).to_owned();
+        let Some(photo) = state.photos.get_mut(&id) else {
+            return (404, json!({"Code": "NoSuchUpload"}));
+        };
+        let signed = |name: &str| headers.get(name).map(String::as_str).unwrap_or_default();
+        if signed("x-amz-checksum-sha256") != hex(&Sha256::digest(body))
+            || signed("content-length") != body.len().to_string()
+        {
+            return (400, json!({"Code": "BadDigest"}));
+        }
+        photo.stored.insert(ObjectKind::Original);
+        (200, Value::Null)
     }
 
     fn handle(&self, route: Route, path: &str, body: &[u8]) -> (u16, Value) {
@@ -349,6 +385,27 @@ impl FakeApi {
                 }
                 photo.stored.insert(kind);
                 (204, Value::Null)
+            }
+            Route::OriginalUpload => {
+                let Some(photo) = state.photos.get(&id) else {
+                    return (404, json!({"_tag": "PhotoNotFound", "photoId": id}));
+                };
+                if photo.stage != Stage::Uploading {
+                    return (409, json!({"_tag": "PhotoAlreadyDraft", "photoId": id}));
+                }
+                let facts = &photo.manifest["original"];
+                (
+                    200,
+                    json!({
+                        "expiresAt": FINALIZED_AT,
+                        "headers": {
+                            "content-length": facts["bytes"].as_u64().unwrap().to_string(),
+                            "x-amz-checksum-sha256": facts["sha256"],
+                        },
+                        "method": "PUT",
+                        "url": format!("{}/r2/photos/{id}/original", self.address),
+                    }),
+                )
             }
             Route::Finalize => {
                 let Some(photo) = state.photos.get_mut(&id) else {
@@ -471,6 +528,10 @@ fn route(method: &str, path: &str) -> Option<Route> {
         ("POST", ["v1", "photos"]) => Route::Begin,
         ("GET", ["v1", "photos", _]) => Route::Get,
         ("POST", ["v1", "photos", _, "finalize"]) => Route::Finalize,
+        ("POST", ["v1", "photos", _, "original", "upload-url"]) => Route::OriginalUpload,
+        ("PUT", ["r2", "photos", _, "original"]) => Route::Put(ObjectKind::Original),
+        // The desktop sends the original straight to storage, never through the API.
+        ("PUT", ["v1", "photos", _, "original"]) => return None,
         ("POST", ["v1", "photos", _, "publish"]) => Route::Publish,
         ("POST", ["v1", "photos", _, "unpublish"]) => Route::Unpublish,
         ("GET", ["v1", "photos"]) => Route::List,
@@ -521,6 +582,18 @@ fn respond(stream: &mut TcpStream, status: u16, body: &Value) {
     let _ = write!(
         stream,
         "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let _ = stream.flush();
+}
+
+/// An S3 error, as storage answers a refused presigned PUT.
+fn respond_xml(stream: &mut TcpStream, status: u16, code: &str) {
+    let body =
+        format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>{code}</Code></Error>");
+    let _ = write!(
+        stream,
+        "HTTP/1.1 {status} X\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     let _ = stream.flush();

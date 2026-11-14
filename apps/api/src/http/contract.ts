@@ -18,6 +18,7 @@ import {
   LengthMismatch,
   Manifest,
   MAX_OBJECT_BYTES,
+  OriginalUpload,
   PhotoAlreadyDraft,
   PhotoId,
   PageLimit,
@@ -89,6 +90,15 @@ export const PhotosGroup = HttpApiGroup.make("photos")
       params: PhotoParams,
       success: PhotoView,
     }),
+    HttpApiEndpoint.post(
+      "originalUpload",
+      "/v1/photos/:photoId/original/upload-url",
+      {
+        error: [PhotoNotFound, PhotoAlreadyDraft, StorageUnavailable],
+        params: PhotoParams,
+        success: OriginalUpload,
+      }
+    ),
     HttpApiEndpoint.put("put", "/v1/photos/:photoId/:kind", {
       error: [
         PhotoNotFound,

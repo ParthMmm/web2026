@@ -2,10 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { MAX_OBJECT_BYTES } from "../src/photos/domain.ts";
 import { writePhotoFixture } from "./photo-fixture.ts";
 
+// Larger than the most the Worker takes in one request, so only a direct upload can send it.
+const ORIGINAL_BYTES = MAX_OBJECT_BYTES + 1;
+
 const dir = mkdtempSync(path.join(tmpdir(), "photo-smoke-"));
-await writePhotoFixture(dir);
+await writePhotoFixture(dir, ORIGINAL_BYTES);
 
 const env = {
   ...process.env,

@@ -114,3 +114,119 @@ fn put_file_streams_the_file_with_its_length() {
     assert!(!head.to_ascii_lowercase().contains("transfer-encoding"));
     assert_eq!(body, bytes);
 }
+
+#[test]
+fn put_original_file_sends_the_signed_headers_to_storage_without_the_owner_token() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let base = format!("http://{address}/");
+    let (received, requests) = mpsc::channel();
+    let bytes: Vec<u8> = (0..300_000).map(|index| (index % 251) as u8).collect();
+    let length = bytes.len();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = stream.unwrap();
+            let received = received.clone();
+            // The API and storage clients each hold a connection open, so serve each on its own thread.
+            thread::spawn(move || {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                while let Some(request) = read_request(&mut reader) {
+                    let answer = if request.head.starts_with("POST ") {
+                        let body = format!(
+                            r#"{{"expiresAt":"2026-11-14T00:15:00.000Z","headers":{{"content-length":"{length}","x-amz-checksum-sha256":"c2lnbmVk"}},"method":"PUT","url":"http://{address}/private/photos/{PHOTO_ID}/original-x?X-Amz-Signature=abc"}}"#
+                        );
+                        format!(
+                            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{body}",
+                            body.len()
+                        )
+                    } else {
+                        "HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n".to_owned()
+                    };
+                    received.send(request).unwrap();
+                    stream.write_all(answer.as_bytes()).unwrap();
+                }
+            });
+        }
+    });
+    let path = std::env::temp_dir().join(format!("put-original-{}", std::process::id()));
+    std::fs::write(&path, &bytes).unwrap();
+
+    let client = Client::new(&base, "owner-secret").unwrap();
+    client.put_original_file(PHOTO_ID, &path).unwrap();
+    std::fs::remove_file(&path).unwrap();
+
+    let sign = requests.recv().unwrap();
+    assert!(
+        sign.head
+            .starts_with(&format!("POST /v1/photos/{PHOTO_ID}/original/upload-url ")),
+        "{}",
+        sign.head
+    );
+    assert!(sign.head.contains("owner-secret"));
+    let Request { head, body } = requests.recv().unwrap();
+    let lower = head.to_ascii_lowercase();
+    assert!(
+        head.starts_with(&format!(
+            "PUT /private/photos/{PHOTO_ID}/original-x?X-Amz-Signature=abc "
+        )),
+        "{head}"
+    );
+    assert!(
+        lower.contains(&format!("content-length: {length}\r\n")),
+        "{head}"
+    );
+    assert!(
+        lower.contains("x-amz-checksum-sha256: c2lnbmvk\r\n"),
+        "{head}"
+    );
+    assert!(!lower.contains("authorization"), "{head}");
+    assert!(!head.contains("owner-secret"), "{head}");
+    assert_eq!(body, bytes);
+}
+
+#[test]
+fn a_storage_refusal_names_its_s3_code() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let base = format!("http://{address}/");
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = stream.unwrap();
+            thread::spawn(move || {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                while let Some(request) = read_request(&mut reader) {
+                    let (status, kind, body) = if request.head.starts_with("POST ") {
+                        (
+                            "200 OK",
+                            "application/json",
+                            format!(
+                                r#"{{"expiresAt":"2026-11-14T00:15:00.000Z","headers":{{"x-amz-checksum-sha256":"c2lnbmVk"}},"method":"PUT","url":"http://{address}/private/k"}}"#
+                            ),
+                        )
+                    } else {
+                        (
+                            "400 Bad Request",
+                            "application/xml",
+                            "<?xml version=\"1.0\"?><Error><Code>BadDigest</Code></Error>"
+                                .to_owned(),
+                        )
+                    };
+                    let answer = format!(
+                        "HTTP/1.1 {status}\r\ncontent-type: {kind}\r\ncontent-length: {}\r\n\r\n{body}",
+                        body.len()
+                    );
+                    stream.write_all(answer.as_bytes()).unwrap();
+                }
+            });
+        }
+    });
+
+    let client = Client::new(&base, "token").unwrap();
+    match client.put_original(PHOTO_ID, vec![1, 2, 3]) {
+        Err(ClientError::Storage {
+            status: 400,
+            code: Some(code),
+        }) if code == "BadDigest" => {}
+        other => panic!("expected storage 400 BadDigest, got {other:?}"),
+    }
+}

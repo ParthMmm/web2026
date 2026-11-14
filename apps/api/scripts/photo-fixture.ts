@@ -7,6 +7,14 @@ import { Digest } from "effect/crypto";
 import { variantKinds } from "../src/photos/domain.ts";
 import { declare, validBodies } from "../tests/support/fixture.ts";
 
+const patterned = (length: number) => {
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < length; index += 1) {
+    bytes[index] = index % 251;
+  }
+  return bytes;
+};
+
 /** Writes a photo's manifest and objects. `originalBytes` sizes the original, as a camera file would be. */
 export const writePhotoFixture = async (
   dir: string,
@@ -14,9 +22,7 @@ export const writePhotoFixture = async (
 ) => {
   const bodies = validBodies();
   const original =
-    originalBytes === undefined
-      ? bodies.original
-      : Uint8Array.from({ length: originalBytes }, (_, index) => index % 251);
+    originalBytes === undefined ? bodies.original : patterned(originalBytes);
   const { manifest } = await Effect.runPromise(
     declare({ ...bodies, original }).pipe(Effect.provide(Digest.layerWebCrypto))
   );
