@@ -254,13 +254,23 @@ pub(super) fn send_prepared(
         return None;
     };
     let cloud_id = CloudId::from_hex(&manifest.original.sha256);
-    let result = send(shared, api, sender, id, &cloud_id, &manifest).map_err(|error| match error {
-        // The server forgot an upload it had begun; begin again.
-        CallError::NotFound => CallError::Transient("HTTP 404".into()),
-        other => other,
-    });
+    let mut files = 0;
+    let result =
+        send(shared, api, sender, id, &cloud_id, &manifest, &mut files).map_err(
+            |error| match error {
+                // The server forgot an upload it had begun; begin again.
+                CallError::NotFound => CallError::Transient("HTTP 404".into()),
+                other => other,
+            },
+        );
     if result.is_ok() {
         let _ = fs::remove_dir_all(shared.upload_dir(id));
+        if files > 0 {
+            let _ = sender.send(Event::UploadTransferred {
+                id: id.clone(),
+                files,
+            });
+        }
     }
     Some(result)
 }
@@ -268,6 +278,7 @@ pub(super) fn send_prepared(
 /// Begin, send what the server misses, finalize, and return the state the server reports once
 /// the upload is done: Draft, or a later state another run reached. A write the server refuses
 /// because the photo is past upload starts over from `begin`, which then reports that state.
+/// `files` counts each object the server accepted.
 fn send(
     shared: &Shared,
     api: &Api,
@@ -275,6 +286,7 @@ fn send(
     id: &PhotoId,
     cloud_id: &CloudId,
     manifest: &Manifest,
+    files: &mut usize,
 ) -> Result<CloudState, CallError> {
     'round: for _ in 0..2 {
         let missing = match api.begin(manifest)? {
@@ -289,7 +301,7 @@ fn send(
             }
             let path = object_path(shared, id, kind, manifest).map_err(CallError::Stop)?;
             match api.put_file(cloud_id, kind, &path) {
-                Ok(()) => {}
+                Ok(()) => *files += 1,
                 Err(CallError::AlreadyDraft) => continue 'round,
                 Err(
                     error @ (CallError::File(_) | CallError::Stop(CloudFailure::Rejected { .. })),

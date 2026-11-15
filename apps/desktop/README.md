@@ -151,7 +151,16 @@ python3 apps/desktop/benchmark.py "$HOME/Pictures" --mode pipeline --count 20 --
 caffeinate -dimsu python3 apps/desktop/benchmark.py "$HOME/Pictures" --count 200 --seconds 30 --output apps/desktop/benchmarks/local/gui-run
 ```
 
-Repeat the GUI command with counts 20, 200, and the full authorized library. Output directories must be new. Each run creates its own library inside the output directory, so benchmarks never touch your real library. The harness samples evenly across the folder tree and omits source names and paths from JSON. Libraries and raw reports are ignored by Git. Encoder stderr and scene captures can contain private material; keep them local.
+Repeat the GUI command with counts 20, 200, and the full authorized library. Then run it once more with `--uploads` while a local Worker runs (see [Upload](#upload)):
+
+```sh
+PHOTO_API_URL=http://127.0.0.1:8791 PHOTO_API_TOKEN=<the Worker's token> \
+  caffeinate -dimsu python3 apps/desktop/benchmark.py "$HOME/Pictures" --count 200 --seconds 30 --uploads --output apps/desktop/benchmarks/local/gui-uploads-run
+```
+
+`--uploads` sets `PHOTO_BENCH_UPLOADS=1`. The app then uploads each photo as a private draft as soon as it lands, so the transfer lanes run while the window scrolls and loads previews. An upload run measures the cold state only: after it, the server holds every selected photo, so a warm run would send nothing. Start each upload run against a Worker that holds none of the selected photos. The report's `uploads` key counts the photos that are local, pending, in the cloud, and failed when the run ends, and `transferred`: the uploads that sent their files and settled during the run. A photo the server already holds does not count. An upload run passes only when it also meets every budget, transfers at least one photo, and stops none. Without `--uploads`, the benchmark never uploads.
+
+Output directories must be new. Each run creates its own library inside the output directory, so benchmarks never touch your real library. The harness samples evenly across the folder tree and omits source names and paths from JSON. Libraries and raw reports are ignored by Git. Encoder stderr and scene captures can contain private material; keep them local.
 
 `benchmark-pipeline <library-directory> <JPEG-or-folder>...` imports without a window and prints one JSON summary. `PHOTO_PREWARM_INDICES` also renders the desktop previews for those grid positions, which the warm GUI run requires.
 

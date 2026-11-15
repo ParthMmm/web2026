@@ -4,7 +4,7 @@
 mod support;
 
 use photo_prototype::{
-    Event, Library, LibraryOptions,
+    Event, Library, LibraryOptions, PhotoId,
     api::{Connection, ObjectKind},
     cloud::{CloudFailure, CloudState},
 };
@@ -58,6 +58,47 @@ fn an_upload_becomes_a_verified_draft_that_survives_restart() {
             cloud_id: cloud_id.clone()
         }
     );
+}
+
+/// Uploads `id` and returns how many files the transfer lane says it sent, and the final state.
+fn upload_and_count_files(library: &Library, id: &PhotoId) -> (usize, CloudState) {
+    library.upload(vec![id.clone()]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut files = 0;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match library.recv_timeout(remaining).expect("upload stalled") {
+            Event::UploadTransferred {
+                id: sent,
+                files: count,
+            } if &sent == id => files += count,
+            Event::CloudChanged { id: changed, state } if &changed == id && is_settled(&state) => {
+                return (files, state);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn only_an_upload_that_sends_files_reports_a_transfer() {
+    let api = FakeApi::start();
+    let first = setup(1);
+    let library = open(&first.root, &api);
+    let id = import(&library, &first.sources)[0].clone();
+    let (files, state) = upload_and_count_files(&library, &id);
+    assert!(matches!(state, CloudState::Draft { .. }), "{state:?}");
+    assert_eq!((files, api.puts()), (4, 4), "a new photo sends each object");
+    drop(library);
+
+    // A fresh library with the same photo: the server already holds it, so `begin` answers
+    // Draft and the lane sends nothing, though preparation set Uploading first.
+    let second = setup(1);
+    let library = open(&second.root, &api);
+    let id = import(&library, &second.sources)[0].clone();
+    let (files, state) = upload_and_count_files(&library, &id);
+    assert!(matches!(state, CloudState::Draft { .. }), "{state:?}");
+    assert_eq!((files, api.puts()), (0, 4), "a held photo sends nothing");
 }
 
 #[test]

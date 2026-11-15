@@ -2,7 +2,7 @@
 //! for every photo, each photo's state as the library reports it, and the words the status bar
 //! says about an upload run and each publish.
 
-use super::{Gallery, LibraryState, Overlay};
+use super::{Gallery, LibraryState, Overlay, benchmark::UploadTotals};
 use crate::{
     PhotoId,
     api::Connection,
@@ -81,6 +81,36 @@ impl Gallery {
         self.ask(CloudStep::Upload, ids);
     }
 
+    /// A benchmark run that uploads each photo as it lands.
+    pub(super) fn benchmark_uploads(&self) -> bool {
+        self.benchmark
+            .as_ref()
+            .is_some_and(super::Benchmark::uploads)
+    }
+
+    /// Uploads a photo that just landed, when the benchmark run asks for uploads.
+    pub(super) fn benchmark_upload(&mut self, id: PhotoId) {
+        if self.benchmark_uploads() {
+            self.ask(CloudStep::Upload, vec![id]);
+        }
+    }
+
+    /// Where each photo's upload stands, for the benchmark report.
+    pub(in crate::ui) fn upload_totals(&self) -> UploadTotals {
+        let mut totals = UploadTotals::default();
+        for photo in &self.photos {
+            let state = &photo.record.cloud;
+            let count = match state {
+                CloudState::Local => &mut totals.local,
+                CloudState::Failed { .. } => &mut totals.failed,
+                _ if state.is_pending() => &mut totals.pending,
+                _ => &mut totals.in_cloud,
+            };
+            *count += 1;
+        }
+        totals
+    }
+
     /// Retries every failure a retry can help, each with the step it needs.
     pub(in crate::ui) fn retry_cloud(&mut self) {
         let retries = self
@@ -145,6 +175,14 @@ impl Gallery {
         }
         for (id, state) in started {
             self.cloud_changed(&id, state);
+        }
+    }
+
+    /// An upload sent files and the server holds the photo now. The benchmark counts it; a
+    /// photo the server already held reports no transfer, so it never counts.
+    pub(in crate::ui) fn upload_transferred(&mut self) {
+        if let Some(benchmark) = &mut self.benchmark {
+            benchmark.upload_transferred();
         }
     }
 

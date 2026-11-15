@@ -157,6 +157,12 @@ pub enum Event {
         id: PhotoId,
         state: CloudState,
     },
+    /// An upload sent `files` of a photo's objects and the server now holds the photo. An
+    /// upload the server already held sends nothing and reports no transfer.
+    UploadTransferred {
+        id: PhotoId,
+        files: usize,
+    },
     /// The library compared its cloud states with the server's list on open: how many it
     /// corrected, or why it couldn't.
     CloudChecked {

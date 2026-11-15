@@ -147,6 +147,8 @@ pub struct GalleryOptions {
     pub library_root: PathBuf,
     pub inputs: Vec<PathBuf>,
     pub benchmark_seconds: Option<u64>,
+    /// A benchmark run uploads each photo as it lands.
+    pub benchmark_uploads: bool,
 }
 
 pub struct Gallery {
@@ -204,7 +206,9 @@ impl Gallery {
         frames: Rc<RefCell<FrameLog>>,
         handle: AppHandle<Self>,
     ) -> Self {
-        let benchmark = options.benchmark_seconds.map(Benchmark::new);
+        let benchmark = options
+            .benchmark_seconds
+            .map(|seconds| Benchmark::new(seconds, options.benchmark_uploads));
         if benchmark.is_some() {
             frames.borrow_mut().start_recording();
         }
@@ -313,11 +317,12 @@ impl Gallery {
             return;
         };
         let benchmarking = self.benchmark.is_some();
+        let library_only = benchmarking && !self.benchmark_uploads();
         let options =
             LibraryOptions::new(self.library_root.clone()).prepare_web_sizes(!benchmarking);
         std::thread::spawn(move || {
-            // A benchmark measures the library alone, so it never uploads.
-            let cloud = if benchmarking {
+            // A benchmark measures the library alone unless it asks to upload.
+            let cloud = if library_only {
                 Err("Uploads are off while benchmarking".into())
             } else {
                 Config::from_environment()
@@ -682,6 +687,7 @@ impl Gallery {
                     .iter()
                     .filter(|photo| matches!(photo.thumbnail, Thumbnail::Failed))
                     .count(),
+            uploads: self.upload_totals(),
         };
         let frames = self.frames.borrow_mut().stop_recording();
         let report = benchmark.report(&totals, &frames, &self.thumbnails, &self.previews);

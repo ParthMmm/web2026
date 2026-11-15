@@ -59,6 +59,7 @@ pub fn run(library_root: PathBuf, inputs: Vec<PathBuf>) {
         library_root,
         inputs,
         benchmark_seconds,
+        benchmark_uploads: benchmark::uploads_from_env(),
     };
     let mut app = app
         .init(move || {

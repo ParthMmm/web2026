@@ -34,6 +34,9 @@ impl Gallery {
                 self.refilter();
                 self.resume_uploads();
                 self.library = LibraryState::Open(library);
+                if self.benchmark_uploads() {
+                    self.upload_all();
+                }
                 // A photo is selected on open, so the inspector carries content
                 // and the first arrow key moves somewhere.
                 if self.focus().is_none() {
@@ -141,6 +144,7 @@ impl Gallery {
                 }
             }
             Event::CloudChanged { id, state } => self.cloud_changed(&id, state),
+            Event::UploadTransferred { .. } => self.upload_transferred(),
             Event::CloudChecked { corrected } => self.cloud_checked(corrected),
             Event::FilmMetadataFinished => {}
             Event::FailuresCleared => self.failures.clear(),
@@ -154,10 +158,14 @@ impl Gallery {
                     return;
                 };
                 let grid = library.derivative_path(&record.id, DerivativeSize::Grid);
+                let id = record.id.clone();
                 self.upsert(record, Thumbnail::Ready(grid.into()), tx);
+                self.benchmark_upload(id);
             }
             ImportOutcome::Duplicate(record) | ImportOutcome::Relinked(record) => {
+                let id = record.id.clone();
                 self.upsert(record, Thumbnail::Pending, tx);
+                self.benchmark_upload(id);
             }
             ImportOutcome::Unchanged(_) => {}
             ImportOutcome::Failed(message) => {
