@@ -22,7 +22,8 @@ jobs:
           bun-version: "1.4.1"
       - uses: actions/setup-node@v4
         with:
-          node-version: "24.15.0"
+          node-version: "26.13.1"
+      - run: node --version
       - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt
