@@ -1,0 +1,15 @@
+PAL-2205 scripts/check, PR #38 head 30c46ee54b9f3330a8690d07825376d8dde66499
+Launched from the Vanta worktree at that head with a clean tree (git status --porcelain: 0 lines);
+factory lease copied it to mac (xcode-1) and ran apps/desktop/scripts/check there. The copy carries no .git.
+
+factory lease: PAL-2205:test:1329100@2026-11-19T10:38:08.607Z granted: mac: xcode-1
+factory lease: PAL-2205:test:1329100@2026-11-19T10:38:08.607Z runs on mac, no simulator
+head n/a
+2026-11-19T10:38:12Z
+ok    format
+ok    shape
+ok    clippy
+ok    test
+exit 0
+2026-11-19T10:39:03Z
+factory lease: PAL-2205:test:1329100@2026-11-19T10:38:08.607Z copied .lease-out back to /home/parth/.cache/agent-scratch/pal-2205/rework-pal-2205-89d1f74-11191008/run-check2-1795084687
