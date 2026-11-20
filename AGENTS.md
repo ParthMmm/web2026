@@ -17,6 +17,10 @@ Never guess at Effect patterns - check the guide first.
 The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` for reference.
 <!-- effect-solutions:end -->
 
+## Docs
+
+The code is the source of truth. A PR that makes a doc wrong corrects or deletes that doc in the same PR. Add no spec, plan, audit or module map to the repo: put a spec or plan in Linear and research in the Forge vault. `bun run check` includes `tools/check-doc-paths.ts`, which fails when a tracked Markdown file names a repo path that does not exist; write paths from the repo root. It skips `docs/adr/` and the dated records its skip list names.
+
 ## Agent skills
 
 ### Issue tracker

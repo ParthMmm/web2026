@@ -16,7 +16,8 @@
     "typecheck": "astro sync && tsc --noEmit && tsc --noEmit -p tests && tsc --noEmit -p workers/now-playing && bun run typecheck:astro",
     "typecheck:astro": "bun install --frozen-lockfile --cwd tools/astro-check && tools/astro-check/node_modules/.bin/astro-check",
     "test": "bun test",
-    "check": "ultracite check",
+    "check": "ultracite check && bun run check:doc-paths",
+    "check:doc-paths": "bun tools/check-doc-paths.ts",
     "fix": "ultracite fix",
     "prepare": "lefthook install"
   },

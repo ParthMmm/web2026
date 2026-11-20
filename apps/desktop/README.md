@@ -253,12 +253,7 @@ The window keeps the Library design from the ZUI build (#21), drawn with Rune an
 
 ## Code layout
 
-- `src/ui/gallery/` holds the window's state and the actions that change it. `layout()` computes the grid's columns and tile size, because the grid is virtualised by row and needs exact row heights.
-- `src/ui/look.rs` holds the palette, the fonts and the text styles.
-- `src/ui/view/` has one file per window region: title bar, grid, inspector, viewer, and the failures sheet. `view/mod.rs` assembles them with the sidebar and the status bar.
-- `src/ui/view/parts.rs` holds pieces that take data and draw it (the exposure readout and pill, the film chip, the detail list). They hold no state.
-- `src/api.rs` is the one door to the photo API, `src/cloud.rs` holds the cloud state, `src/library/transfer.rs` runs the transfer lanes, `src/library/upload.rs` prepares and sends uploads, and `src/library/publish.rs` holds publish, unpublish, the description, and the check on open. `src/ui/gallery/cloud.rs` holds the window's cloud actions, `src/ui/gallery/description.rs` the description being edited, and `src/ui/view/cloud.rs` draws the inspector's cloud section and the tile mark.
-- `src/ui/demo.rs` holds the demo library and the scenes, and `goldens/` each scene's element tree.
+`AGENTS.md` names each part of the code and what it holds; the code is the source.
 
 ## Pipeline choice and remaining product work
 
