@@ -1,5 +1,5 @@
-//! A photo's place in the cloud: the inspector's section with its action (Upload, Publish,
-//! Unpublish or Retry), whether the public can see it, and its description; and the mark a
+//! A photo's place in the cloud: the inspector's section with its action (Upload, Cancel,
+//! Publish, Unpublish or Retry), whether the public can see it, and its description; and the mark a
 //! grid tile carries. Each state has its own icon and words, so no state is told by colour
 //! alone.
 
@@ -75,6 +75,8 @@ struct Action {
     help: &'static str,
     icon: &'static Icon,
     press: fn(&mut Gallery),
+    /// Off while the photo API is not connected. A cancel makes no call.
+    calls: bool,
 }
 
 fn action(state: &CloudState) -> Option<Action> {
@@ -84,6 +86,7 @@ fn action(state: &CloudState) -> Option<Action> {
         help,
         icon: &icons::CLOUD_UPLOAD,
         press: Gallery::retry_selected,
+        calls: true,
     };
     Some(match state {
         CloudState::Local => Action {
@@ -92,6 +95,15 @@ fn action(state: &CloudState) -> Option<Action> {
             help: "Upload as a private draft (⌘U)",
             icon: &icons::CLOUD_UPLOAD,
             press: Gallery::upload_selected,
+            calls: true,
+        },
+        CloudState::Queued | CloudState::Uploading { .. } => Action {
+            label: "Cancel",
+            key: "cancel-upload",
+            help: "Stop the upload and keep the photo only in this library",
+            icon: &icons::X,
+            press: Gallery::cancel_selected,
+            calls: false,
         },
         CloudState::Draft { .. } => Action {
             label: "Publish",
@@ -99,6 +111,7 @@ fn action(state: &CloudState) -> Option<Action> {
             help: "Add it to the public gallery (⌘P)",
             icon: &icons::GLOBE,
             press: Gallery::publish_selected,
+            calls: true,
         },
         CloudState::Published { .. } => Action {
             label: "Unpublish",
@@ -106,6 +119,7 @@ fn action(state: &CloudState) -> Option<Action> {
             help: "Take it out of the public gallery (⇧⌘P)",
             icon: &icons::CLOUD_CHECK,
             press: Gallery::unpublish_selected,
+            calls: true,
         },
         CloudState::Failed { .. } => match state.retry()? {
             CloudStep::Upload => retry("retry-upload", "Try the upload again (⌘U)"),
@@ -126,6 +140,8 @@ struct SelectionAction {
     help: &'static str,
     icon: &'static Icon,
     press: fn(&mut Gallery),
+    /// Off while the photo API is not connected. A cancel makes no call.
+    calls: bool,
 }
 
 /// The cloud actions for several selected photos: each step any of them can take, with how
@@ -141,6 +157,7 @@ pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
             help: "Upload as private drafts (⌘U)",
             icon: &icons::CLOUD_UPLOAD,
             press: Gallery::upload_selected,
+            calls: true,
         },
         SelectionAction {
             count: s.selected_for(CloudStep::Publish),
@@ -151,6 +168,7 @@ pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
             help: "Add them to the public gallery (⌘P)",
             icon: &icons::GLOBE,
             press: Gallery::publish_selected,
+            calls: true,
         },
         SelectionAction {
             count: s.selected_for(CloudStep::Unpublish),
@@ -161,6 +179,7 @@ pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
             help: "Take them out of the public gallery (⇧⌘P)",
             icon: &icons::CLOUD_CHECK,
             press: Gallery::unpublish_selected,
+            calls: true,
         },
         SelectionAction {
             count: s.selected_retries(),
@@ -171,6 +190,18 @@ pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
             help: "Try each stopped step again",
             icon: &icons::CLOUD_UPLOAD,
             press: Gallery::retry_selected,
+            calls: true,
+        },
+        SelectionAction {
+            count: s.selected_uploads(),
+            singular: "upload to cancel",
+            plural: "uploads to cancel",
+            label: "Cancel",
+            key: "cancel-selected",
+            help: "Stop the uploads and keep the photos only in this library",
+            icon: &icons::X,
+            press: Gallery::cancel_selected,
+            calls: false,
         },
     ];
     let connected = s.is_connected();
@@ -194,7 +225,7 @@ pub(super) fn selection_actions(s: &Gallery, look: &Look) -> El {
                     Button::new(action.label)
                         .icon(action.icon)
                         .control_size(ControlSize::Small)
-                        .disabled(!connected)
+                        .disabled(action.calls && !connected)
                         .help(action.help)
                         .on_press(move |s: &mut Gallery| press(s))
                         .build(look)
@@ -270,7 +301,7 @@ pub(super) fn cloud_section(s: &Gallery, photo: &GalleryPhoto, look: &Look) -> E
             Button::new(action.label)
                 .icon(action.icon)
                 .control_size(ControlSize::Small)
-                .disabled(!connected)
+                .disabled(action.calls && !connected)
                 .help(action.help)
                 .on_press(move |s: &mut Gallery| press(s))
                 .build(look)

@@ -2,7 +2,8 @@
 //! headless run never opens the library on disk, so a render never shows anyone's photos.
 //! Every state the window can show has a scene: full, empty, opening, failed, importing,
 //! long names, each end of the zoom, the panels hidden, each upload and publish state, several
-//! photos selected, and the Drafts and Published destinations.
+//! photos selected, the Drafts and Published destinations, a cancelled upload, and the pause
+//! after the photo API refused the owner token.
 //! Demo uploads and publishes are made up too: the demo library makes no calls.
 
 use super::{
@@ -96,6 +97,37 @@ pub(super) static SCENES: &[Scene] = &[
     ("uploading", |s| {
         uploads_in_flight(s);
         select(s, 1);
+    }),
+    ("upload-waiting", |s| {
+        uploads_in_flight(s);
+        select(s, 2);
+    }),
+    ("uploads-selected", |s| {
+        uploads_in_flight(s);
+        // An uploading photo, a queued one, and a draft: Cancel stops the first two.
+        select(s, 1);
+        add_to_selection(s, &[2, 4]);
+    }),
+    ("upload-cancelled", |s| {
+        uploads_in_flight(s);
+        set_cloud(s, 1, |_| CloudState::Local);
+        s.uploads = Some(UploadRun {
+            total: 6,
+            drafts: 3,
+            failed: 1,
+        });
+        s.status = format::cancelled(1, &s.photos[1].record.file_name());
+        select(s, 1);
+    }),
+    ("token-refused", |s| {
+        uploads_in_flight(s);
+        set_cloud(s, 5, |cloud_id| CloudState::Failed {
+            cloud_id: Some(cloud_id),
+            failure: CloudFailure::Unauthorized,
+            step: CloudStep::Upload,
+        });
+        s.cloud_paused();
+        select(s, 5);
     }),
     ("upload-draft", |s| {
         for index in 0..6 {

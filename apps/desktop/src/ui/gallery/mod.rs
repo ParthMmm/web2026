@@ -167,7 +167,7 @@ pub struct Gallery {
     /// The selected photos and the focused one.
     pub(super) selection: Selection<PhotoId>,
     /// What the menu bar shows now.
-    menu: MenuState,
+    pub(super) menu: MenuState,
     /// The sidebar destination the grid shows.
     pub(super) destination: Destination,
     /// Indices into `photos` of the destination's photos, unless it is every photo.
@@ -184,6 +184,8 @@ pub struct Gallery {
     pub(super) connection: Connection,
     /// The uploads since the queue was last empty.
     pub(super) uploads: Option<UploadRun>,
+    /// The photo API refused the owner token, and no call runs until a Retry finds a new one.
+    pub(super) cloud_paused: bool,
     /// The focused photo's description as the inspector edits it.
     pub(super) description: DescriptionEdit,
     pub(super) status: String,
@@ -300,6 +302,7 @@ impl Gallery {
                 reason: "Opening the library".into(),
             },
             uploads: None,
+            cloud_paused: false,
             description: DescriptionEdit::default(),
             status: String::new(),
             picking: false,
@@ -482,6 +485,11 @@ impl Gallery {
             sidebar_hidden: self.sidebar_hidden,
             inspector_hidden: self.inspector_hidden,
             several: self.selection.len() > 1,
+            cancel_all: self
+                .photos
+                .iter()
+                .any(|photo| photo.record.cloud.is_pending()),
+            cancel: self.selected_uploads() > 0,
             ..MenuState::default()
         };
         if !self.is_connected() {

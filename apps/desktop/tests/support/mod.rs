@@ -5,7 +5,7 @@
 //! stands in for storage: the original arrives by a presigned PUT under `/r2/`, which needs no
 //! token and refuses one, and is counted as `Route::Put(ObjectKind::Original)`. It lets a test
 //! inject faults: an HTTP status, a lost answer, a delay, an unpublish that stops midway, or a
-//! hold until the test releases it.
+//! hold until the test releases it. A test can also change the owner token it accepts.
 
 #![allow(dead_code)]
 
@@ -80,6 +80,9 @@ struct State {
     faults: Vec<Fault>,
     held: bool,
     released: bool,
+    refused: usize,
+    /// The owner token it accepts, when not [`TOKEN`].
+    token: Option<String>,
 }
 
 #[derive(Clone)]
@@ -117,6 +120,16 @@ impl FakeApi {
             action,
             remaining: times,
         });
+    }
+
+    /// Accepts `token` from now on, and refuses every other, [`TOKEN`] included.
+    pub fn change_token(&self, token: &str) {
+        self.lock().token = Some(token.to_owned());
+    }
+
+    /// Calls the API answered 401.
+    pub fn refused(&self) -> usize {
+        self.lock().refused
     }
 
     pub fn clear_faults(&self) {
@@ -249,7 +262,12 @@ impl FakeApi {
             // A presigned PUT carries its signature in the URL; the owner token must stay home.
             !headers.contains_key("authorization")
         } else {
-            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {TOKEN}"))
+            let accepted = self
+                .lock()
+                .token
+                .clone()
+                .unwrap_or_else(|| TOKEN.to_owned());
+            headers.get("authorization").map(String::as_str) == Some(&format!("Bearer {accepted}"))
         };
         let Some(route) = route(&method, &path) else {
             respond(&mut stream, 404, &json!({"_tag": "NotFound"}));
@@ -285,6 +303,7 @@ impl FakeApi {
             _ => {}
         }
         let (status, answer) = if !authorized {
+            self.lock().refused += 1;
             (401, json!({"_tag": "Unauthorized"}))
         } else if storage {
             self.store_original(&path, &headers, &body)

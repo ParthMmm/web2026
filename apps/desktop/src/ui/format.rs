@@ -71,6 +71,18 @@ pub(super) fn upload_summary(run: &UploadRun) -> String {
     summary
 }
 
+/// What a cancel did: `name` is the first photo cancelled.
+pub(super) fn cancelled(photos: usize, name: &str) -> String {
+    if photos == 1 {
+        format!("Cancelled the upload of {name}. It is only in this library")
+    } else {
+        format!(
+            "Cancelled {}. They are only in this library",
+            count(photos, "upload", "uploads")
+        )
+    }
+}
+
 /// A cloud state in a few words, for the inspector and for a tile's label.
 pub(super) fn cloud_state(state: &CloudState) -> String {
     match state {
@@ -123,11 +135,12 @@ pub(super) fn publish_outcome(
     })
 }
 
-/// The status bar's words while photos are being published or unpublished.
+/// The status bar's words while photos are being published or unpublished, with why they
+/// wait, when they do.
 pub(super) fn publishing_status(
     publishing: usize,
     unpublishing: usize,
-    connected: bool,
+    waiting: Option<&str>,
 ) -> Option<String> {
     let mut parts = Vec::new();
     if publishing > 0 {
@@ -145,8 +158,8 @@ pub(super) fn publishing_status(
     if parts.is_empty() {
         return None;
     }
-    if !connected {
-        parts.push("not connected".into());
+    if let Some(waiting) = waiting {
+        parts.push(waiting.into());
     }
     Some(parts.join(" · "))
 }
