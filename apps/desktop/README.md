@@ -192,54 +192,25 @@ A pass also requires more than 100 measured presentation intervals, complete ord
 
 ## Measured evidence
 
-**Every measurement in this section was taken on the earlier GPUI and ZUI builds.** The Rune port changes what the frame keys measure (see above), so none of these numbers carries over. The Rune build has not yet passed the GUI gate; rerun the matrix with an unlocked, awake display before relying on it.
+On November 16, 2026, the Rune build at `e37cf09` ran the GUI gate on **Apple M1 Pro (MacBookPro18,3), 32 GiB, macOS 27.0 (26A428)**, Rust **1.97.1**, libvips **8.18.3**, through the factory lease `PAL-2324:test:2102310` (Xcode slot, no simulator). The photos are the owner's JPEGs under `~/Pictures`: 291 files, median 25.8 MB. The 20-, 200- and 291-photo samples hold 0.49, 4.74 and 6.91 GB. Each row is one 30-second run; the 1-minute load average was under 8 at the start of each run, with no other lease, simulator, or `xcodebuild` on the Mac.
 
-On November 6, 2026, the move from GPUI Kit to ZUI was checked with one 30-second run per condition and stack, using 24 photos sampled from `~/Pictures` (median 26 MB) on **Apple M1 Pro, 32 GiB, macOS 27.0, libvips 8.18.3**. Each row is a single run.
+| Photos | Condition | Draw p95 ms | Present p95 / p99 ms | First present / max present gap ms | Preview-ready p95 ms | Previews ready | RSS MiB | Result |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 20 | Cold | 2.09 | 17.36 / 24.89 | 378.89 / 378.89 | 766.65 | 10 of 11 | 458.4 | Fail |
+| 20 | Warm | 2.78 | 17.82 / 25.62 | 166.03 / 166.03 | 17.66 | 11 of 11 | 224.2 | Pass |
+| 200 | Cold | 1.22 | 17.04 / 24.79 | 158.59 / 158.59 | 866.65 | 10 of 11 | 509.7 | Fail |
+| 200 | Warm | 3.06 | 17.46 / 25.67 | 170.02 / 170.02 | 33.46 | 11 of 11 | 286.8 | Pass |
+| 291 | Cold | 1.20 | 16.75 / 24.22 | 121.32 / 121.32 | 882.86 | 10 of 11 | 481.0 | Fail |
+| 291 | Warm | 2.78 | 17.04 / 25.16 | 164.97 / 164.97 | 33.12 | 11 of 11 | 279.8 | Pass |
+| 200, uploads | Cold | 0.67 | 16.74 / 24.79 | 154.16 / 154.16 | 249.97 | 10 of 11 | 394.0 | Fail |
 
-| Condition | Stack | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Cold | GPUI Kit 0.6.1 | 1.06 | 16.97 / 19.64 | 84.99 | 925.84 | 332.77 |
-| Cold | ZUI | 1.15 | 17.65 / 17.89 | 82.62 | 894.43 | 377.42 |
-| Warm | GPUI Kit 0.6.1 | 1.33 | 17.09 / 17.78 | 90.07 | 18.96 | 235.11 |
-| Warm | ZUI | 1.24 | 17.62 / 17.78 | 73.28 | 24.00 | 212.83 |
+Every warm run passed every budget and check: all eleven preview requests hit their large derivative, and the 200- and 291-photo runs reached the 64/2 cache and 4/1 decode limits without exceeding them.
 
-Both warm runs passed. Both cold runs failed the same check: 11 preview requests and 10 ready previews, because the last request was still pending when the run ended. ZUI caps an inactive window near 30 fps, which held a first ZUI run at 50.2 ms present intervals. The ZUI build's benchmark mode then requested its frames with `Window::on_next_display_frame`, which keeps the display's rate.
+Every cold run failed the same check: eleven preview requests and ten ready previews, because the last request was still pending when the 30-second window ended. The earlier GPUI and ZUI builds failed their cold runs the same way. The 20-photo cold run also failed two budgets: its first presentation came at 378.89 ms, against 250 ms, so its maximum presentation gap was also 378.89 ms. It started 2 minutes after the release build, at a 1-minute load of 7.41. The 200-photo cold run stayed 2.4 MiB under the 512 MiB RSS limit. In 30 seconds the cold window imported 20, 78 and 79 photos for the 20-, 200- and 291-photo runs; warm preparation then imported the rest in 44.0 s and 69.7 s with no failures.
 
-On September 29, 2026, the corrected full-trace gate passed all four 30-second runs with 24 and 200 generated JPEGs on **Apple M1 Pro, 32 GiB, macOS 27.0 (26A428), libvips 8.18.3**.
+The upload run sent each photo to a local Worker that held none of them, while the window ran. It imported 19 photos in 30 seconds; at the end, 17 were in the cloud, 2 were pending and none had failed (`transferred` 17), so the upload check passed. Its only failure was the pending eleventh preview.
 
-| Photos | Cache | Draw p95 ms | Present p95 / p99 ms | Max present gap ms | Preview-ready p95 ms | RSS MiB |
-| ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| 24 | Cold | 0.95 | 16.98 / 19.81 | 150.52 | 208.98 | 166.44 |
-| 24 | Warm | 0.95 | 17.46 / 23.86 | 66.73 | 17.24 | 153.25 |
-| 200 | Cold | 1.33 | 17.25 / 20.03 | 150.00 | 277.53 | 268.67 |
-| 200 | Warm | 1.46 | 17.28 / 23.88 | 52.57 | 16.60 | 254.64 |
-
-Each run completed ten previews without failures, accounted for one superseded draw, and had zero pending draws. Every warm preview hit its large derivative. Both 200-photo runs reached the 64/2 cache and 4/1 decode limits without exceeding them. Reports remain in `benchmarks/local/fix-20260929/final-24/` and `final-200/`. These synthetic fixtures do not replace the real-photo matrix or establish the cause of earlier frame variation.
-
-The older figures below use GPUI’s activity-filtered presentation histogram and are not directly comparable to the current full-trace intervals. The measurements below are from issue #3, taken before the persistent library replaced the JPEG cache and the UI moved to GPUI Kit components. After those changes, a 24-photo smoke run of the same harness passed every budget. Cold: draw p95 0.93 ms, present p95/p99 17.7/19.9 ms, preview-ready p95 784 ms. Warm: draw p95 1.13 ms, present p95/p99 17.7/33.0 ms, preview-ready p95 13 ms, all four preview requests cache hits. Pipeline mode re-imported the unchanged 24 photos in 0.07 s. Rerun the full matrix below before relying on it for larger libraries.
-
-Earlier checks were not consistently green after the persistent-library changes. On September 29, 2026, two fresh 12-second runs with 24 generated JPEGs each failed frame-interval budgets. The first cold run recorded p95 23.81 ms against 20 ms while a separate pipeline check ran. An isolated rerun passed cold, but warm recorded p95 21.00 ms and p99 33.341 ms against 20 ms and 33.34 ms. All four runs completed every preview without import or decode failures, and draw p95 stayed below 1.4 ms. The cause of the frame-interval variation remains unresolved. Both reports remain locally under `benchmarks/local/pickup-20260929/`. These generated fixtures do not replace the full real-photo matrix.
-
-The earlier 30-second GUI workload passed before the persistent-library changes. The earlier `gui-20-reviewed` warm failure is retained as regression evidence, not replaced by a favorable result. Its render-gap cause is understood: pinned GPUI 0.3.4 stops its macOS `CVDisplayLink` source when a normal window is fully occluded, even when the window is dirty and inactive-window throttling is disabled.
-
-Measured on **Apple M1 Pro, 32 GiB, macOS 26.6.2**, Rust **1.97.1**, libvips **8.18.3**, using owner-authorized JPEGs under Pictures. The full tree contains **944 JPEGs / 17.35 GB**, median **20.92 MB**. Twenty- and 200-photo samples contain 368 MB and 3.74 GB respectively. Lightroom provenance was supplied by the owner, not independently established.
-
-The GPUI build's benchmark mode used GPUI's `WindowKind::PopUp`, which maps to a non-activating macOS panel at popup level. It sets `focus = false`, leaves the inactive-window throttle disabled, and does not call `cx.activate` or repeatedly raise the window. This keeps the frame source alive while another normal app is active without taking keyboard focus. The trade-off is intentional and documented: the benchmark window can appear above normal windows and across Spaces. A first post-fix 200-photo warm run still recorded a **1125.08 ms** gap and failed; it was retained. Three direct warm reruns, the next 200-photo harness run, and the full-library run stayed below 52 ms. This is evidence for the fixed path, not a claim that external display or user actions cannot interrupt a run.
-
-The post-fix 30-second harness runs passed the unchanged budgets:
-
-| Photos | Cache | Thumbnails complete | Draw p95 ms | Present p95 / p99 ms | Preview-ready p95 ms | Max gap ms | Last age ms | RSS MiB |
-| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 20 | Cold | 20 | 0.40 | 17.63 / 19.23 | 555.5 | 43.3 | 4.5 | 258.2 |
-| 20 | Warm | 20 | 0.37 | 17.63 / 19.27 | 16.0 | 47.0 | 3.0 | 174.6 |
-| 200 | Cold | 87 | 0.57 | 17.56 / 17.92 | 588.0 | 44.9 | 6.3 | 342.4 |
-| 200 | Warm | 200 | 0.88 | 17.58 / 30.87 | 15.6 | 44.7 | 5.4 | 246.2 |
-| 944 | Cold | 73 | 0.51 | 17.61 / 18.24 | 653.8 | 52.5 | 15.3 | 281.1 |
-| 944 | Warm | 944 | 0.95 | 17.53 / 20.17 | 18.8 | 44.1 | 3.8 | 239.3 |
-
-Every post-fix run completed ten of ten preview requests with no import, preview, or decode failures. Warm runs hit all ten large derivatives and reached the 64/2 cache and 4/1 loading bounds where the workload required them. Full-library warm preparation completed all 944 thumbnails without failures in 256.8 seconds after the cold window had made 73 thumbnails. This is mixed-cache preparation, not a clean cold-throughput measurement.
-
-Earlier failures informed fixes and were not discarded: thumbnail-only warming produced false warm requests; a serial encoder delayed previews beyond 1.5 seconds; key-window-only activation left long no-render gaps (up to 8.53 seconds); and the pre-fix `gui-20-reviewed` warm run reached 1030.81 ms. The benchmark still rejects locked/asleep displays, reports inactive frames honestly, and does not claim that pixels reached the display. No display restriction was bypassed.
+Draw p95 stayed under 3.1 ms and present p95 under 18 ms in every run. Raw reports stay on the Mac; they are not in Git.
 
 ### Native UI check
 
