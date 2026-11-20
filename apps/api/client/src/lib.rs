@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use reqwest::{blocking, header, redirect::Policy};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{fs::File, path::Path, time::Duration};
+use std::{collections::HashMap, fs::File, path::Path, time::Duration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -116,6 +116,18 @@ impl PhotoView {
             | PhotoView::Unpublishing { photo_id, .. } => photo_id,
         }
     }
+}
+
+/// A presigned PUT that sends an original straight to storage. Send the bytes to `url` with
+/// exactly these `headers` before `expires_at`. Storage refuses other bytes, other headers, or a
+/// late start.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OriginalUpload {
+    pub expires_at: String,
+    pub headers: HashMap<String, String>,
+    pub method: String,
+    pub url: String,
 }
 
 /// One page of `list`. Pass `next` as `after` to read the following page; it is `None` on the last.
@@ -239,10 +251,22 @@ pub enum ClientError {
         status: u16,
         error: Option<ApiError>,
     },
+
+    /// Storage refused a presigned upload. `code` is its S3 error code, such as `BadDigest`
+    /// for bytes that do not match the signed SHA-256, or `AccessDenied` for an expired URL.
+    #[error("storage HTTP {status}: {code:?}")]
+    Storage { status: u16, code: Option<String> },
 }
+
+/// Time for a request to storage before the body: connect, TLS and the first answer.
+const STORAGE_BASE_TIMEOUT: Duration = Duration::from_secs(120);
+/// The slowest upload rate an original may take before the request times out.
+const STORAGE_MIN_BYTES_PER_SECOND: u64 = 256 * 1024;
 
 pub struct Client {
     http: blocking::Client,
+    /// Sends presigned uploads. It has no default headers, so the owner token stays with the API.
+    storage: blocking::Client,
     base: reqwest::Url,
 }
 
@@ -263,6 +287,9 @@ impl Client {
                 .default_headers(headers)
                 .redirect(Policy::none())
                 .timeout(Duration::from_secs(120))
+                .build()?,
+            storage: blocking::Client::builder()
+                .redirect(Policy::none())
                 .build()?,
             base,
         })
@@ -342,6 +369,58 @@ impl Client {
         })
     }
 
+    /// A presigned PUT for the original of a photo that is still uploading.
+    pub fn original_upload(&self, photo_id: &str) -> Result<OriginalUpload, ClientError> {
+        let url = self.url(&format!("/v1/photos/{photo_id}/original/upload-url"));
+        decode(self.send(|| Ok(self.http.post(&url)))?)
+    }
+
+    /// Sends the original straight to storage from memory, through a fresh presigned URL.
+    pub fn put_original(&self, photo_id: &str, body: impl Into<Bytes>) -> Result<(), ClientError> {
+        let body = body.into();
+        let length = body.len() as u64;
+        self.put_original_body(photo_id, length, || Ok(body.clone().into()))
+    }
+
+    /// Streams the original from a file straight to storage, through a fresh presigned URL. The
+    /// Worker never sees the bytes, so the original may be larger than a Worker request.
+    pub fn put_original_file(&self, photo_id: &str, path: &Path) -> Result<(), ClientError> {
+        let length = std::fs::metadata(path)?.len();
+        self.put_original_body(photo_id, length, || {
+            let file = File::open(path)?;
+            let length = file.metadata()?.len();
+            Ok(blocking::Body::sized(file, length))
+        })
+    }
+
+    fn put_original_body(
+        &self,
+        photo_id: &str,
+        length: u64,
+        body: impl Fn() -> Result<blocking::Body, ClientError>,
+    ) -> Result<(), ClientError> {
+        let upload = self.original_upload(photo_id)?;
+        let timeout = STORAGE_BASE_TIMEOUT
+            + Duration::from_secs(length.div_ceil(STORAGE_MIN_BYTES_PER_SECOND));
+        let request = || -> Result<blocking::RequestBuilder, ClientError> {
+            let mut request = self.storage.put(&upload.url).timeout(timeout).body(body()?);
+            // reqwest sets Content-Length from the sized body; the signed value must match it.
+            for (name, value) in &upload.headers {
+                if !name.eq_ignore_ascii_case("content-length") {
+                    request = request.header(name, value);
+                }
+            }
+            Ok(request)
+        };
+        let response = self.send(request)?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status().as_u16();
+        let code = response.text().ok().and_then(|text| s3_code(&text));
+        Err(ClientError::Storage { status, code })
+    }
+
     pub fn finalize(&self, photo_id: &str) -> Result<PhotoView, ClientError> {
         let url = self.url(&format!("/v1/photos/{photo_id}/finalize"));
         decode(self.send(|| Ok(self.http.post(&url)))?)
@@ -408,6 +487,13 @@ impl Gallery {
             Err(failure(response))
         }
     }
+}
+
+/// The `<Code>` of an S3 XML error body.
+fn s3_code(body: &str) -> Option<String> {
+    let start = body.find("<Code>")? + "<Code>".len();
+    let end = start + body[start..].find("</Code>")?;
+    Some(body[start..end].to_owned())
 }
 
 fn is_dropped_connection(error: &reqwest::Error) -> bool {
