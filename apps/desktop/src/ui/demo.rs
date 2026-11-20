@@ -102,6 +102,12 @@ pub(super) static SCENES: &[Scene] = &[
         uploads_in_flight(s);
         select(s, 2);
     }),
+    ("uploads-selected", |s| {
+        uploads_in_flight(s);
+        // An uploading photo, a queued one, and a draft: Cancel stops the first two.
+        select(s, 1);
+        add_to_selection(s, &[2, 4]);
+    }),
     ("upload-cancelled", |s| {
         uploads_in_flight(s);
         set_cloud(s, 1, |_| CloudState::Local);
