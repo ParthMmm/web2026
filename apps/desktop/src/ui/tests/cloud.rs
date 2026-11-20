@@ -552,3 +552,27 @@ fn pressing_cancel_on_an_uploading_photo_shows_it_only_in_the_library() {
     let id = rt.state.photos[0].record.id.clone();
     assert!(!setup.root.join("uploads").join(id.as_str()).exists());
 }
+
+#[test]
+fn cancel_on_a_selection_stops_each_upload_and_leaves_the_other_photo() {
+    let (mut rt, api, _setup) = local(3);
+    api.fault(Route::Put(ObjectKind::Original), Action::Hold, 2);
+    press_tile(&mut rt, 1, CMD);
+    press(&mut rt, "upload-selected");
+    until_each(&mut rt, &[0, 1], |state| {
+        matches!(state, CloudState::Uploading { .. })
+    });
+    assert!(text_in(&rt, "cloud").contains("2 uploads to cancel"));
+    assert!(rt.state.menu.cancel && rt.state.menu.several);
+
+    press(&mut rt, "cancel-selected");
+    until_each(&mut rt, &[0, 1], |state| *state == CloudState::Local);
+    assert!(
+        text_in(&rt, "status").starts_with("Cancelled 2 uploads."),
+        "{}",
+        text_in(&rt, "status")
+    );
+    assert!(!rt.state.menu.cancel && !rt.state.menu.cancel_all);
+    assert_eq!(rt.state.photos[2].record.cloud, CloudState::Local);
+    api.release();
+}
