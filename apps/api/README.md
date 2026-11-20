@@ -167,7 +167,7 @@ The experiment crate was removed because CI never ran it. This result is its rec
 
 ## Client transport
 
-The client keeps idle connections open and reuses them. The Worker can refuse an upload before it reads the body, for example a `LengthMismatch`, and then close the connection. When a request fails to send on a connection that closed, the client sends it once more on a new connection. A timeout is never retried. `tests/transport.rs` proves the retry against a server that closes a reused connection, and fails when the retry is removed.
+The client keeps idle connections open and reuses them. The Worker can refuse an upload before it reads the body, for example a `LengthMismatch`, and then close the connection. When a request fails to send on a connection that closed, the client sends it once more on a new connection. A timeout is never retried. `client/tests/transport.rs` proves the retry against a server that closes a reused connection, and fails when the retry is removed.
 
 `put_file(photo_id, kind, path)` streams a file from disk with its `Content-Length`, so a camera original is never read into memory. `put` takes `Bytes`, so a retry reuses the body without a copy.
 

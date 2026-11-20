@@ -19,4 +19,4 @@ The app was built on GPUI Kit, then ZUI, before it moved to Rune. These links re
 - [GPUI Kit](https://github.com/longbridge/gpui-kit), used before the move to ZUI
 - [Zed GPUI image example](https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/image/image.rs)
 - [GPUI FPS monitor](https://gpui-kit.com/docs/fps/)
-- [Zeron](https://github.com/zeronsh/zeron) and [the Zeron reference](zeron-reference.md), which pins revision `7a472fce41b6a834da87b460e189adb05eacf3d4`
+- [Zeron](https://github.com/zeronsh/zeron), the GPUI app the early look was drawn from
