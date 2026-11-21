@@ -5,12 +5,11 @@
   "scripts": {
     "test": "vitest run",
     "test:workerd": "vitest run --config vitest.workerd.config.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "effect-tsrs diagnostics --project tsconfig.json --type-check",
     "dev": "bun scripts/serve.ts",
     "openapi": "bun scripts/openapi.ts",
     "smoke": "bun scripts/smoke.ts",
-    "deploy": "alchemy deploy --yes",
-    "prepare": "effect-language-service patch"
+    "deploy": "alchemy deploy --yes"
   },
   "dependencies": {
     "effect": "4.1.2"
@@ -28,6 +27,7 @@
     "@effect/sql-sqlite-node": "4.1.2",
     "@effect/vitest": "4.1.2",
     "@types/bun": "1.4.1",
+    "@yielded/effect-tsrs": "0.2.3",
     "alchemy": "2.0.0-beta.85",
     "miniflare": "4.20260730.0",
     "rolldown": "1.2.13",
